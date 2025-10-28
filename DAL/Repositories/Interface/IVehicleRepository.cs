@@ -9,5 +9,7 @@ namespace DAL.Repositories.Interface
 {
     public interface IVehicleRepository : IGenericRepository<Vehicle>
     {
+        Task<List<Vehicle>> GetAvailableVehiclesAsync();
+        Task<List<Vehicle>> GetVehiclesByOwnerIdAsync(Guid ownerId);
     }
 }
