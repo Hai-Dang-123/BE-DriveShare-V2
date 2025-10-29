@@ -11,5 +11,6 @@ namespace Common.Settings
         VEHICLE_IMAGES,
         VERIFICATION_IMAGES,
         VEHICLE_INSPECTION,
+        AVATAR_IMAGES,
     }
 }

@@ -35,16 +35,6 @@ builder.Services.AddControllers()
     });
 
 
-
-// Register Firebase config + upload service
-//builder.Services.Configure<FirebaseSetting>(
-//    builder.Configuration.GetSection("Firebase"));
-//builder.Services.AddScoped<FirebaseUploadService>();
-
-
-// Program.cs hoặc Startup.cs (trong ConfigureServices)
-//builder.Services.AddScoped<IBookingService, BookingService>();
-
 builder.Services.RegisterAllServices(builder.Configuration);
 
 //Add config

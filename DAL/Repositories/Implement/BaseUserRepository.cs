@@ -23,5 +23,20 @@ namespace DAL.Repositories.Implement
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email);
         }
+
+        public async Task<BaseUser?> FindByEmailAndRoleAsync(string email, string roleName)
+        {
+            return await _context.BaseUsers
+                .Include(u => u.Role)
+                .Where(u => u.Email == email && u.Role.RoleName == roleName)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<BaseUser> FindByPhoneNumberAsync(string phoneNumber)
+        {
+            return await _context.BaseUsers
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+        }
     }
 }
