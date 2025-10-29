@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace BLL.Services.Impletement
 {
@@ -50,7 +51,7 @@ namespace BLL.Services.Impletement
                         Message = "Item not found"
                     };
                 }
-                var imageUrl = await _firebaseUploadService.UploadFileAsync(itemImageDTO.File, userId, FirebaseFileType.Item_IMAGES);
+                var imageUrl = await _firebaseUploadService.UploadFileAsync(itemImageDTO.File, userId, FirebaseFileType.ITEM_IMAGES);
                 var itemImage = new ItemImage
                 {
                     ItemImageId = Guid.NewGuid(),
@@ -210,7 +211,17 @@ namespace BLL.Services.Impletement
         {
             try
             {
-                var itemImage = _unitOfWork.ItemImageRepo.GetById(updateItemImageDTO.ImageUrl);
+                var userId = _userUtility.GetUserIdFromToken();
+                if (userId == Guid.Empty)
+                { 
+                  return new ResponseDTO
+                    {
+                        Result = false,
+                        StatusCode = StatusCodes.Status401Unauthorized,
+                        Message = "Unauthorized"
+                    };
+                }
+                var itemImage = _unitOfWork.ItemImageRepo.GetById(updateItemImageDTO.ItemImageId);
                 if(itemImage == null || itemImage.Status == ItemImageStatus.Deleted)
                 {
                     return new ResponseDTO
@@ -220,7 +231,12 @@ namespace BLL.Services.Impletement
                         Message = "Item image not found"
                     };
                 }
-                itemImage.ItemImageURL = updateItemImageDTO.ImageUrl;
+                if (updateItemImageDTO.File != null)
+                {
+                    var imageUrl = await _firebaseUploadService.UploadFileAsync(updateItemImageDTO.File, userId, FirebaseFileType.ITEM_IMAGES);
+
+                    itemImage.ItemImageURL = imageUrl;
+                }
                 itemImage.ItemId = updateItemImageDTO.ItemId;
                 await _unitOfWork.ItemImageRepo.UpdateAsync(itemImage);
                 await _unitOfWork.SaveChangeAsync();

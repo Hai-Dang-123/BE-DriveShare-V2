@@ -19,7 +19,7 @@ namespace Common.DTOs
     {
         public string ItemImageId { get; set; }
         public Guid ItemId { get; set; }
-        public string ImageUrl { get; set; } = null!;
+        public IFormFile File { get; set; } = null!;
     }
     public class ItemImageReadDTO
     {
