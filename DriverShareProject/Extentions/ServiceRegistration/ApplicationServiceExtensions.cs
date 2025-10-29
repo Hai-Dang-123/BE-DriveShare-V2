@@ -20,7 +20,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
             //Service
             services.AddScoped<IAuthService, AuthService>();
-           
+            services.AddScoped<IItemService, ItemService>();
 
 
 

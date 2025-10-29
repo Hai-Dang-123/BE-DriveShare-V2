@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Common.Enums.Status;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,7 +18,8 @@ namespace DAL.Entities
         //public string? ItemType { get; set; } // Loại hàng: "Dễ vỡ", "Đông lạnh", v.v.
         public Guid? OwnerId { get; set; } // FK to Owner
         public Guid? ProviderId { get; set; } // FK to Provider
-        // 
+        
+        public ItemStatus Status { get; set; }  // Trạng thái hiện tại của hàng hóa
         public virtual Owner? Owner { get; set; }
         public virtual Provider? Provider { get; set; }
         // Mối quan hệ 1-1 với Package
