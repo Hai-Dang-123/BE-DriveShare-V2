@@ -20,26 +20,17 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
             services.AddDbContext<DriverShareAppContext>(options =>
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
-
-
-       
-
+          
             //Service
             services.AddScoped<IAuthService, AuthService>();
-
-            services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
-            services.AddHttpContextAccessor();
-            services.AddScoped<UserUtility>();
-
-            services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
-
+            services.AddScoped<IOwnerDriverLinkService, OwnerDriverLinkService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IVehicleImageService, VehicleImageService>();
             services.AddScoped<IVehicleTypeService, VehicleTypeService>();
             services.AddScoped<IContractTemplateService, ContractTemplateService>();
             services.AddScoped<IContractTermService, ContractTermService>();
 
-
+            services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             
 
