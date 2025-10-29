@@ -22,7 +22,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IItemService, ItemService>();
             services.AddScoped<IItemImagesService, ItemImagesService>();
-
+            services.AddScoped<IPackageService, PackageService>();
 
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
