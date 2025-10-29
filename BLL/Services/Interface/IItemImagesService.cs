@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace BLL.Services.Interface
 {
-    internal interface IItemImagesService
+    public interface IItemImagesService
     {
-        Task<ResponseDTO> CraeteItemImageAsync(ItemImageDTO itemImageDTO);
+        Task<ResponseDTO> CreateItemImageAsync(ItemImageCreateDTO itemImageDTO);
         Task<ResponseDTO> GetALlItemImagesByItemIdAsync(Guid itemId);
         Task<ResponseDTO> DeleteItemImageAsync(Guid itemImageId);
         Task<ResponseDTO> UpdateItemImageAsync(UpdateItemImageDTO updateItemImageDTO);

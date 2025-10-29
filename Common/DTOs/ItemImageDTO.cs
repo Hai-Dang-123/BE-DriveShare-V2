@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,11 +13,11 @@ namespace Common.DTOs
     public class ItemImageCreateDTO
     {
         public Guid ItemId { get; set; }
-        public string ImageUrl { get; set; } = null!;
+        public IFormFile File { get; set; } = null!;
     }
     public class UpdateItemImageDTO
     {
-        public string ItemImangeId { get; set; }
+        public string ItemImageId { get; set; }
         public Guid ItemId { get; set; }
         public string ImageUrl { get; set; } = null!;
     }

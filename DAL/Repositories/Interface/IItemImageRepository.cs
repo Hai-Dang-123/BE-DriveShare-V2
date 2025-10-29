@@ -9,5 +9,7 @@ namespace DAL.Repositories.Interface
 {
     public interface IItemImageRepository : IGenericRepository<ItemImage>
     {
+        Task<IEnumerable<ItemImage>> GetAllByItemIdAsync(Guid itemId);
+        
     }
 }
