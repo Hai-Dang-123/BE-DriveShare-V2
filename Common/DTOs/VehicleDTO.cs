@@ -35,9 +35,21 @@ namespace Common.DTOs
         public decimal PayloadInKg { get; set; }
         public decimal VolumeInM3 { get; set; }
         public VehicleStatus Status { get; set; }
-
-        public string VehicleTypeName { get; set; } = string.Empty;
-        public string OwnerCompanyName { get; set; } = string.Empty;
-        public List<string> ImageUrls { get; set; } = new();
+        public List<VehicleImageDetailDTO> ImageUrls { get; set; } = new();
+        public List<VehicleDocumentDetailDTO> Documents { get; set; } = new();
+        public VehicleTypeDTO VehicleType { get; set; }
+        public GetDetailOwnerDTO Owner { get; set; }
+    }
+    public class VehicleDTO
+    {
+        public Guid VehicleId { get; set; }
+        public string PlateNumber { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string Brand { get; set; } = string.Empty;
+        public string Color { get; set; } = string.Empty;
+        public int YearOfManufacture { get; set; }
+        public decimal PayloadInKg { get; set; }
+        public decimal VolumeInM3 { get; set; }
+        public VehicleStatus Status { get; set; }
     }
 }

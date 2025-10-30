@@ -1,5 +1,4 @@
 ﻿
-using BLL.Services.Implement;
 using BLL.Services.Impletement;
 using BLL.Services.Interface;
 using BLL.Utilities;
@@ -23,6 +22,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
           
             //Service
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<UserUtility>();
 
             services.AddScoped<IItemService, ItemService>();
             services.AddScoped<IItemImagesService, ItemImagesService>();
@@ -38,6 +38,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<UserUtility>();
             
 
             //services.AddHttpClient<IVNPTTokenService, VNPTTokenService>();

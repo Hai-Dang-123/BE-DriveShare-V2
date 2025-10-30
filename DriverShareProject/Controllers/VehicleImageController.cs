@@ -1,13 +1,13 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Threading.Tasks;
 
 namespace DriverShareProject.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    [Route("api/[controller]")]
     public class VehicleImageController : ControllerBase
     {
         private readonly IVehicleImageService _vehicleImageService;
@@ -17,39 +17,40 @@ namespace DriverShareProject.Controllers
             _vehicleImageService = vehicleImageService;
         }
 
-        [HttpPost("create")]
+        [HttpPost]
         public async Task<IActionResult> Create([FromForm] VehicleImageCreateDTO dto)
         {
-            var result = await _vehicleImageService.CreateVehicleImageAsync(dto);
-            return Ok(result);
+            var result = await _vehicleImageService.CreateAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
 
-        [HttpPut("update")]
-        public async Task<IActionResult> Update([FromForm] VehicleImageUpdateDTO dto)
+        [HttpPut("{id:guid}")]
+        public async Task<IActionResult> Update(Guid id, [FromForm] VehicleImageUpdateDTO dto)
         {
-            var result = await _vehicleImageService.UpdateVehicleImageAsync(dto);
-            return Ok(result);
+            dto.VehicleImageId = id;
+            var result = await _vehicleImageService.UpdateAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
 
-        [HttpDelete("soft-delete/{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> SoftDelete(Guid id)
         {
-            var result = await _vehicleImageService.SoftDeleteVehicleImageAsync(id);
-            return Ok(result);
+            var result = await _vehicleImageService.SoftDeleteAsync(id);
+            return StatusCode(result.StatusCode, result);
         }
 
-        [HttpGet("all/{vehicleId}")]
+        [HttpGet("vehicle/{vehicleId:guid}")]
         public async Task<IActionResult> GetAll(Guid vehicleId)
         {
-            var result = await _vehicleImageService.GetAllVehicleImagesAsync(vehicleId);
-            return Ok(result);
+            var result = await _vehicleImageService.GetAllAsync(vehicleId);
+            return StatusCode(result.StatusCode, result);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var result = await _vehicleImageService.GetVehicleImageByIdAsync(id);
-            return Ok(result);
+            var result = await _vehicleImageService.GetByIdAsync(id);
+            return StatusCode(result.StatusCode, result);
         }
     }
 }

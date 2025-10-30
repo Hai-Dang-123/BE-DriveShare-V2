@@ -1,7 +1,6 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
 using DAL.Entities;
-using DAL.Repositories.Interface;
 using DAL.UnitOfWork;
 using System;
 using System.Linq;
@@ -20,37 +19,36 @@ namespace BLL.Services.Impletement
 
         public async Task<ResponseDTO> CreateAsync(ContractTermCreateDTO dto)
         {
-            var template = await _unitOfWork.ContractTemplateRepo.GetByIdAsync(dto.ContractTemplateId);
-            if (template == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Contract template not found" };
-
-            var term = new ContractTerm
+            try
             {
-                ContractTermId = Guid.NewGuid(),
-                Content = dto.Content,
-                Order = dto.Order,
-                ContractTemplateId = dto.ContractTemplateId
-            };
+                var template = await _unitOfWork.ContractTemplateRepo.GetByIdAsync(dto.ContractTemplateId);
+                if (template == null)
+                    return new ResponseDTO("Contract template not found", 404, false);
 
-            await _unitOfWork.ContractTermRepo.AddAsync(term);
-            await _unitOfWork.SaveChangeAsync();
+                var term = new ContractTerm
+                {
+                    ContractTermId = Guid.NewGuid(),
+                    Content = dto.Content,
+                    Order = dto.Order,
+                    ContractTemplateId = dto.ContractTemplateId
+                };
 
-            var result = new ContractTermDetailDTO
+                await _unitOfWork.ContractTermRepo.AddAsync(term);
+                await _unitOfWork.SaveChangeAsync();
+
+                return new ResponseDTO("Create ContractTerm Successfully !!!", 200, true);
+            }
+            catch (Exception ex)
             {
-                ContractTermId = term.ContractTermId,
-                Content = term.Content,
-                Order = term.Order,
-                ContractTemplateId = term.ContractTemplateId
-            };
-
-            return new ResponseDTO { IsSuccess = true, Message = "Contract term created successfully", Result = result };
+                return new ResponseDTO("Error at saving ContractTerm", 500, false, ex.Message);
+            }
         }
 
         public async Task<ResponseDTO> UpdateAsync(ContractTermUpdateDTO dto)
         {
             var term = await _unitOfWork.ContractTermRepo.GetByIdAsync(dto.ContractTermId);
             if (term == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Contract term not found" };
+                return new ResponseDTO("Contract term not found", 404, false);
 
             term.Content = dto.Content ?? term.Content;
             term.Order = dto.Order ?? term.Order;
@@ -58,19 +56,19 @@ namespace BLL.Services.Impletement
             await _unitOfWork.ContractTermRepo.UpdateAsync(term);
             await _unitOfWork.SaveChangeAsync();
 
-            return new ResponseDTO { IsSuccess = true, Message = "Contract term updated successfully" };
+            return new ResponseDTO("Contract term updated successfully", 200, true);
         }
 
         public async Task<ResponseDTO> SoftDeleteAsync(Guid id)
         {
             var term = await _unitOfWork.ContractTermRepo.GetByIdAsync(id);
             if (term == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Contract term not found" };
+                return new ResponseDTO("Contract term not found", 404, false);
 
             await _unitOfWork.ContractTermRepo.DeleteAsync(id);
             await _unitOfWork.SaveChangeAsync();
 
-            return new ResponseDTO { IsSuccess = true, Message = "Contract term deleted successfully" };
+            return new ResponseDTO("Contract term deleted successfully", 200, true);
         }
 
         public async Task<ResponseDTO> GetAllAsync(Guid contractTemplateId)
@@ -87,14 +85,14 @@ namespace BLL.Services.Impletement
                 })
                 .ToList();
 
-            return new ResponseDTO { IsSuccess = true, Result = result };
+            return new ResponseDTO("Get all ContractTerm successfully", 200, true, result);
         }
 
         public async Task<ResponseDTO> GetByIdAsync(Guid id)
         {
             var term = await _unitOfWork.ContractTermRepo.GetByIdAsync(id);
             if (term == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Contract term not found" };
+                return new ResponseDTO("Contract term not found", 404, false);
 
             var dto = new ContractTermDetailDTO
             {
@@ -104,7 +102,7 @@ namespace BLL.Services.Impletement
                 ContractTemplateId = term.ContractTemplateId
             };
 
-            return new ResponseDTO { IsSuccess = true, Result = dto };
+            return new ResponseDTO("Get ContractTerm successfully", 200, true, dto);
         }
     }
 }

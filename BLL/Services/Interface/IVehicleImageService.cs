@@ -6,10 +6,10 @@ namespace BLL.Services.Interface
 {
     public interface IVehicleImageService
     {
-        Task<ResponseDTO> CreateVehicleImageAsync(VehicleImageCreateDTO dto);
-        Task<ResponseDTO> UpdateVehicleImageAsync(VehicleImageUpdateDTO dto);
-        Task<ResponseDTO> SoftDeleteVehicleImageAsync(Guid imageId);
-        Task<ResponseDTO> GetAllVehicleImagesAsync(Guid vehicleId);
-        Task<ResponseDTO> GetVehicleImageByIdAsync(Guid imageId);
+        Task<ResponseDTO> CreateAsync(VehicleImageCreateDTO dto);
+        Task<ResponseDTO> UpdateAsync(VehicleImageUpdateDTO dto);
+        Task<ResponseDTO> SoftDeleteAsync(Guid imageId);
+        Task<ResponseDTO> GetAllAsync(Guid vehicleId);
+        Task<ResponseDTO> GetByIdAsync(Guid imageId);
     }
 }
