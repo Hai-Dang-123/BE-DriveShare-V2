@@ -136,10 +136,7 @@ namespace BLL.Services.Impletement
                     PostPackageId = package.PostPackageId,
                     TripId = package.TripId,
                     PackageImageUrls = package.PackageImages.Select(i => i.PackageImageURL).ToList()
-                    Item = new ItemReadDTO
-                    {
-                        Currency =
-                    }
+
                 };
                 return new ResponseDTO
                 {
