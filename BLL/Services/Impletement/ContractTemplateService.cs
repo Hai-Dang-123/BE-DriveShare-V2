@@ -93,16 +93,37 @@ namespace BLL.Services.Impletement
             if (template == null)
                 return new ResponseDTO { IsSuccess = false, Message = "Template not found" };
 
+            // 🔹 Lấy danh sách ContractTerm liên quan
+            var terms = await _unitOfWork.ContractTermRepo.GetAllAsync(t => t.ContractTemplateId == id);
+            var termDtos = terms
+                .OrderBy(t => t.Order)
+                .Select(t => new ContractTermDTO
+                {
+                    ContractTermId = t.ContractTermId,
+                    Content = t.Content,
+                    Order = t.Order,
+                    ContractTemplateId = t.ContractTemplateId
+                })
+                .ToList();
+
+            // 🔹 Gộp tất cả lại thành DTO tổng
             var dto = new ContractTemplateDetailDTO
             {
                 ContractTemplateId = template.ContractTemplateId,
                 ContractTemplateName = template.ContractTemplateName,
                 Version = template.Version,
                 CreatedAt = template.CreatedAt,
-                Type = template.Type
+                Type = template.Type,
+                ContractTerms = termDtos   // 👈 Thêm phần này
             };
 
-            return new ResponseDTO { IsSuccess = true, Result = dto };
+            return new ResponseDTO
+            {
+                IsSuccess = true,
+                Message = "Get ContractTemplate successfully",
+                Result = dto
+            };
         }
+
     }
 }
