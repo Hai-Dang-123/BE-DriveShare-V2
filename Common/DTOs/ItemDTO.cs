@@ -37,6 +37,6 @@ namespace Common.DTOs
         public Guid? OwnerId { get; set; }
         public Guid? ProviderId { get; set; }
         public string Status { get; set; }
-        public List<string> ImageUrls { get; set; } = new();
+        public List<ItemImageReadDTO> ImageUrls { get; set; } = new();
     }
 }
