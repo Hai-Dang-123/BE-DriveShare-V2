@@ -12,7 +12,6 @@ namespace DAL.Entities
         public Guid PackageImageId { get; set; }
         public string PackageImageURL { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
         public PackageImageStatus Status { get; set; }
         //
         public virtual Package Package { get; set; }

@@ -65,5 +65,6 @@ namespace Common.DTOs
         public Guid? TripId { get; set; }
 
         public List<string>? PackageImageUrls { get; set; }
+        public ItemReadDTO Item { get; set; }
     }
 }
