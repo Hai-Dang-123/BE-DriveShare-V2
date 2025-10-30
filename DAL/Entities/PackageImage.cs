@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Common.Enums.Status;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,6 +13,7 @@ namespace DAL.Entities
         public string PackageImageURL { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        public PackageImageStatus Status { get; set; }
         //
         public virtual Package Package { get; set; }
         public Guid PackageId { get; set; }

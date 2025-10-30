@@ -8,6 +8,8 @@ namespace Common.Settings
 {
     public enum FirebaseFileType
     {
+        PACKAGE_IMAGES,
+        ITEM_IMAGES,
         VEHICLE_IMAGES,
         VERIFICATION_IMAGES,
         VEHICLE_INSPECTION,

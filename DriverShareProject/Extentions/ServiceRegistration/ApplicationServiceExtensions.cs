@@ -23,6 +23,12 @@ namespace DriverShareProject.Extentions.ServiceRegistration
           
             //Service
             services.AddScoped<IAuthService, AuthService>();
+
+            services.AddScoped<IItemService, ItemService>();
+            services.AddScoped<IItemImagesService, ItemImagesService>();
+            services.AddScoped<IPackageService, PackageService>();
+            services.AddScoped<IPackageImageService, PackageImageService>();
+
             services.AddScoped<IOwnerDriverLinkService, OwnerDriverLinkService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IVehicleImageService, VehicleImageService>();

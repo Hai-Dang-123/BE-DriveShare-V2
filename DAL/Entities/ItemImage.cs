@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Common.Enums.Status;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,6 +12,7 @@ namespace DAL.Entities
         public Guid ItemImageId { get; set; }
         public string ItemImageURL { get; set; } = string.Empty;
 
+        public ItemImageStatus Status { get; set; }
         //
         public virtual Item Item { get; set; }
         public Guid ItemId { get; set; }
