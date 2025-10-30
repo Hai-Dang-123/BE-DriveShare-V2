@@ -113,7 +113,7 @@ namespace BLL.Services.Impletement
                 };
             }
         }
-
+        // Get All Item Images By Item Id
         public async Task<ResponseDTO> GetALlItemImagesByItemIdAsync(Guid itemId)
         {
             try

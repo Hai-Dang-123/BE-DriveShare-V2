@@ -92,7 +92,12 @@ namespace BLL.Services.Impletement
                         OwnerId = p.Item.OwnerId,
                         ProviderId = p.Item.ProviderId,
                         Status = p.Item.Status.ToString(),
-                        ImageUrls = p.Item.ItemImages.Select(ii => ii.ItemImageURL).ToList(),
+                        ImageUrls = p.Item.ItemImages?.Select(pi => new ItemImageReadDTO
+                        {
+                            ItemImageId = pi.ItemImageId,
+                            ItemId = pi.ItemId,
+                            ImageUrl = pi.ItemImageURL
+                        }).ToList() ?? new List<ItemImageReadDTO>()
                     },
                     PackageImages = p.PackageImages?.Select(pi => new PackageImageReadDTO
                     {
@@ -165,7 +170,12 @@ namespace BLL.Services.Impletement
                         OwnerId = package.Item.OwnerId,
                         ProviderId = package.Item.ProviderId,
                         Status = package.Item.Status.ToString(),
-                        ImageUrls = package.Item.ItemImages.Select(ii => ii.ItemImageURL).ToList(),
+                        ImageUrls = package.Item.ItemImages?.Select(pi => new ItemImageReadDTO
+                        {
+                            ItemImageId = pi.ItemImageId,
+                            ItemId = pi.ItemId,
+                            ImageUrl = pi.ItemImageURL
+                        }).ToList() ?? new List<ItemImageReadDTO>()
                     },
                     PackageImages = package.PackageImages?.Select(pi => new PackageImageReadDTO
                     {

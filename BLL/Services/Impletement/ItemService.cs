@@ -76,7 +76,13 @@ namespace BLL.Services.Impletement
                     OwnerId = item.OwnerId,
                     ProviderId = item.ProviderId,
                     Status = item.Status.ToString(),
-                    ImageUrls = item.ItemImages.Select(img => img.ItemImageURL).ToList()
+                    //ImageUrls = item.ItemImages.Select(img => img.ItemImageURL).ToList()
+                    ImageUrls = item.ItemImages?.Select(pi => new ItemImageReadDTO
+                    {
+                       ItemImageId = pi.ItemImageId,
+                       ItemId = pi.ItemId,
+                       ImageUrl = pi.ItemImageURL
+                    }).ToList() ?? new List<ItemImageReadDTO>()
                 }).ToList();
                 return new ResponseDTO
                 {
@@ -122,7 +128,12 @@ namespace BLL.Services.Impletement
                     OwnerId = item.OwnerId,
                     ProviderId = item.ProviderId,
                     Status = item.Status.ToString(),
-                    ImageUrls = item.ItemImages.Select(img => img.ItemImageURL).ToList()
+                    ImageUrls = item.ItemImages?.Select(pi => new ItemImageReadDTO
+                    {
+                        ItemImageId = pi.ItemImageId,
+                        ItemId = pi.ItemId,
+                        ImageUrl = pi.ItemImageURL
+                    }).ToList() ?? new List<ItemImageReadDTO>()
                 };
                 return new ResponseDTO
                 {
@@ -294,7 +305,12 @@ namespace BLL.Services.Impletement
                     OwnerId = item.OwnerId,
                     ProviderId = item.ProviderId,
                     Status = item.Status.ToString(),
-                    ImageUrls = item.ItemImages.Select(img => img.ItemImageURL).ToList()
+                    ImageUrls = item.ItemImages?.Select(pi => new ItemImageReadDTO
+                    {
+                        ItemImageId = pi.ItemImageId,
+                        ItemId = pi.ItemId,
+                        ImageUrl = pi.ItemImageURL
+                    }).ToList() ?? new List<ItemImageReadDTO>()
                 }).ToList();
                 return Task.FromResult(new ResponseDTO
                 {
