@@ -35,5 +35,16 @@ namespace Common.DTOs
         public string Version { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public ContractType Type { get; set; }
+
+    }
+
+    public class GetDetailContractTemplateDTO
+    {
+        public Guid ContractTemplateId { get; set; }
+        public string ContractTemplateName { get; set; } = string.Empty;
+        public string Version { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public ContractType Type { get; set; }
+        public List<ContractTermDetailDTO> ContractTerms { get; set; }
     }
 }

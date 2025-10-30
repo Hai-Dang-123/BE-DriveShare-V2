@@ -11,44 +11,41 @@ namespace BLL.Services.Impletement
 {
     public class ContractTemplateService : IContractTemplateService
     {
-        private readonly IGenericRepository<ContractTemplate> _contractTemplateRepo;
         private readonly IUnitOfWork _unitOfWork;
 
-        public ContractTemplateService(IGenericRepository<ContractTemplate> contractTemplateRepo, IUnitOfWork unitOfWork)
+        public ContractTemplateService(IUnitOfWork unitOfWork)
         {
-            _contractTemplateRepo = contractTemplateRepo;
             _unitOfWork = unitOfWork;
         }
 
         public async Task<ResponseDTO> CreateAsync(ContractTemplateCreateDTO dto)
         {
-            var template = new ContractTemplate
+            try
             {
-                ContractTemplateId = Guid.NewGuid(),
-                ContractTemplateName = dto.ContractTemplateName,
-                Version = dto.Version,
-                Type = dto.Type,
-                CreatedAt = DateTime.UtcNow
-            };
 
-            await _contractTemplateRepo.AddAsync(template);
-            await _unitOfWork.SaveChangeAsync();
+                var template = new ContractTemplate
+                {
+                    ContractTemplateId = Guid.NewGuid(),
+                    ContractTemplateName = dto.ContractTemplateName,
+                    Version = dto.Version,
+                    Type = dto.Type,
+                    CreatedAt = DateTime.UtcNow
+                };
 
-            var result = new ContractTemplateDetailDTO
+
+                await _unitOfWork.ContractTemplateRepo.AddAsync(template);
+                await _unitOfWork.SaveChangeAsync();
+
+                return new ResponseDTO("Create ContractTemplate Successfully !!!", 200, true);
+            } catch (Exception ex)
             {
-                ContractTemplateId = template.ContractTemplateId,
-                ContractTemplateName = template.ContractTemplateName,
-                Version = template.Version,
-                Type = template.Type,
-                CreatedAt = template.CreatedAt
-            };
-
-            return new ResponseDTO { IsSuccess = true, Message = "Contract template created successfully", Result = result };
+                return new ResponseDTO("Error at saving ContractTemplate" , 500, false);
+            }
         }
 
         public async Task<ResponseDTO> UpdateAsync(ContractTemplateUpdateDTO dto)
         {
-            var template = await _contractTemplateRepo.GetByIdAsync(dto.ContractTemplateId);
+            var template = await _unitOfWork.ContractTemplateRepo.GetByIdAsync(dto.ContractTemplateId);
             if (template == null)
                 return new ResponseDTO { IsSuccess = false, Message = "Template not found" };
 
@@ -57,7 +54,7 @@ namespace BLL.Services.Impletement
             if (dto.Type.HasValue)
                 template.Type = dto.Type.Value;
 
-            await _contractTemplateRepo.UpdateAsync(template);
+            await _unitOfWork.ContractTemplateRepo.UpdateAsync(template);
             await _unitOfWork.SaveChangeAsync();
 
             return new ResponseDTO { IsSuccess = true, Message = "Contract template updated successfully" };
@@ -65,11 +62,11 @@ namespace BLL.Services.Impletement
 
         public async Task<ResponseDTO> SoftDeleteAsync(Guid id)
         {
-            var template = await _contractTemplateRepo.GetByIdAsync(id);
+            var template = await _unitOfWork.ContractTemplateRepo.GetByIdAsync(id);
             if (template == null)
                 return new ResponseDTO { IsSuccess = false, Message = "Template not found" };
 
-            await _contractTemplateRepo.DeleteAsync(id);
+            await _unitOfWork.ContractTemplateRepo.DeleteAsync(id);
             await _unitOfWork.SaveChangeAsync();
 
             return new ResponseDTO { IsSuccess = true, Message = "Template soft-deleted successfully" };
@@ -77,7 +74,7 @@ namespace BLL.Services.Impletement
 
         public async Task<ResponseDTO> GetAllAsync()
         {
-            var templates = await _contractTemplateRepo.GetAllAsync();
+            var templates = await _unitOfWork.ContractTemplateRepo.GetAllAsync();
             var result = templates.Select(t => new ContractTemplateDTO
             {
                 ContractTemplateId = t.ContractTemplateId,
@@ -92,7 +89,7 @@ namespace BLL.Services.Impletement
 
         public async Task<ResponseDTO> GetByIdAsync(Guid id)
         {
-            var template = await _contractTemplateRepo.GetByIdAsync(id);
+            var template = await _unitOfWork.ContractTemplateRepo.GetByIdAsync(id);
             if (template == null)
                 return new ResponseDTO { IsSuccess = false, Message = "Template not found" };
 
