@@ -81,7 +81,7 @@ namespace BLL.Services.Impletement
                     ItemId = p.ItemId,
                     PostPackageId = p.PostPackageId,
                     TripId = p.TripId,
-                    PackageImageUrls = p.PackageImages.Select(i => i.PackageImageURL).ToList(),
+                    //PackageImageUrls = p.PackageImages.Select(i => i.PackageImageURL).ToList(),
                     Item = new ItemReadDTO
                     {
                         Currency = p.Item.Currency,
@@ -93,10 +93,16 @@ namespace BLL.Services.Impletement
                         ProviderId = p.Item.ProviderId,
                         Status = p.Item.Status.ToString(),
                         ImageUrls = p.Item.ItemImages.Select(ii => ii.ItemImageURL).ToList(),
-                    }
-
+                    },
+                    PackageImages = p.PackageImages?.Select(pi => new PackageImageReadDTO
+                    {
+                        PackageImageId = pi.PackageImageId,
+                        PackageId = pi.PackageId,
+                        ImageUrl = pi.PackageImageURL,
+                        CreatedAt = pi.CreatedAt,
+                    }).ToList() ?? new List<PackageImageReadDTO>()
                 }).ToList();
-
+           
                 return new ResponseDTO
                 {
                     IsSuccess = true,
@@ -148,7 +154,7 @@ namespace BLL.Services.Impletement
                     ItemId = package.ItemId,
                     PostPackageId = package.PostPackageId,
                     TripId = package.TripId,
-                    PackageImageUrls = package.PackageImages.Select(i => i.PackageImageURL).ToList(),
+                    //PackageImageUrls = package.PackageImages.Select(i => i.PackageImageURL).ToList(),
                     Item = new ItemReadDTO
                     {
                         Currency = package.Item.Currency,
@@ -160,7 +166,14 @@ namespace BLL.Services.Impletement
                         ProviderId = package.Item.ProviderId,
                         Status = package.Item.Status.ToString(),
                         ImageUrls = package.Item.ItemImages.Select(ii => ii.ItemImageURL).ToList(),
-                    }
+                    },
+                    PackageImages = package.PackageImages?.Select(pi => new PackageImageReadDTO
+                    {
+                        PackageImageId = pi.PackageImageId,
+                        PackageId = pi.PackageId,
+                        ImageUrl = pi.PackageImageURL,
+                        CreatedAt = pi.CreatedAt,
+                    }).ToList() ?? new List<PackageImageReadDTO>()
                 };
                 return new ResponseDTO
                 {
