@@ -1,6 +1,7 @@
 ﻿using DAL.Context;
 using DAL.Entities;
 using DAL.Repositories.Interface;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,15 @@ namespace DAL.Repositories.Implement
         public ProviderRepository (DriverShareAppContext context) : base (context)
         {
             _context = context;
+        }
+
+        public async Task<Provider?> GetProviderByTaxCodeAsync(string taxCode)
+        {
+            if (string.IsNullOrWhiteSpace(taxCode))
+            {
+                return null;
+            }
+            return await _context.Providers.FirstOrDefaultAsync(o => o.TaxCode == taxCode);
         }
     }
 }

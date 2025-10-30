@@ -31,7 +31,6 @@ namespace DAL.Entities
         public Guid RoleId { get; set; }
         //
         public virtual Wallet Wallet { get; set; }
-        public Guid WalletId { get; set; }
         //
         public virtual ICollection<UserDocument> UserDocuments { get; set; }
         public virtual ICollection<UserToken> UserTokens { get; set; }

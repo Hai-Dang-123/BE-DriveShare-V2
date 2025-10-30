@@ -1,6 +1,8 @@
-﻿using DAL.Context;
+﻿using Common.Enums.Status;
+using DAL.Context;
 using DAL.Entities;
 using DAL.Repositories.Interface;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,5 +18,15 @@ namespace DAL.Repositories.Implement
         {
             _context = context;
         }
+
+        public async Task<bool> CheckLinkExistsAsync(Guid ownerId, Guid driverId)
+        {
+            return await _context.OwnerDriverLinks
+                .AnyAsync(link =>
+                    link.OwnerId == ownerId &&
+                    link.DriverId == driverId &&
+                    (link.Status == FleetJoinStatus.PENDING || link.Status == FleetJoinStatus.APPROVED));
+        }
+
     }
 }
