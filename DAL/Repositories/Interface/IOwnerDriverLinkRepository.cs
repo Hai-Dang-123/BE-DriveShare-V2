@@ -9,5 +9,6 @@ namespace DAL.Repositories.Interface
 {
     public interface IOwnerDriverLinkRepository : IGenericRepository<OwnerDriverLink>
     {
+        Task<bool> CheckLinkExistsAsync(Guid ownerId, Guid driverId);
     }
 }

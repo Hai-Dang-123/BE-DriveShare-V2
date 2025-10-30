@@ -1,7 +1,7 @@
 ﻿using Common.Enums;
 using Common.Enums.Status;
 using Common.Enums.Type;
-using Common.ValueObjects; // Thêm using cho Location
+using Common.ValueObjects;
 using DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -91,7 +91,6 @@ namespace DAL.Context
                     Status = UserStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
-                    WalletId = AdminWalletID, // Gán Wallet ID
                     //Address = sampleAddress,   // Gán Địa chỉ
                     IsEmailVerified = true,
                     IsPhoneVerified = true
@@ -107,7 +106,6 @@ namespace DAL.Context
                     Status = UserStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
-                    WalletId = StaffWalletID, // Gán Wallet ID
                     //Address = sampleAddress,  // Gán Địa chỉ
                     IsEmailVerified = true,
                     IsPhoneVerified = true
@@ -154,7 +152,6 @@ namespace DAL.Context
                     IsPhoneVerified = true,
                     //Address = driverAddress,
                     RoleId = DriverRole,
-                    WalletId = DriverWalletID, // Quan trọng: Gán Wallet ID
 
                     // --- Driver Specific Fields ---
                     LicenseNumber = "GPLX12345",
@@ -192,7 +189,6 @@ namespace DAL.Context
                     IsPhoneVerified = true,
                     //Address = ownerAddress,
                     RoleId = OwnerRole,
-                    WalletId = OwnerWalletID, // Quan trọng: Gán Wallet ID
 
                     // --- Owner Specific Fields ---
                     CompanyName = "Công ty Vận Tải ABC",
@@ -229,7 +225,6 @@ namespace DAL.Context
                     IsPhoneVerified = true,
                     //Address = providerAddress,
                     RoleId = ProviderRole, // Gán đúng Role ID
-                    WalletId = ProviderWalletID, // Quan trọng: Gán Wallet ID
 
                     // --- Provider Specific Fields ---
                     CompanyName = "Nhà cung cấp XYZ",
