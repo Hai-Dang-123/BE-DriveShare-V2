@@ -38,6 +38,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<UserUtility>();
             
 
             //services.AddHttpClient<IVNPTTokenService, VNPTTokenService>();
