@@ -4,160 +4,162 @@ using Common.DTOs;
 using Common.Enums.Status;
 using Common.Settings;
 using DAL.Entities;
-using DAL.Repositories.Interface;
 using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace BLL.Services.Implement
+namespace BLL.Services.Impletement
 {
     public class VehicleImageService : IVehicleImageService
     {
-        private readonly IGenericRepository<VehicleImage> _vehicleImageRepo;
-        private readonly IGenericRepository<Vehicle> _vehicleRepo;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IFirebaseUploadService _firebaseService;
         private readonly UserUtility _userUtility;
 
         public VehicleImageService(
-            IGenericRepository<VehicleImage> vehicleImageRepo,
-            IGenericRepository<Vehicle> vehicleRepo,
             IUnitOfWork unitOfWork,
             IFirebaseUploadService firebaseService,
             UserUtility userUtility)
         {
-            _vehicleImageRepo = vehicleImageRepo;
-            _vehicleRepo = vehicleRepo;
             _unitOfWork = unitOfWork;
             _firebaseService = firebaseService;
             _userUtility = userUtility;
         }
 
         // CREATE
-        public async Task<ResponseDTO> CreateVehicleImageAsync(VehicleImageCreateDTO dto)
+        public async Task<ResponseDTO> CreateAsync(VehicleImageCreateDTO dto)
         {
-            var ownerId = _userUtility.GetUserIdFromToken();
-            if (ownerId == Guid.Empty)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized or invalid token" };
-
-            var vehicle = await _vehicleRepo.GetByIdAsync(dto.VehicleId);
-            if (vehicle == null || vehicle.OwnerId != ownerId)
-                return new ResponseDTO { IsSuccess = false, Message = "Vehicle not found or not owned by user" };
-
-            // Upload ảnh lên Firebase
-            var imageUrl = await _firebaseService.UploadFileAsync(dto.File, ownerId, FirebaseFileType.VEHICLE_IMAGES);
-
-            var image = new VehicleImage
+            try
             {
-                VehicleImageId = Guid.NewGuid(),
-                VehicleId = dto.VehicleId,
-                ImageURL = imageUrl,
-                Caption = dto.Caption,
-                CreatedAt = DateTime.UtcNow
-            };
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
-            await _vehicleImageRepo.AddAsync(image);
-            await _unitOfWork.SaveChangeAsync();
+                var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(dto.VehicleId);
+                if (vehicle == null || vehicle.OwnerId != ownerId)
+                    return new ResponseDTO("Vehicle not found or not owned by user", 404, false);
 
-            var dtoResult = new VehicleImageDTO
+                // Upload ảnh lên Firebase
+                var imageUrl = await _firebaseService.UploadFileAsync(dto.File, ownerId, FirebaseFileType.VEHICLE_IMAGES);
+
+                var image = new VehicleImage
+                {
+                    VehicleImageId = Guid.NewGuid(),
+                    VehicleId = dto.VehicleId,
+                    ImageURL = imageUrl,
+                    Caption = dto.Caption,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _unitOfWork.VehicleImageRepo.AddAsync(image);
+                await _unitOfWork.SaveChangeAsync();
+
+                var result = new VehicleImageDTO
+                {
+                    VehicleImageId = image.VehicleImageId,
+                    VehicleId = image.VehicleId,
+                    Caption = image.Caption,
+                    ImageURL = image.ImageURL,
+                    CreatedAt = image.CreatedAt
+                };
+
+                return new ResponseDTO("Create VehicleImage Successfully !!!", 200, true, result);
+            }
+            catch (Exception ex)
             {
-                VehicleImageId = image.VehicleImageId,
-                VehicleId = image.VehicleId,
-                Caption = image.Caption,
-                ImageURL = image.ImageURL,
-                CreatedAt = image.CreatedAt
-            };
-
-            return new ResponseDTO
-            {
-                IsSuccess = true,
-                Message = "Vehicle image uploaded successfully",
-                Result = dtoResult
-            };
-
+                return new ResponseDTO("Error at saving VehicleImage", 500, false, ex.Message);
+            }
         }
 
         // UPDATE
-        public async Task<ResponseDTO> UpdateVehicleImageAsync(VehicleImageUpdateDTO dto)
+        public async Task<ResponseDTO> UpdateAsync(VehicleImageUpdateDTO dto)
         {
-            var ownerId = _userUtility.GetUserIdFromToken();
-            if (ownerId == Guid.Empty)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
-
-            var image = await _vehicleImageRepo.GetByIdAsync(dto.VehicleImageId);
-            if (image == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Vehicle image not found" };
-
-            var vehicle = await _vehicleRepo.GetByIdAsync(image.VehicleId);
-            if (vehicle == null || vehicle.OwnerId != ownerId)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized to modify this image" };
-
-            if (dto.File != null)
+            try
             {
-                var imageUrl = await _firebaseService.UploadFileAsync(dto.File, ownerId, FirebaseFileType.VEHICLE_IMAGES);
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized", 401, false);
 
-                image.ImageURL = imageUrl;
+                var image = await _unitOfWork.VehicleImageRepo.GetByIdAsync(dto.VehicleImageId);
+                if (image == null)
+                    return new ResponseDTO("Vehicle image not found", 404, false);
+
+                var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(image.VehicleId);
+                if (vehicle == null || vehicle.OwnerId != ownerId)
+                    return new ResponseDTO("Unauthorized to modify this image", 403, false);
+
+                // Nếu có file mới, upload lại lên Firebase
+                if (dto.File != null)
+                {
+                    var imageUrl = await _firebaseService.UploadFileAsync(dto.File, ownerId, FirebaseFileType.VEHICLE_IMAGES);
+                    image.ImageURL = imageUrl;
+                }
+
+                image.Caption = dto.Caption ?? image.Caption;
+
+                await _unitOfWork.VehicleImageRepo.UpdateAsync(image);
+                await _unitOfWork.SaveChangeAsync();
+
+                var result = new VehicleImageDTO
+                {
+                    VehicleImageId = image.VehicleImageId,
+                    VehicleId = image.VehicleId,
+                    Caption = image.Caption,
+                    ImageURL = image.ImageURL,
+                    CreatedAt = image.CreatedAt
+                };
+
+                return new ResponseDTO("Vehicle image updated successfully", 200, true, result);
             }
-
-            image.Caption = dto.Caption ?? image.Caption;
-
-            await _vehicleImageRepo.UpdateAsync(image);
-            await _unitOfWork.SaveChangeAsync();
-
-            var dtoResult = new VehicleImageDTO
+            catch (Exception ex)
             {
-                VehicleImageId = image.VehicleImageId,
-                VehicleId = image.VehicleId,
-                Caption = image.Caption,
-                ImageURL = image.ImageURL,
-                CreatedAt = image.CreatedAt
-            };
-
-            return new ResponseDTO
-            {
-                IsSuccess = true,
-                Message = "Vehicle image updated successfully",
-                Result = dtoResult
-            };
-
+                return new ResponseDTO("Error at updating VehicleImage", 500, false, ex.Message);
+            }
         }
 
         // SOFT DELETE
-        public async Task<ResponseDTO> SoftDeleteVehicleImageAsync(Guid imageId)
+        public async Task<ResponseDTO> SoftDeleteAsync(Guid imageId)
         {
-            var ownerId = _userUtility.GetUserIdFromToken();
-            if (ownerId == Guid.Empty)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
+            try
+            {
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized", 401, false);
 
-            var image = await _vehicleImageRepo.GetByIdAsync(imageId);
-            if (image == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Vehicle image not found" };
+                var image = await _unitOfWork.VehicleImageRepo.GetByIdAsync(imageId);
+                if (image == null)
+                    return new ResponseDTO("Vehicle image not found", 404, false);
 
-            var vehicle = await _vehicleRepo.GetByIdAsync(image.VehicleId);
-            if (vehicle == null || vehicle.OwnerId != ownerId)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
+                var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(image.VehicleId);
+                if (vehicle == null || vehicle.OwnerId != ownerId)
+                    return new ResponseDTO("Unauthorized", 403, false);
 
-            await _vehicleImageRepo.DeleteAsync(imageId);
-            await _unitOfWork.SaveChangeAsync();
+                await _unitOfWork.VehicleImageRepo.DeleteAsync(imageId);
+                await _unitOfWork.SaveChangeAsync();
 
-            return new ResponseDTO { IsSuccess = true, Message = "Vehicle image deleted successfully" };
+                return new ResponseDTO("Vehicle image deleted successfully", 200, true);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO("Error at deleting VehicleImage", 500, false, ex.Message);
+            }
         }
 
         // GET ALL
-        public async Task<ResponseDTO> GetAllVehicleImagesAsync(Guid vehicleId)
+        public async Task<ResponseDTO> GetAllAsync(Guid vehicleId)
         {
             var ownerId = _userUtility.GetUserIdFromToken();
             if (ownerId == Guid.Empty)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
+                return new ResponseDTO("Unauthorized", 401, false);
 
-            var vehicle = await _vehicleRepo.GetByIdAsync(vehicleId);
+            var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(vehicleId);
             if (vehicle == null || vehicle.OwnerId != ownerId)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
+                return new ResponseDTO("Unauthorized", 403, false);
 
-            var images = await _vehicleImageRepo.GetAllAsync(v => v.VehicleId == vehicleId);
-            var result = images.Select(i => new VehicleImageDetailDTO
+            var images = await _unitOfWork.VehicleImageRepo.GetAllAsync(v => v.VehicleId == vehicleId);
+            var result = images.Select(i => new VehicleImageDTO
             {
                 VehicleImageId = i.VehicleImageId,
                 VehicleId = i.VehicleId,
@@ -166,25 +168,25 @@ namespace BLL.Services.Implement
                 CreatedAt = i.CreatedAt
             }).ToList();
 
-            return new ResponseDTO { IsSuccess = true, Result = result };
+            return new ResponseDTO("Get all VehicleImages successfully", 200, true, result);
         }
 
         // GET BY ID
-        public async Task<ResponseDTO> GetVehicleImageByIdAsync(Guid imageId)
+        public async Task<ResponseDTO> GetByIdAsync(Guid imageId)
         {
             var ownerId = _userUtility.GetUserIdFromToken();
             if (ownerId == Guid.Empty)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
+                return new ResponseDTO("Unauthorized", 401, false);
 
-            var image = await _vehicleImageRepo.GetByIdAsync(imageId);
+            var image = await _unitOfWork.VehicleImageRepo.GetByIdAsync(imageId);
             if (image == null)
-                return new ResponseDTO { IsSuccess = false, Message = "Vehicle image not found" };
+                return new ResponseDTO("Vehicle image not found", 404, false);
 
-            var vehicle = await _vehicleRepo.GetByIdAsync(image.VehicleId);
+            var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(image.VehicleId);
             if (vehicle == null || vehicle.OwnerId != ownerId)
-                return new ResponseDTO { IsSuccess = false, Message = "Unauthorized" };
+                return new ResponseDTO("Unauthorized", 403, false);
 
-            var dto = new VehicleImageDetailDTO
+            var dto = new VehicleImageDTO
             {
                 VehicleImageId = image.VehicleImageId,
                 VehicleId = image.VehicleId,
@@ -193,7 +195,7 @@ namespace BLL.Services.Implement
                 CreatedAt = image.CreatedAt
             };
 
-            return new ResponseDTO { IsSuccess = true, Result = dto };
+            return new ResponseDTO("Get VehicleImage successfully", 200, true, dto);
         }
     }
 }

@@ -26,6 +26,8 @@ namespace Common.DTOs
         public string Version { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public ContractType Type { get; set; }
+
+        public List<ContractTermDTO> ContractTerms { get; set; } = new List<ContractTermDTO>();
     }
 
     public class ContractTemplateDTO

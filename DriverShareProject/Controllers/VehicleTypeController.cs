@@ -1,15 +1,13 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
 
 namespace DriverShareProject.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-
+    [Route("api/[controller]")]
     public class VehicleTypeController : ControllerBase
     {
         private readonly IVehicleTypeService _vehicleTypeService;
@@ -19,44 +17,40 @@ namespace DriverShareProject.Controllers
             _vehicleTypeService = vehicleTypeService;
         }
 
-        // ✅ Create
-        [HttpPost("create")]
-        public async Task<IActionResult> Create([FromForm] VehicleTypeCreateDTO dto)
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] VehicleTypeCreateDTO dto)
         {
-            var response = await _vehicleTypeService.CreateVehicleTypeAsync(dto);
-            return Ok(response);
+            var result = await _vehicleTypeService.CreateAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
 
-        // ✅ Update
-        [HttpPut("update")]
-        public async Task<IActionResult> Update([FromForm] VehicleTypeUpdateDTO dto)
+        [HttpPut("{id:guid}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] VehicleTypeUpdateDTO dto)
         {
-            var response = await _vehicleTypeService.UpdateVehicleTypeAsync(dto);
-            return Ok(response);
+            dto.VehicleTypeId = id;
+            var result = await _vehicleTypeService.UpdateAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
 
-        // ✅ Soft Delete
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> SoftDelete(Guid id)
         {
-            var response = await _vehicleTypeService.SoftDeleteVehicleTypeAsync(id);
-            return Ok(response);
+            var result = await _vehicleTypeService.SoftDeleteAsync(id);
+            return StatusCode(result.StatusCode, result);
         }
 
-        // ✅ Get All
-        [HttpGet("get-all")]
+        [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var response = await _vehicleTypeService.GetAllVehicleTypesAsync();
-            return Ok(response);
+            var result = await _vehicleTypeService.GetAllAsync();
+            return StatusCode(result.StatusCode, result);
         }
 
-        // ✅ Get By Id
-        [HttpGet("{id}")]
+        [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var response = await _vehicleTypeService.GetVehicleTypeByIdAsync(id);
-            return Ok(response);
+            var result = await _vehicleTypeService.GetByIdAsync(id);
+            return StatusCode(result.StatusCode, result);
         }
     }
 }
