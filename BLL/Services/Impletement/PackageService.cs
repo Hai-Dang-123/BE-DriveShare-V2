@@ -204,6 +204,84 @@ namespace BLL.Services.Impletement
                 };
             }
         }
+        // Get packages by user id
+        public async Task<ResponseDTO> GetPackagesByUserIdAsync()
+        {
+            try
+            {
+                var userId = _userUtility.GetUserIdFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO
+                    {
+                        Result = false,
+                        StatusCode = StatusCodes.Status401Unauthorized,
+                        Message = "Unauthorized"
+                    };
+                var packages = await _unitOfWork.PackageRepo.GetPackagesByUserIdAsync(userId);
+                var packageDto = packages.Select(p => new PackageReadDTO
+                {
+
+                    PackageId = p.PackageId,
+                    PackageCode = p.PackageCode,
+                    Title = p.Title,
+                    Description = p.Description,
+                    Quantity = p.Quantity,
+                    Unit = p.Unit,
+                    WeightKg = p.WeightKg,
+                    VolumeM3 = p.VolumeM3,
+                    Status = p.Status,
+                    HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
+                    OtherRequirements = p.OtherRequirements,
+                    OwnerId = p.OwnerId,
+                    ProviderId = p.ProviderId,
+                    ItemId = p.ItemId,
+                    PostPackageId = p.PostPackageId,
+                    TripId = p.TripId,
+
+                    Item = new ItemReadDTO
+                    {
+                        Currency = p.Item.Currency,
+                        DeclaredValue = p.Item.DeclaredValue,
+                        Description = p.Item.Description,
+                        ItemId = p.Item.ItemId,
+                        ItemName = p.Item.ItemName,
+                        OwnerId = p.Item.OwnerId,
+                        ProviderId = p.Item.ProviderId,
+                        Status = p.Item.Status.ToString(),
+                        ImageUrls = p.Item.ItemImages?.Select(pi => new ItemImageReadDTO
+                        {
+                            ItemImageId = pi.ItemImageId,
+                            ItemId = pi.ItemId,
+                            ImageUrl = pi.ItemImageURL
+                        }).ToList() ?? new List<ItemImageReadDTO>()
+                    },
+                    PackageImages = p.PackageImages?.Select(pi => new PackageImageReadDTO
+                    {
+                        PackageImageId = pi.PackageImageId,
+                        PackageId = pi.PackageId,
+                        ImageUrl = pi.PackageImageURL,
+                        CreatedAt = pi.CreatedAt,
+                    }).ToList() ?? new List<PackageImageReadDTO>()
+                }).ToList();
+                return new ResponseDTO
+                {
+                    IsSuccess = true,
+                    StatusCode = StatusCodes.Status200OK,
+                    Message = "Packages retrieved successfully",
+                    Result = packageDto
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO
+                {
+                    Result = false,
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
         // Owner create package
         public async Task<ResponseDTO> OwnerCreatePackageAsync(PackageCreateDTO packageDTO)
         {

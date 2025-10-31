@@ -15,5 +15,6 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> GetAllPackagesAsync();
         Task<ResponseDTO> UpdatePackageAsync(PackageUpdateDTO updatePackageDTO);
         Task<ResponseDTO> DeletePackageAsync(Guid packageId);
+        Task<ResponseDTO> GetPackagesByUserIdAsync();
     }
 }
