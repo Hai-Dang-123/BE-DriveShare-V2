@@ -28,7 +28,6 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IItemImagesService, ItemImagesService>();
             services.AddScoped<IPackageService, PackageService>();
             services.AddScoped<IPackageImageService, PackageImageService>();
-
             services.AddScoped<IOwnerDriverLinkService, OwnerDriverLinkService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IVehicleImageService, VehicleImageService>();
@@ -36,6 +35,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IContractTemplateService, ContractTemplateService>();
             services.AddScoped<IContractTermService, ContractTermService>();
             services.AddScoped<IPostPackageService, PostPackageService>();
+            services.AddScoped<ITripContactService, TripContactService>();
 
 
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
