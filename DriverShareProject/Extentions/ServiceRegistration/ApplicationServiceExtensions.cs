@@ -1,4 +1,5 @@
 ﻿
+using BLL.Services.Implement;
 using BLL.Services.Impletement;
 using BLL.Services.Interface;
 using BLL.Utilities;
@@ -22,7 +23,15 @@ namespace DriverShareProject.Extentions.ServiceRegistration
           
             //Service
             services.AddScoped<IAuthService, AuthService>();
+
+            //services.AddScoped<IDeliveryRecordTemplateService, DeliveryRecordTemplateService>();
+            //services.AddScoped<IDeliveryRecordTermService, DeliveryRecordTermService>();
+            //services.AddScoped<IUserDocumentService, UserDocumentService>();
+            //services.AddScoped<IVehicleDocumentService, VehicleDocumentService>();
+
+
             services.AddScoped<UserUtility>();
+
 
             services.AddScoped<IItemService, ItemService>();
             services.AddScoped<IItemImagesService, ItemImagesService>();
@@ -34,8 +43,14 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IVehicleTypeService, VehicleTypeService>();
             services.AddScoped<IContractTemplateService, ContractTemplateService>();
             services.AddScoped<IContractTermService, ContractTermService>();
+
             services.AddScoped<IPostPackageService, PostPackageService>();
             services.AddScoped<ITripContactService, TripContactService>();
+
+            services.AddScoped<ITripService, TripService>();
+            services.AddScoped<ITripProviderContractService, TripProviderContractService>();
+            services.AddScoped<ITripDriverContractService, TripDriverContractService>();
+
 
 
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
