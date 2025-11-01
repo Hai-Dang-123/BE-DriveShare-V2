@@ -33,8 +33,6 @@ namespace BLL.Services.Impletement
             _context.Set<DeliveryRecordTemplate>().Add(entity);
             await _context.SaveChangesAsync();
 
-            dto.DeliveryRecordTemplateId = entity.DeliveryRecordTemplateId;
-            dto.CreatedAt = entity.CreatedAt;
 
             return new ResponseDTO("Created successfully", 201, true, dto);
         }

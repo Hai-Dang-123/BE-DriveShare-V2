@@ -10,6 +10,7 @@ namespace Common.Enums.Status
     {
         PENDING,
         COMPLETED,
+        AWAITING_CONTRACT_SIGNATURE
         CANCELLED,
         REJECTED
     }
