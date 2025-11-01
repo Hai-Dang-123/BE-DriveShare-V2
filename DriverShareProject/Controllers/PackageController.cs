@@ -41,6 +41,12 @@ namespace DriverShareProject.Controllers
             var result = await _packageService.GetAllPackagesAsync();
             return StatusCode(result.StatusCode, result);
         }
+        [HttpGet("get-packages-by-user")]
+        public async Task<IActionResult> GetPackagesByUser()
+        {
+            var result = await _packageService.GetPackagesByUserIdAsync();
+            return StatusCode(result.StatusCode, result);
+        }
         [HttpPut("update-package")]
         public async Task<IActionResult> UpdatePackage([FromBody] PackageUpdateDTO packageUpdateDTO)
         {
