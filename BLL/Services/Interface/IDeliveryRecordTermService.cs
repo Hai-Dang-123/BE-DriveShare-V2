@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BLL.Services.Interface
 {
-    internal interface IDeliveryRecordTermService
+    public interface IDeliveryRecordTermService
     {
     }
 }
