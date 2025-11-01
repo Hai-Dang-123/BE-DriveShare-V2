@@ -39,7 +39,10 @@ namespace DAL.Repositories.Implement
             return await _context.Packages
                 .Include(p => p.Item)
                 .Include(p => p.PackageImages)
-                .Where(p => p.OwnerId == UserId || p.ProviderId == UserId && p.Status != PackageStatus.Deleted)
+                .Where(p =>
+                (p.OwnerId == UserId || p.ProviderId == UserId)
+                && p.Status != PackageStatus.Deleted
+                && p.TripId == null)
                 .ToListAsync();
         }
     }
