@@ -52,6 +52,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<ITripDriverContractService, TripDriverContractService>();
             services.AddScoped<ITripDeliveryIssueImageService, TripDeliveryIssueImageService>();
             services.AddScoped<ITripDeliveryIssueService, TripDeliveryIssueService>();
+            services.AddScoped<ITripCompensationService, TripCompensationService>();
 
 
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
