@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Common.Enums.Status;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,6 +17,8 @@ namespace DAL.Entities
         public string? Unit { get; set; } // Ví dụ: "cái", "thùng", "kg"
         public decimal WeightKg { get; set; }
         public decimal VolumeM3 { get; set; } // Mét khối
+
+        public PackageStatus Status { get; set; } 
 
         // --- GỢI Ý CẢI TIẾN (Thay thế cho các trường Is...) ---
         // Lưu dưới dạng JSON hoặc một mảng string trong DB

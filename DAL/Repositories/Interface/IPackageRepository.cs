@@ -9,5 +9,8 @@ namespace DAL.Repositories.Interface
 {
     public interface IPackageRepository : IGenericRepository<Package>
     {
+        Task<IEnumerable<Package>> GetAllPackagesAsync();
+        Task<Package?> GetPackageByIdAsync(Guid packageId);
+        Task<IEnumerable<Package>> GetPackagesByUserIdAsync(Guid UserId);
     }
 }

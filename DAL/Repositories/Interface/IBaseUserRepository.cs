@@ -10,5 +10,7 @@ namespace DAL.Repositories.Interface
     public interface IBaseUserRepository : IGenericRepository<BaseUser>
     {
         Task<BaseUser> FindByEmailAsync(string email);
+        Task<BaseUser?> FindByEmailAndRoleAsync(string email, string roleName);
+        Task<BaseUser> FindByPhoneNumberAsync(string phoneNumber);
     }
 }

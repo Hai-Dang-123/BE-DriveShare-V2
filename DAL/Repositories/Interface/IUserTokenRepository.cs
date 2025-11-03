@@ -10,5 +10,6 @@ namespace DAL.Repositories.Interface
     public interface IUserTokenRepository : IGenericRepository<UserToken>
     {
         Task<UserToken> GetRefreshTokenByUserID(Guid userId);
+        Task<UserToken?> GetValidRefreshTokenWithUserAsync(string tokenValue);
     }
 }
