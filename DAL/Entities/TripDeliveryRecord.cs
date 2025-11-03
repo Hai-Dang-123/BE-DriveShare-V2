@@ -25,7 +25,9 @@ namespace DAL.Entities
         // --- GỢI Ý (Nghiệp vụ Ký) ---
         public string? DriverSignatureUrl { get; set; } // Ảnh chữ ký của Driver
         public DateTime? DriverSignedAt { get; set; }
+        public bool? DriverSigned { get; set; }
         public string? ContactSignatureUrl { get; set; } // Ảnh chữ ký của Người gửi/nhận
+        public bool? ContactSigned { get; set; }
         public DateTime? ContactSignedAt { get; set; }
         //public Location? SignLocation { get; set; } // Vị trí ký (nếu cần)
 
