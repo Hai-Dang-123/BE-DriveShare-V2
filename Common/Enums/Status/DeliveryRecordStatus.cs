@@ -10,6 +10,8 @@ namespace Common.Enums.Status
     {
         PENDING,
         AWAITING_DELIVERY_RECORD_SIGNATURE,
-        COMPLETED
+        COMPLETED,
+        CANCELLED,
+        REJECTED
     }
 }

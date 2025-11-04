@@ -15,7 +15,7 @@ namespace DAL.Entities
         public string Description { get; set; } = string.Empty;
 
         // --- Thông tin đăng tuyển ---
-        public decimal EstimatedFare { get; set; } // Tổng tiền dự kiến (trả cho tài xế)
+        //public decimal EstimatedFare { get; set; } // Tổng tiền dự kiến (trả cho tài xế)
         public PostStatus Status { get; set; } // Open, Filled, Cancelled
         public DateTime CreateAt { get; set; } = DateTime.Now;
         public DateTime UpdateAt { get; set; } = DateTime.Now;
@@ -23,8 +23,6 @@ namespace DAL.Entities
         // --- Yêu cầu cho tài xế/xe ---
         public DriverType Type { get; set; } // Loại tài xế (chính, phụ)
         public decimal? RequiredPayloadInKg { get; set; } // Yêu cầu trọng tải
-        public int? RequiredMainDrivers { get; set; }     // SỐ LƯỢNG TÀI CHÍNH CẦN
-        public int? RequiredAssistantDrivers { get; set; }// SỐ LƯỢNG TÀI PHỤ CẦN
 
         // --- GỢI Ý BẮT BUỘC (Dựa trên sơ đồ quan hệ) ---
 
@@ -36,8 +34,8 @@ namespace DAL.Entities
         public Guid TripId { get; set; } // FK to Trip
         public virtual Trip Trip { get; set; } = null!;
 
+        public virtual ICollection<PostTripDetail> PostTripDetails { get; set; } = new List<PostTripDetail>();
 
 
-      
     }
 }

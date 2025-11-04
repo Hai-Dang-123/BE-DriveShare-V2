@@ -76,6 +76,8 @@ namespace DAL.Context
 
         public DbSet<PostContact> PostContacts { get; set; } = null!;
 
+        public DbSet<PostTripDetail> PostTripDetails { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -148,6 +150,7 @@ namespace DAL.Context
             modelBuilder.Entity<TripDeliveryIssueImage>().HasKey(e => e.TripDeliveryIssueImageId);
 
             modelBuilder.Entity<PostContact>().HasKey(p => p.PostContactId);
+            modelBuilder.Entity<PostTripDetail>().HasKey(ptd => ptd.PostTripDetailId);
         }
 
         // =================================================================
@@ -670,6 +673,12 @@ namespace DAL.Context
                 .WithMany(pp => pp.PostContacts)
                 .HasForeignKey(pc => pc.PostPackageId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PostTripDetail>()
+                .HasOne(ptd => ptd.PostTrip)
+                .WithMany(pt => pt.PostTripDetails)
+                .HasForeignKey(ptd => ptd.PostTripId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
         // =================================================================
         // HÀM 5: CẤU HÌNH ĐỘ CHÍNH XÁC CHO DECIMAL
@@ -680,7 +689,8 @@ namespace DAL.Context
             modelBuilder.Entity<BaseContract>().Property(p => p.ContractValue).HasPrecision(18, 2);
             modelBuilder.Entity<Item>().Property(p => p.DeclaredValue).HasPrecision(18, 2);
             modelBuilder.Entity<PostPackage>().Property(p => p.OfferedPrice).HasPrecision(18, 2);
-            modelBuilder.Entity<PostTrip>().Property(p => p.EstimatedFare).HasPrecision(18, 2);
+            //modelBuilder.Entity<PostTrip>().Property(p => p.EstimatedFare).HasPrecision(18, 2);
+            modelBuilder.Entity<PostTripDetail>().Property(p => p.PricePerPerson).HasPrecision(18, 2);
             modelBuilder.Entity<Transaction>().Property(p => p.Amount).HasPrecision(18, 2);
             modelBuilder.Entity<Transaction>().Property(p => p.BalanceAfter).HasPrecision(18, 2);
             modelBuilder.Entity<Transaction>().Property(p => p.BalanceBefore).HasPrecision(18, 2);
