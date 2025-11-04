@@ -47,6 +47,9 @@ namespace DAL.Entities
         // Liên kết n-1
         public virtual Owner Owner { get; set; } = null!;
 
+        public virtual TripProviderContract? TripProviderContract { get; set; } // Nếu chuyến đi này do Nhà cung cấp tạo
+        public Guid TripProviderContractId { get; set; } // FK to TripProviderContract
+
 
 
         // Liên kết 1-1
@@ -65,7 +68,7 @@ namespace DAL.Entities
 
         // (Liên kết hợp đồng - đã có trong BaseContract qua TripId)
         public virtual ICollection<TripDriverContract> DriverContracts { get; set; } = new List<TripDriverContract>();
-        public virtual ICollection<TripProviderContract> ProviderContracts { get; set; } = new List<TripProviderContract>();
+        
 
         // (Liên kết giao dịch - đã có trong Transaction qua TripId)
         public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();

@@ -7,9 +7,7 @@ using System.Threading.Tasks;
 
 namespace Common.DTOs
 {
-    internal class TripContactDTO
-    {
-    }
+
     public class TripContactCreateDTO
     {
         public Guid TripId { get; set; }

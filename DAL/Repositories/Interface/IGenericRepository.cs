@@ -36,6 +36,9 @@ namespace DAL.Repositories.Interface
             string? includeProperties = null);
 
         Task<List<T>> GetAllAsync();
+        Task<T?> FirstOrDefaultAsync(
+    Expression<Func<T, bool>> filter,
+    string includeProperties = "");
 
     }
 }

@@ -18,7 +18,6 @@ namespace DAL.Entities
         public DateTime ExpectedDeliveryDate { get; set; }
         public TimeWindow PickupTimeWindow { get; set; } = new(null, null);
         public TimeWindow DeliveryTimeWindow { get; set; } = new(null, null);
-        public decimal EstimatedDistanceKm { get; set; }
 
         // --- GỢI Ý BẮT BUỘC (Navigation Properties - Dựa trên quan hệ 1-1) ---
 

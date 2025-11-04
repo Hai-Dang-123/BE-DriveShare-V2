@@ -6,11 +6,10 @@ using System.Threading.Tasks;
 
 namespace Common.Enums.Status
 {
-    public enum ItemStatus
+    public enum DeliveryRecordTemplateStatus
     {
-        PENDING,
-        IN_PROGRESS,
-        COMPLETED,
-        DELETED
+        ACTIVE,
+        INACTIVE,
+        DELETED 
     }
 }

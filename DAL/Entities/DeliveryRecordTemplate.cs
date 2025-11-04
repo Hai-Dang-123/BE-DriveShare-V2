@@ -1,4 +1,5 @@
-﻿using Common.Enums.Type;
+﻿using Common.Enums.Status;
+using Common.Enums.Type;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,7 @@ namespace DAL.Entities
 
         // Mẫu này dùng cho loại biên bản nào (Nhận hàng hay Trả hàng)
         public DeliveryRecordType Type { get; set; }
+        public DeliveryRecordTemplateStatus Status { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

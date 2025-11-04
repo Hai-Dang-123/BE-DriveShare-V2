@@ -74,6 +74,7 @@ namespace DAL.Context
         // === SỬA LỖI 1 ===
         public DbSet<TripDeliveryIssueImage> DeliveryIssueImages { get; set; } = null!; // Đổi tên class
 
+        public DbSet<PostContact> PostContacts { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -145,6 +146,8 @@ namespace DAL.Context
             modelBuilder.Entity<DeliveryRecordTerm>().HasKey(e => e.DeliveryRecordTermId);
             modelBuilder.Entity<TripDeliveryIssue>().HasKey(e => e.TripDeliveryIssueId);
             modelBuilder.Entity<TripDeliveryIssueImage>().HasKey(e => e.TripDeliveryIssueImageId);
+
+            modelBuilder.Entity<PostContact>().HasKey(p => p.PostContactId);
         }
 
         // =================================================================
@@ -600,11 +603,11 @@ namespace DAL.Context
                 .HasForeignKey(bc => bc.TripId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity < TripProviderContract>()
-               .HasOne(bc => bc.Trip)
-               .WithMany(t => t.ProviderContracts)
-               .HasForeignKey(bc => bc.TripId)
-               .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Trip>()
+                  .HasOne(trip => trip.TripProviderContract) // 1. Trip có một (hoặc không) TripProviderContract
+                  .WithOne(contract => contract.Trip)       // 2. TripProviderContract đó liên kết với một Trip
+                  .HasForeignKey<TripProviderContract>(contract => contract.TripId) // 3. Khóa ngoại là 'TripId' nằm trên entity 'TripProviderContract'
+                  .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Transaction>()
                 .HasOne(tr => tr.Trip)
@@ -661,6 +664,12 @@ namespace DAL.Context
                 .WithMany()
                 .HasForeignKey(tc => tc.RequesterId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PostContact>()
+                .HasOne(pc => pc.PostPackage)
+                .WithMany(pp => pp.PostContacts)
+                .HasForeignKey(pc => pc.PostPackageId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
         // =================================================================
         // HÀM 5: CẤU HÌNH ĐỘ CHÍNH XÁC CHO DECIMAL
@@ -691,7 +700,6 @@ namespace DAL.Context
             modelBuilder.Entity<Package>().Property(p => p.VolumeM3).HasPrecision(10, 2);
             modelBuilder.Entity<Package>().Property(p => p.WeightKg).HasPrecision(10, 2);
             modelBuilder.Entity<PostTrip>().Property(p => p.RequiredPayloadInKg).HasPrecision(10, 2);
-            modelBuilder.Entity<ShippingRoute>().Property(p => p.EstimatedDistanceKm).HasPrecision(10, 2);
             modelBuilder.Entity<Trip>().Property(p => p.ActualDistanceKm).HasPrecision(10, 2);
             modelBuilder.Entity<TripRoute>().Property(p => p.DistanceKm).HasPrecision(10, 2);
             modelBuilder.Entity<TripRouteSuggestion>().Property(p => p.DistanceKm).HasPrecision(10, 2);

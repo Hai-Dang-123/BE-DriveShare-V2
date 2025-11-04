@@ -6,9 +6,7 @@ using System.Threading.Tasks;
 
 namespace Common.DTOs
 {
-    public class TripDeliveryRecordDTO
-    {
-    }
+
     public class TripDeliveryRecordCreateDTO
     {
         public Guid TripId { get; set; }

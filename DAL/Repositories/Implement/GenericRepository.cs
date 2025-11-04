@@ -199,5 +199,21 @@ namespace DAL.Repositories.Implement
         {
             return await _dbSet.ToListAsync();
         }
+
+        public async Task<T?> FirstOrDefaultAsync(
+    Expression<Func<T, bool>> filter,
+    string includeProperties = "")
+        {
+            IQueryable<T> query = _dbSet;
+
+            // Phân tích chuỗi "ShippingRoute,Vehicle.VehicleType"
+            foreach (var includeProperty in includeProperties.Split(
+                new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                query = query.Include(includeProperty); // Dùng Include(string)
+            }
+
+            return await query.FirstOrDefaultAsync(filter);
+        }
     }
 }

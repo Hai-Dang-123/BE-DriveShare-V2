@@ -158,7 +158,6 @@ namespace BLL.Services.Implement
 
                     StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
                     EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
-                    EstimatedDistanceKm = t.ShippingRoute?.EstimatedDistanceKm ?? 0,
 
                     // Tính thời gian dự kiến dựa trên hai mốc ExpectedPickupDate và ExpectedDeliveryDate
                     EstimatedDuration = (t.ShippingRoute != null &&
@@ -229,7 +228,6 @@ namespace BLL.Services.Implement
                         // --- Shipping Route Info ---
                         StartAddress = t.ShippingRoute?.StartLocation?.Address ?? "",
                         EndAddress = t.ShippingRoute?.EndLocation?.Address ?? "",
-                        EstimatedDistanceKm = t.ShippingRoute?.EstimatedDistanceKm ?? 0,
                         EstimatedDuration = (t.ShippingRoute != null &&
                                              t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
                                             ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate
@@ -319,7 +317,6 @@ namespace BLL.Services.Implement
                     {
                         StartAddress = trip.ShippingRoute.StartLocation.Address,
                         EndAddress = trip.ShippingRoute.EndLocation.Address,
-                        EstimatedDistanceKm = trip.ShippingRoute.EstimatedDistanceKm,
                         EstimatedDuration = trip.ShippingRoute.ExpectedDeliveryDate - trip.ShippingRoute.ExpectedPickupDate
                     },
 

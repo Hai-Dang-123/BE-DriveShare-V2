@@ -30,7 +30,7 @@ namespace DAL.Entities
         // 3. Lộ trình của bài đăng là gì? (PostPackage - ShippingRoute 1-1)
         public Guid ShippingRouteId { get; set; } // FK to ShippingRoute
         public virtual ShippingRoute ShippingRoute { get; set; } = null!;
-
+        public virtual ICollection<PostContact> PostContacts { get; set; } = new List<PostContact>();
 
     }
 }
