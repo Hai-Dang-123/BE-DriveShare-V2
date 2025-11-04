@@ -16,4 +16,5 @@ namespace Common.DTOs
         public List<DeliveryRecordTermDTO> DeliveryRecordTerms { get; set; } = new List<DeliveryRecordTermDTO>();
 
     }
+   
 }

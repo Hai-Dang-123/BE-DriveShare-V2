@@ -9,5 +9,8 @@ namespace DAL.Repositories.Interface
 {
     public interface ITripDeliveryRecordRepository : IGenericRepository<TripDeliveryRecord>
     {
+        Task<IEnumerable<TripDeliveryRecord>> GetByTripIdAsync(Guid tripId);
+        Task<TripDeliveryRecord?> GetByIdWithDetailsAsync(Guid tripDeliveryRecordId);
+
     }
 }

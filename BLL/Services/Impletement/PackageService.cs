@@ -310,9 +310,9 @@ namespace BLL.Services.Impletement
                     OtherRequirements = packageDTO.OtherRequirements,
                     OwnerId = userId,
                     ItemId = packageDTO.ItemId,
-                    PostPackageId = packageDTO.PostPackageId,
+                    PostPackageId = packageDTO.PostPackageId,              
+                    Status = PackageStatus.Open,
                     TripId = packageDTO.TripId,
-                    Status = PackageStatus.Active,
                 };
 
                 await _unitOfWork.PackageRepo.AddAsync(package);
@@ -366,7 +366,7 @@ namespace BLL.Services.Impletement
                     ItemId = packageDTO.ItemId,
                     PostPackageId = packageDTO.PostPackageId,
                     TripId = packageDTO.TripId,
-                    Status = PackageStatus.Active,
+                    Status = PackageStatus.Pending,
                 };
 
                 await _unitOfWork.PackageRepo.AddAsync(package);

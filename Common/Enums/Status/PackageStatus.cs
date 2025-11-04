@@ -8,9 +8,11 @@ namespace Common.Enums.Status
 {
     public enum PackageStatus
     {
+        PENDING,
         OPEN,
         CLOSED,
         IN_PROGRESS,
         DELETED,
+
     }
 }
