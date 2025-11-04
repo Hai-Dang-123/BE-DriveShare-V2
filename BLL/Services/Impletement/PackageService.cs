@@ -37,7 +37,7 @@ namespace BLL.Services.Impletement
                         Message = "Package not found"
                     };
                 }
-                package.Status = PackageStatus.Deleted;
+                package.Status = PackageStatus.DELETED;
                 await _unitOfWork.PackageRepo.UpdateAsync(package);
                 await _unitOfWork.SaveChangeAsync();
                 return new ResponseDTO
@@ -311,7 +311,7 @@ namespace BLL.Services.Impletement
                     OwnerId = userId,
                     ItemId = packageDTO.ItemId,
                     PostPackageId = packageDTO.PostPackageId,              
-                    Status = PackageStatus.Open,
+                    Status = PackageStatus.OPEN,
                     TripId = packageDTO.TripId,
                 };
 
@@ -366,7 +366,7 @@ namespace BLL.Services.Impletement
                     ItemId = packageDTO.ItemId,
                     PostPackageId = packageDTO.PostPackageId,
                     TripId = packageDTO.TripId,
-                    Status = PackageStatus.Pending,
+                    Status = PackageStatus.OPEN,
                 };
 
                 await _unitOfWork.PackageRepo.AddAsync(package);

@@ -72,13 +72,10 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"Error while creating trip: {ex.Message}", 500, false);
             }
         }
-
         private string GenerateTripCode()
         {
             return $"TRIP-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
         }
-
-
         public async Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto)
         {
             try
@@ -104,8 +101,6 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"Error changing trip status: {ex.Message}", 500, false);
             }
         }
-
-
         private bool IsValidTransition(TripStatus current, TripStatus next)
         {
 
@@ -171,9 +166,9 @@ namespace BLL.Services.Implement
                                   ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes"
     :                             string.Empty,
 
-                    ContractCodes = t.DriverContracts.Select(c => c.ContractCode)
-                                      .Concat(t.ProviderContracts.Select(c => c.ContractCode))
-                                      .ToList()
+                    //ContractCodes = t.DriverContracts.Select(c => c.ContractCode)
+                    //                  .Concat(t.ProviderContracts.Select(c => c.ContractCode))
+                    //                  .ToList()
                 }).ToList();
 
                 return new ResponseDTO("Get trips successfully", 200, true, result);
@@ -240,9 +235,9 @@ namespace BLL.Services.Implement
 
                         // --- Packages & Contracts ---
                         PackageCodes = t.Packages.Select(p => p.PackageCode).ToList(),
-                        ContractCodes = t.DriverContracts.Select(c => c.ContractCode)
-                                          .Concat(t.ProviderContracts.Select(c => c.ContractCode))
-                                          .ToList(),
+                        //ContractCodes = t.DriverContracts.Select(c => c.ContractCode)
+                        //                  .Concat(t.ProviderContracts.Select(c => c.ContractCode))
+                        //                  .ToList(),
 
                         // --- All Drivers assigned to this Trip ---
                         DriverNames = t.DriverAssignments.Select(d => d.Driver.FullName).ToList(),
@@ -373,19 +368,19 @@ namespace BLL.Services.Implement
                         FileURL = c.FileURL
                     }).ToList(),
 
-                    // --- Provider Contracts ---
-                    ProviderContracts = trip.ProviderContracts.Select(c => new ContractSummaryDTO
-                    {
-                        ContractId = c.ContractId,
-                        ContractCode = c.ContractCode,
-                        Status = c.Status.ToString(),
-                        Type = c.Type.ToString(),              // ✅ Enum ContractType (OwnerProvider)
-                        ContractValue = c.ContractValue ?? 0,
-                        Currency = c.Currency,
-                        EffectiveDate = c.EffectiveDate,
-                        ExpirationDate = c.ExpirationDate,
-                        FileURL = c.FileURL
-                    }).ToList(),
+                    //// --- Provider Contracts ---
+                    //ProviderContracts = trip.ProviderContracts.Select(c => new ContractSummaryDTO
+                    //{
+                    //    ContractId = c.ContractId,
+                    //    ContractCode = c.ContractCode,
+                    //    Status = c.Status.ToString(),
+                    //    Type = c.Type.ToString(),              // ✅ Enum ContractType (OwnerProvider)
+                    //    ContractValue = c.ContractValue ?? 0,
+                    //    Currency = c.Currency,
+                    //    EffectiveDate = c.EffectiveDate,
+                    //    ExpirationDate = c.ExpirationDate,
+                    //    FileURL = c.FileURL
+                    //}).ToList(),
 
 
                     // --- Delivery Records ---

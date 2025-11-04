@@ -48,7 +48,6 @@ namespace DAL.Entities
         public virtual Owner Owner { get; set; } = null!;
 
         public virtual TripProviderContract? TripProviderContract { get; set; } // Nếu chuyến đi này do Nhà cung cấp tạo
-        public Guid TripProviderContractId { get; set; } // FK to TripProviderContract
 
 
 

@@ -22,7 +22,7 @@ namespace DAL.Repositories.Implement
         {
             return await _context.Items
                 .Include(i => i.ItemImages)
-                .Where(i => (i.OwnerId == userId || i.ProviderId == userId) && i.Status == ItemStatus.ACTIVE)
+                .Where(i => (i.OwnerId == userId || i.ProviderId == userId) )
                 .ToListAsync();
         }
 
@@ -30,7 +30,7 @@ namespace DAL.Repositories.Implement
         {
             return await _context.Items
                 .Include(i => i.ItemImages)
-                .Where (i => i.Status == ItemStatus.ACTIVE)
+                //.Where (i => i.Status == ItemStatus.PENDING)
                 .ToListAsync();
         }
 

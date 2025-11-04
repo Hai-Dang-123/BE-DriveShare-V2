@@ -24,7 +24,7 @@ namespace DAL.Repositories.Implement
             return await _context.Packages
                 .Include(p => p.Item)
                 .Include(p => p.PackageImages)
-                .Where(p => p.Status != PackageStatus.Deleted)
+                .Where(p => p.Status != PackageStatus.DELETED)
                 .ToListAsync();
         }
         public async Task<Package?> GetPackageByIdAsync(Guid packageId)
@@ -41,7 +41,7 @@ namespace DAL.Repositories.Implement
                 .Include(p => p.PackageImages)
                 .Where(p =>
                 (p.OwnerId == UserId || p.ProviderId == UserId)
-                && p.Status != PackageStatus.Deleted
+                && p.Status != PackageStatus.DELETED
                 && p.TripId == null)
                 .ToListAsync();
         }

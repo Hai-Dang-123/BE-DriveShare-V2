@@ -218,7 +218,7 @@ namespace BLL.Services.Impletement
                     Currency = itemCreateDTO.Currency,
                     DeclaredValue = itemCreateDTO.DeclaredValue,
                     Description = itemCreateDTO.Description,
-                    Status = ItemStatus.ACTIVE,
+                    Status = ItemStatus.PENDING,
                 };
                 await _unitOfWork.ItemRepo.AddAsync(newItem);
                 await _unitOfWork.SaveChangeAsync();
@@ -265,7 +265,7 @@ namespace BLL.Services.Impletement
                     Currency = itemCreateDTO.Currency,
                     DeclaredValue = itemCreateDTO.DeclaredValue,
                     Description = itemCreateDTO.Description,
-                    Status = ItemStatus.ACTIVE,
+                    Status = ItemStatus.PENDING,
                 };
                 await _unitOfWork.ItemRepo.AddAsync(newItem);
                 await _unitOfWork.SaveChangeAsync();
