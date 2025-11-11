@@ -9,5 +9,8 @@ namespace DAL.Repositories.Interface
 {
     public interface IPostPackageRepository : IGenericRepository<PostPackage>
     {
+        IQueryable<PostPackage> GetAllQueryable();
+        IQueryable<PostPackage> GetByProviderIdQueryable(Guid providerId);
+        Task<PostPackage?> GetDetailsByIdAsync(Guid postPackageId);
     }
 }

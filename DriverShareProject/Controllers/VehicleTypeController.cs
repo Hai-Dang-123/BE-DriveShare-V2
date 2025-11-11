@@ -39,7 +39,7 @@ namespace DriverShareProject.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
-        [HttpGet]
+        [HttpGet("get-all-vehicle-type")]
         public async Task<IActionResult> GetAll()
         {
             var result = await _vehicleTypeService.GetAllAsync();

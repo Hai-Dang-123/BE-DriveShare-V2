@@ -9,5 +9,7 @@ namespace DAL.Repositories.Interface
 {
     public interface IDriverRepository : IGenericRepository<Driver>
     {
+        Task<Driver?> GetDriverProfileAsync(Guid userId);
+
     }
 }

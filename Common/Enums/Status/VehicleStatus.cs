@@ -9,6 +9,7 @@ namespace Common.Enums.Status
     public enum VehicleStatus
     {
         ACTIVE,
+        IN_USE,
         INACTIVE,
         DELETED,
     }

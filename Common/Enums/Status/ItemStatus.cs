@@ -9,6 +9,7 @@ namespace Common.Enums.Status
     public enum ItemStatus
     {
         PENDING,
+        IN_USE,
         IN_PROGRESS,
         COMPLETED,
         DELETED

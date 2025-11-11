@@ -12,5 +12,7 @@ namespace DAL.Repositories.Interface
         Task<IEnumerable<Package>> GetAllPackagesAsync();
         Task<Package?> GetPackageByIdAsync(Guid packageId);
         Task<IEnumerable<Package>> GetPackagesByUserIdAsync(Guid UserId);
+        IQueryable<Package> GetPackagesByUserIdQueryable(Guid userId);
+        IQueryable<Package> GetAllPackagesQueryable();
     }
 }

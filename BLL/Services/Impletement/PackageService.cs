@@ -5,6 +5,7 @@ using Common.Enums.Status;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,10 +18,12 @@ namespace BLL.Services.Impletement
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
-        public PackageService(IUnitOfWork unitOfWork, UserUtility userUtility)
+        private readonly IPackageImageService _packageImageService;
+        public PackageService(IUnitOfWork unitOfWork, UserUtility userUtility, IPackageImageService packageImageService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
+            _packageImageService = packageImageService;
         }
         // delete package
         public async Task<ResponseDTO> DeletePackageAsync(Guid packageId)
@@ -58,62 +61,60 @@ namespace BLL.Services.Impletement
             }
         }
         // get all packages
-        public async Task<ResponseDTO> GetAllPackagesAsync()
+        // Nhớ import: using Common.DTOs;
+        public async Task<ResponseDTO> GetAllPackagesAsync(int pageNumber, int pageSize)
         {
             try
             {
-                var packages = await _unitOfWork.PackageRepo.GetAllPackagesAsync();
-                var packageDto = packages.Select(p => new PackageReadDTO
-                {
-                    PackageId = p.PackageId,
-                    PackageCode = p.PackageCode,
-                    Title = p.Title,
-                    Description = p.Description,
-                    Quantity = p.Quantity,
-                    Unit = p.Unit,
-                    WeightKg = p.WeightKg,
-                    VolumeM3 = p.VolumeM3,
-                    Status = p.Status,
-                    HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
-                    OtherRequirements = p.OtherRequirements,
-                    OwnerId = p.OwnerId,
-                    ProviderId = p.ProviderId,
-                    ItemId = p.ItemId,
-                    PostPackageId = p.PostPackageId,
-                    TripId = p.TripId,
-                    //PackageImageUrls = p.PackageImages.Select(i => i.PackageImageURL).ToList(),
-                    Item = new ItemReadDTO
+                // BƯỚC 1: LẤY IQUERYABLE TỪ REPO
+                // (Giả định bạn tạo hàm này trong Repo)
+                var packagesQuery = _unitOfWork.PackageRepo.GetAllPackagesQueryable();
+
+                // BƯỚC 2: ĐẾM TỔNG SỐ MỤC
+                int totalCount = await packagesQuery.CountAsync();
+
+                // BƯỚC 3: LẤY DỮ LIỆU CỦA TRANG HIỆN TẠI
+                var packageDto = await packagesQuery
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(p => new PackageGetAllDTO
                     {
-                        Currency = p.Item.Currency,
-                        DeclaredValue = p.Item.DeclaredValue,
-                        Description = p.Item.Description,
-                        ItemId = p.Item.ItemId,
-                        ItemName = p.Item.ItemName,
-                        OwnerId = p.Item.OwnerId,
-                        ProviderId = p.Item.ProviderId,
-                        Status = p.Item.Status.ToString(),
-                        ImageUrls = p.Item.ItemImages?.Select(pi => new ItemImageReadDTO
+                        PackageId = p.PackageId,
+                        PackageCode = p.PackageCode,
+                        Title = p.Title,
+                        Description = p.Description,
+                        Quantity = p.Quantity,
+                        Unit = p.Unit,
+                        WeightKg = p.WeightKg,
+                        VolumeM3 = p.VolumeM3,
+                        Status = p.Status,
+                        HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
+                        OtherRequirements = p.OtherRequirements,
+                        OwnerId = p.OwnerId,
+                        ProviderId = p.ProviderId,
+                        PostPackageId = p.PostPackageId,
+                        TripId = p.TripId,
+                        
+                        PackageImages = p.PackageImages.Select(pi => new PackageImageReadDTO
                         {
-                            ItemImageId = pi.ItemImageId,
-                            ItemId = pi.ItemId,
-                            ImageUrl = pi.ItemImageURL
-                        }).ToList() ?? new List<ItemImageReadDTO>()
-                    },
-                    PackageImages = p.PackageImages?.Select(pi => new PackageImageReadDTO
-                    {
-                        PackageImageId = pi.PackageImageId,
-                        PackageId = pi.PackageId,
-                        ImageUrl = pi.PackageImageURL,
-                        CreatedAt = pi.CreatedAt,
-                    }).ToList() ?? new List<PackageImageReadDTO>()
-                }).ToList();
-           
+                            PackageImageId = pi.PackageImageId,
+                            PackageId = pi.PackageId,
+                            ImageUrl = pi.PackageImageURL,
+                            CreatedAt = pi.CreatedAt,
+                        }).ToList() ?? new List<PackageImageReadDTO>()
+                    })
+                    .ToListAsync();
+
+                // BƯỚC 4: TẠO KẾT QUẢ PHÂN TRANG
+                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(packageDto, totalCount, pageNumber, pageSize);
+
+                // BƯỚC 5: TRẢ VỀ RESPONSE
                 return new ResponseDTO
                 {
                     IsSuccess = true,
                     StatusCode = StatusCodes.Status200OK,
                     Message = "Packages retrieved successfully",
-                    Result = packageDto
+                    Result = paginatedResult
                 };
             }
             catch (Exception ex)
@@ -141,7 +142,7 @@ namespace BLL.Services.Impletement
                         Message = "Package not found"
                     };
                 }
-                var packageDto = new PackageReadDTO
+                var packageDto = new PackageGetByIdDTO
                 {
                     PackageId = package.PackageId,
                     PackageCode = package.PackageCode,
@@ -205,7 +206,8 @@ namespace BLL.Services.Impletement
             }
         }
         // Get packages by user id
-        public async Task<ResponseDTO> GetPackagesByUserIdAsync()
+        // Nhớ import: using Common.DTOs;
+        public async Task<ResponseDTO> GetPackagesByUserIdAsync(int pageNumber, int pageSize)
         {
             try
             {
@@ -217,58 +219,138 @@ namespace BLL.Services.Impletement
                         StatusCode = StatusCodes.Status401Unauthorized,
                         Message = "Unauthorized"
                     };
-                var packages = await _unitOfWork.PackageRepo.GetPackagesByUserIdAsync(userId);
-                var packageDto = packages.Select(p => new PackageReadDTO
-                {
 
-                    PackageId = p.PackageId,
-                    PackageCode = p.PackageCode,
-                    Title = p.Title,
-                    Description = p.Description,
-                    Quantity = p.Quantity,
-                    Unit = p.Unit,
-                    WeightKg = p.WeightKg,
-                    VolumeM3 = p.VolumeM3,
-                    Status = p.Status,
-                    HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
-                    OtherRequirements = p.OtherRequirements,
-                    OwnerId = p.OwnerId,
-                    ProviderId = p.ProviderId,
-                    ItemId = p.ItemId,
-                    PostPackageId = p.PostPackageId,
-                    TripId = p.TripId,
+                // BƯỚC 1: LẤY IQUERYABLE TỪ REPO (QUAN TRỌNG)
+                // Phương thức này KHÔNG ĐƯỢC .ToListAsync() bên trong Repo
+                var packagesQuery = _unitOfWork.PackageRepo.GetPackagesByUserIdQueryable(userId);
 
-                    Item = new ItemReadDTO
+                // BƯỚC 2: ĐẾM TỔNG SỐ MỤC (Thực thi COUNT trên DB)
+                int totalCount = await packagesQuery.CountAsync();
+
+                // BƯỚC 3: LẤY DỮ LIỆU CỦA TRANG HIỆN TẠI
+                // Áp dụng .Skip().Take() trước, .Select() sau, .ToListAsync() cuối cùng
+                // để EF tối ưu hóa truy vấn SQL
+                var packageDto = await packagesQuery
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(p => new PackageGetAllDTO
                     {
-                        Currency = p.Item.Currency,
-                        DeclaredValue = p.Item.DeclaredValue,
-                        Description = p.Item.Description,
-                        ItemId = p.Item.ItemId,
-                        ItemName = p.Item.ItemName,
-                        OwnerId = p.Item.OwnerId,
-                        ProviderId = p.Item.ProviderId,
-                        Status = p.Item.Status.ToString(),
-                        ImageUrls = p.Item.ItemImages?.Select(pi => new ItemImageReadDTO
+                        PackageId = p.PackageId,
+                        PackageCode = p.PackageCode,
+                        Title = p.Title,
+                        Description = p.Description,
+                        Quantity = p.Quantity,
+                        Unit = p.Unit,
+                        WeightKg = p.WeightKg,
+                        VolumeM3 = p.VolumeM3,
+                        Status = p.Status,
+                        HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
+                        OtherRequirements = p.OtherRequirements,
+                        OwnerId = p.OwnerId,
+                        ProviderId = p.ProviderId,
+                        PostPackageId = p.PostPackageId,
+                        TripId = p.TripId,
+                        
+                        PackageImages = p.PackageImages.Select(pi => new PackageImageReadDTO
                         {
-                            ItemImageId = pi.ItemImageId,
-                            ItemId = pi.ItemId,
-                            ImageUrl = pi.ItemImageURL
-                        }).ToList() ?? new List<ItemImageReadDTO>()
-                    },
-                    PackageImages = p.PackageImages?.Select(pi => new PackageImageReadDTO
-                    {
-                        PackageImageId = pi.PackageImageId,
-                        PackageId = pi.PackageId,
-                        ImageUrl = pi.PackageImageURL,
-                        CreatedAt = pi.CreatedAt,
-                    }).ToList() ?? new List<PackageImageReadDTO>()
-                }).ToList();
+                            PackageImageId = pi.PackageImageId,
+                            PackageId = pi.PackageId,
+                            ImageUrl = pi.PackageImageURL,
+                            CreatedAt = pi.CreatedAt,
+                        }).ToList() ?? new List<PackageImageReadDTO>()
+                    })
+                    .ToListAsync(); // Thực thi truy vấn LẤY DỮ LIỆU trên DB
+
+                // BƯỚC 4: TẠO KẾT QUẢ PHÂN TRANG
+                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(packageDto, totalCount, pageNumber, pageSize);
+
+                // BƯỚC 5: TRẢ VỀ RESPONSE
                 return new ResponseDTO
                 {
                     IsSuccess = true,
                     StatusCode = StatusCodes.Status200OK,
                     Message = "Packages retrieved successfully",
-                    Result = packageDto
+                    Result = paginatedResult
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO
+                {
+                    Result = false,
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+        // (Hàm này được thêm vào lớp PackageService của bạn)
+
+        public async Task<ResponseDTO> GetMyPendingPackagesAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                var userId = _userUtility.GetUserIdFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO
+                    {
+                        Result = false,
+                        StatusCode = StatusCodes.Status401Unauthorized,
+                        Message = "Unauthorized"
+                    };
+
+                // BƯỚC 1: LẤY IQUERYABLE TỪ REPO
+                var packagesQuery = _unitOfWork.PackageRepo.GetPackagesByUserIdQueryable(userId);
+
+                // ***** THAY ĐỔI QUAN TRỌNG *****
+                // Thêm bộ lọc (filter) để chỉ lấy trạng thái PENDING
+                var pendingPackagesQuery = packagesQuery.Where(p => p.Status == PackageStatus.PENDING);
+                // *******************************
+
+                // BƯỚC 2: ĐẾM TỔNG SỐ (dùng query đã lọc)
+                int totalCount = await pendingPackagesQuery.CountAsync();
+
+                // BƯỚC 3: LẤY DỮ LIỆU CỦA TRANG HIỆN TẠI (dùng query đã lọc)
+                var packageDto = await pendingPackagesQuery // <-- Dùng query đã lọc
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(p => new PackageGetAllDTO
+                    {
+                        PackageId = p.PackageId,
+                        PackageCode = p.PackageCode,
+                        Title = p.Title,
+                        Description = p.Description,
+                        Quantity = p.Quantity,
+                        Unit = p.Unit,
+                        WeightKg = p.WeightKg,
+                        VolumeM3 = p.VolumeM3,
+                        Status = p.Status, // Sẽ luôn là "PENDING"
+                        HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
+                        OtherRequirements = p.OtherRequirements,
+                        OwnerId = p.OwnerId,
+                        ProviderId = p.ProviderId,
+                        PostPackageId = p.PostPackageId,
+                        TripId = p.TripId,
+                        PackageImages = p.PackageImages.Select(pi => new PackageImageReadDTO
+                        {
+                            PackageImageId = pi.PackageImageId,
+                            PackageId = pi.PackageId,
+                            ImageUrl = pi.PackageImageURL,
+                            CreatedAt = pi.CreatedAt,
+                        }).ToList() ?? new List<PackageImageReadDTO>()
+                    })
+                    .ToListAsync();
+
+                // BƯỚC 4: TẠO KẾT QUẢ PHÂN TRANG
+                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(packageDto, totalCount, pageNumber, pageSize);
+
+                // BƯỚC 5: TRẢ VỀ RESPONSE
+                return new ResponseDTO
+                {
+                    IsSuccess = true,
+                    StatusCode = StatusCodes.Status200OK,
+                    Message = "Pending packages retrieved successfully", // Cập nhật message
+                    Result = paginatedResult
                 };
             }
             catch (Exception ex)
@@ -283,23 +365,128 @@ namespace BLL.Services.Impletement
         }
 
         // Owner create package
+        //public async Task<ResponseDTO> OwnerCreatePackageAsync(PackageCreateDTO packageDTO)
+        //{
+        //    try
+        //    {
+        //        var userId = _userUtility.GetUserIdFromToken();
+        //        if (userId == Guid.Empty)
+        //            return new ResponseDTO
+        //            {
+        //                Result = false,
+        //                StatusCode = StatusCodes.Status401Unauthorized,
+        //                Message = "Unauthorized"
+        //            };
+
+        //        var package = new Package
+        //        {
+        //            PackageId = Guid.NewGuid(),
+        //            PackageCode = packageDTO.PackageCode,
+        //            Title = packageDTO.Title,
+        //            Description = packageDTO.Description,
+        //            Quantity = packageDTO.Quantity,
+        //            Unit = packageDTO.Unit,
+        //            WeightKg = packageDTO.WeightKg,
+        //            VolumeM3 = packageDTO.VolumeM3,
+        //            HandlingAttributes = packageDTO.HandlingAttributes ?? new(),
+        //            OtherRequirements = packageDTO.OtherRequirements,
+        //            OwnerId = userId,
+        //            ItemId = packageDTO.ItemId,
+        //            PostPackageId = packageDTO.PostPackageId,              
+        //            Status = PackageStatus.PENDING,
+        //            TripId = packageDTO.TripId,
+        //        };
+
+        //        await _unitOfWork.PackageRepo.AddAsync(package);
+        //        await _unitOfWork.SaveChangeAsync();
+
+        //        return new ResponseDTO
+        //        {
+        //            Result = true,
+        //            StatusCode = StatusCodes.Status201Created,
+        //            Message = "Package created successfully",
+
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return new ResponseDTO
+        //        {
+        //            Result = false,
+        //            StatusCode = StatusCodes.Status500InternalServerError,
+        //            Message = $"An error occurred: {ex.Message}"
+        //        };
+        //    }
+        //    }
+        //// Provider create package
+        //public async Task<ResponseDTO> ProviderCreatePackageAsync(PackageCreateDTO packageDTO)
+        //{
+        //    try
+        //    {
+        //        var userId = _userUtility.GetUserIdFromToken();
+        //        if (userId == Guid.Empty)
+        //            return new ResponseDTO
+        //            {
+        //                Result = false,
+        //                StatusCode = StatusCodes.Status401Unauthorized,
+        //                Message = "Unauthorized"
+        //            };
+
+        //        var package = new Package
+        //        {
+        //            PackageId = Guid.NewGuid(),
+        //            PackageCode = packageDTO.PackageCode,
+        //            Title = packageDTO.Title,
+        //            Description = packageDTO.Description,
+        //            Quantity = packageDTO.Quantity,
+        //            Unit = packageDTO.Unit,
+        //            WeightKg = packageDTO.WeightKg,
+        //            VolumeM3 = packageDTO.VolumeM3,
+        //            HandlingAttributes = packageDTO.HandlingAttributes ?? new(),
+        //            OtherRequirements = packageDTO.OtherRequirements,
+        //            ProviderId = userId,
+        //            ItemId = packageDTO.ItemId,
+        //            PostPackageId = packageDTO.PostPackageId,
+        //            TripId = packageDTO.TripId,
+        //            Status = PackageStatus.PENDING,
+        //        };
+
+        //        await _unitOfWork.PackageRepo.AddAsync(package);
+        //        await _unitOfWork.SaveChangeAsync();
+
+        //        return new ResponseDTO
+        //        {
+        //            Result = true,
+        //            StatusCode = StatusCodes.Status201Created,
+        //            Message = "Package created successfully",
+
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return new ResponseDTO
+        //        {
+        //            Result = false,
+        //            StatusCode = StatusCodes.Status500InternalServerError,
+        //            Message = $"An error occurred: {ex.Message}"
+        //        };
+        //    }
+        //}
+
+
         public async Task<ResponseDTO> OwnerCreatePackageAsync(PackageCreateDTO packageDTO)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
                 if (userId == Guid.Empty)
-                    return new ResponseDTO
-                    {
-                        Result = false,
-                        StatusCode = StatusCodes.Status401Unauthorized,
-                        Message = "Unauthorized"
-                    };
+                    return new ResponseDTO { /* Unauthorized */ };
 
+                // 1. Tạo Package
                 var package = new Package
                 {
                     PackageId = Guid.NewGuid(),
-                    PackageCode = packageDTO.PackageCode,
+                    PackageCode = GeneratePackageCode(),
                     Title = packageDTO.Title,
                     Description = packageDTO.Description,
                     Quantity = packageDTO.Quantity,
@@ -308,52 +495,52 @@ namespace BLL.Services.Impletement
                     VolumeM3 = packageDTO.VolumeM3,
                     HandlingAttributes = packageDTO.HandlingAttributes ?? new(),
                     OtherRequirements = packageDTO.OtherRequirements,
-                    OwnerId = userId,
+                    OwnerId = userId, // Gán OwnerId
                     ItemId = packageDTO.ItemId,
-                    PostPackageId = packageDTO.PostPackageId,              
-                    Status = PackageStatus.OPEN,
-                    TripId = packageDTO.TripId,
+                    Status = PackageStatus.PENDING,
                 };
 
+                // 2. Thêm Package vào UoW
                 await _unitOfWork.PackageRepo.AddAsync(package);
-                await _unitOfWork.SaveChangeAsync();
+
+                // 3. Thêm hình ảnh (nếu có) vào UoW
+                if (packageDTO.PackageImages != null && packageDTO.PackageImages.Any())
+                {
+                    await _packageImageService.AddImagesToPackageAsync(package.PackageId, userId, packageDTO.PackageImages);
+                }
+
+                // 4. Save 1 LẦN DUY NHẤT (cho cả Package và PackageImages)
+                await _unitOfWork.SaveChangeAsync(); // (Hoặc SaveAsync() tùy theo UoW của bạn)
 
                 return new ResponseDTO
                 {
-                    Result = true,
+                    IsSuccess = true,
                     StatusCode = StatusCodes.Status201Created,
                     Message = "Package created successfully",
-                    
+                    Result = new { PackageId = package.PackageId } // Trả về ID
                 };
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    Result = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = $"An error occurred: {ex.Message}"
-                };
+                return new ResponseDTO { /* 500 Error */ Message = ex.Message };
             }
-            }
-        // Provider create package
+        }
+
+        // --- HÀM PROVIDER CREATE (ĐÃ CẬP NHẬT) ---
         public async Task<ResponseDTO> ProviderCreatePackageAsync(PackageCreateDTO packageDTO)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
                 if (userId == Guid.Empty)
-                    return new ResponseDTO
-                    {
-                        Result = false,
-                        StatusCode = StatusCodes.Status401Unauthorized,
-                        Message = "Unauthorized"
-                    };
+                    return new ResponseDTO { /* Unauthorized */ };
 
+                // 1. Tạo Package
                 var package = new Package
                 {
                     PackageId = Guid.NewGuid(),
-                    PackageCode = packageDTO.PackageCode,
+                    // (Tất cả thuộc tính DTO...)
+                    PackageCode = GeneratePackageCode(),
                     Title = packageDTO.Title,
                     Description = packageDTO.Description,
                     Quantity = packageDTO.Quantity,
@@ -362,33 +549,49 @@ namespace BLL.Services.Impletement
                     VolumeM3 = packageDTO.VolumeM3,
                     HandlingAttributes = packageDTO.HandlingAttributes ?? new(),
                     OtherRequirements = packageDTO.OtherRequirements,
-                    ProviderId = userId,
+                    ProviderId = userId, // Gán ProviderId
                     ItemId = packageDTO.ItemId,
-                    PostPackageId = packageDTO.PostPackageId,
-                    TripId = packageDTO.TripId,
-                    Status = PackageStatus.OPEN,
+                    Status = PackageStatus.PENDING,
                 };
 
+                // 2. Thêm Package vào UoW
                 await _unitOfWork.PackageRepo.AddAsync(package);
-                await _unitOfWork.SaveChangeAsync();
+
+                // 3. Thêm hình ảnh (nếu có) vào UoW
+                if (packageDTO.PackageImages != null && packageDTO.PackageImages.Any())
+                {
+                    await _packageImageService.AddImagesToPackageAsync(package.PackageId, userId, packageDTO.PackageImages);
+                }
+
+                var item = await _unitOfWork.ItemRepo.GetByIdAsync(packageDTO.ItemId);
+                if (item != null)
+                {
+                    item.Status = Common.Enums.Status.ItemStatus.IN_USE;
+                    await _unitOfWork.ItemRepo.UpdateAsync(item);
+                }
+
+                // 4. Save 1 LẦN DUY NHẤT
+                await _unitOfWork.SaveChangeAsync(); // (Hoặc SaveAsync())
 
                 return new ResponseDTO
                 {
-                    Result = true,
+                    IsSuccess = true,
                     StatusCode = StatusCodes.Status201Created,
                     Message = "Package created successfully",
-
+                    Result = new { PackageId = package.PackageId } // Trả về ID
                 };
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    Result = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = $"An error occurred: {ex.Message}"
-                };
+                return new ResponseDTO { /* 500 Error */ Message = ex.Message };
             }
+        }
+
+        private string GeneratePackageCode()
+        {
+            // Tạo một code ngẫu nhiên, dễ đọc, và duy nhất
+            // Ví dụ: PKG-B7E1A0C9
+            return $"PKG-{Guid.NewGuid().ToString("N").ToUpper().Substring(0, 8)}";
         }
         // Common update package
         public async Task<ResponseDTO> UpdatePackageAsync(PackageUpdateDTO updatePackageDTO)

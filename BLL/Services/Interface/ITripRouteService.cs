@@ -1,4 +1,5 @@
 ﻿using Common.DTOs;
+using DAL.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,5 +32,9 @@ namespace BLL.Services.Interface
         /// <param name="tripId">ID của Trip</param>
         /// <returns>ResponseDTO chứa thông tin TripRoute</returns>
         Task<ResponseDTO> GetRouteForTripAsync(Guid tripId);
+
+        Task<TripRoute> CreateAndAddTripRouteAsync(ShippingRoute shippingRoute, Vehicle vehicle);
+
+
     }
 }

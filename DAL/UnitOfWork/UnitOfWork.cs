@@ -60,7 +60,7 @@ namespace DAL.UnitOfWork
             VehicleRepo = new VehicleRepository(context);
             VehicleTypeRepo = new VehicleTypeRepository(context);
             WalletRepo = new WalletRepository(context);
-
+            PostContactRepo = new PostContactRepository(context);
 
 
         }
@@ -106,6 +106,7 @@ namespace DAL.UnitOfWork
         public IVehicleTypeRepository VehicleTypeRepo { get; private set; }
         public IWalletRepository WalletRepo { get; private set; }
 
+        public IPostContactRepository PostContactRepo { get; private set; }
 
 
 

@@ -21,7 +21,7 @@ namespace DAL.Entities
 
         // --- Chi tiết giấy tờ ---
         public string FrontDocumentUrl { get; set; } = null!;
-        public string? BackDocumentUrl { get; set; }
+        public string BackDocumentUrl { get; set; } = null!;
         public string? FrontFileHash { get; set; }
         public string? BackFileHash { get; set; } 
         public DateTime? ExpirationDate { get; set; } // Ngày hết hạn (rất quan trọng cho bảo hiểm/đăng kiểm)

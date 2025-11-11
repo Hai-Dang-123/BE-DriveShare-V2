@@ -60,7 +60,9 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<ITripDeliveryIssueService, TripDeliveryIssueService>();
             services.AddScoped<ITripCompensationService, TripCompensationService>();
             services.AddScoped<ITripDeliveryRecordService, TripDeliveryRecordService>();
-
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IPostContactService, PostContactService>();
+            services.AddScoped<IVehicleDocumentService, VehicleDocumentService>();
 
             services.AddScoped<IVietMapService, VietMapService>();
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();

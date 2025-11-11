@@ -45,5 +45,29 @@ namespace DAL.Repositories.Implement
                 && p.TripId == null)
                 .ToListAsync();
         }
+
+        public IQueryable<Package> GetPackagesByUserIdQueryable(Guid userId)
+        {
+            // Rất quan trọng: Không .ToListAsync() hay await ở đây.
+            // Chúng ta trả về chính đối tượng truy vấn.
+            return _context.Packages
+                .AsNoTracking() // Thêm AsNoTracking() để tăng hiệu suất cho truy vấn chỉ đọc
+                .Where(p => p.ProviderId == userId || p.OwnerId == userId) // (Đây là logic tôi suy đoán, bạn hãy thay bằng logic nghiệp vụ của mình để lấy package theo user)
+                .Include(p => p.Item)
+                    .ThenInclude(i => i.ItemImages) // Include bảng con của Item
+                .Include(p => p.PackageImages)
+                .OrderByDescending(p => p.CreatedAt); // (Ví dụ: Sắp xếp theo ngày tạo, bạn nên thêm OrderBy)
+        }
+
+        public IQueryable<Package> GetAllPackagesQueryable()
+        {
+            // Tương tự, không .ToListAsync() hay await
+            return _context.Packages
+                .AsNoTracking()
+                .Include(p => p.Item)
+                    .ThenInclude(i => i.ItemImages)
+                .Include(p => p.PackageImages)
+                .OrderByDescending(p => p.CreatedAt); // (Nên có OrderBy)
+        }
     }
 }

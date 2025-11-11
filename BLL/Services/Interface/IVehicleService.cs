@@ -11,5 +11,8 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> SoftDeleteAsync(Guid id);
         Task<ResponseDTO> GetAllAsync();
         Task<ResponseDTO> GetByIdAsync(Guid id);
+
+        Task<ResponseDTO> GetMyVehiclesAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetMyActiveVehiclesAsync(int pageNumber, int pageSize);
     }
 }

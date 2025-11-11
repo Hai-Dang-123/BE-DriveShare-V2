@@ -41,6 +41,15 @@ namespace DAL.Context
         private static readonly Guid StaffWalletID = Guid.NewGuid();
         private static readonly Guid ProviderWalletID = Guid.NewGuid();
 
+        // ───────────────────────────────────────────────
+        // 🔹 TEMPLATE IDs (MỚI)
+        // ───────────────────────────────────────────────
+        private static readonly Guid ProviderContractTemplateID = Guid.Parse("C0100001-0001-0000-0000-000000000001");
+        private static readonly Guid DriverContractTemplateID = Guid.Parse("C0200001-0002-0000-0000-000000000001");
+
+        private static readonly Guid PickupRecordTemplateID = Guid.Parse("D0100001-0003-0000-0000-000000000001");
+        private static readonly Guid DropoffRecordTemplateID = Guid.Parse("D0200001-0004-0000-0000-000000000001");
+
 
         // ───────────────────────────────────────────────
         // 🔹 HÀM SEED CHÍNH (Thêm các hàm seed mới)
@@ -49,10 +58,13 @@ namespace DAL.Context
         {
             SeedRole(modelBuilder);
             SeedUser(modelBuilder);
-            SeedWallets(modelBuilder); // Thêm seed Wallet
+            SeedWallets(modelBuilder); 
             SeedDriver(modelBuilder);
             SeedOwner(modelBuilder);
             SeedProvider(modelBuilder);
+
+            SeedContractTemplates(modelBuilder);
+            SeedDeliveryRecordTemplates(modelBuilder);
         }
 
         // ───────────────────────────────────────────────
@@ -232,6 +244,91 @@ namespace DAL.Context
                     //BusinessAddress = providerBusinessAddress,
                     AverageRating = 4.8m
                 }
+            );
+        }
+
+        // ───────────────────────────────────────────────
+        // 🔹 CONTRACT TEMPLATES (MỚI)
+        // ───────────────────────────────────────────────
+        private static void SeedContractTemplates(ModelBuilder modelBuilder)
+        {
+            // Dùng thời gian cố định cho seeding
+            var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            // --- 1. Seed Templates ---
+            modelBuilder.Entity<ContractTemplate>().HasData(
+                new ContractTemplate
+                {
+                    ContractTemplateId = ProviderContractTemplateID,
+                    ContractTemplateName = "Hợp đồng Vận chuyển (Owner-Provider)",
+                    Version = "1.0",
+                    Type = ContractType.PROVIDER_CONTRACT,
+                    CreatedAt = seedTime
+                },
+                new ContractTemplate
+                {
+                    ContractTemplateId = DriverContractTemplateID,
+                    ContractTemplateName = "Hợp đồng Thuê Tài xế (Owner-Driver)",
+                    Version = "1.0",
+                    Type = ContractType.DRIVER_CONTRACT,
+                    CreatedAt = seedTime
+                }
+            );
+
+            // --- 2. Seed Terms (Các điều khoản liên kết) ---
+            modelBuilder.Entity<ContractTerm>().HasData(
+                // Provider Terms
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 1, Content = "Bên A (Chủ xe) đồng ý cung cấp dịch vụ vận tải theo các điều khoản đã thỏa thuận." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 2, Content = "Bên B (Chủ hàng/Provider) đồng ý thanh toán cước phí vận chuyển đúng hạn." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 3, Content = "Trách nhiệm bồi thường thiệt hại sẽ được áp dụng theo quy định hiện hành nếu hàng hóa bị hư hỏng, mất mát do lỗi của Bên A." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 4, Content = "Hợp đồng có hiệu lực kể từ thời điểm cả hai bên xác nhận ký." },
+
+                // Driver Terms
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 1, Content = "Bên A (Chủ xe) đồng ý thuê Bên B (Tài xế) để thực hiện các chuyến vận chuyển được chỉ định." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 2, Content = "Bên B (Tài xế) có trách nhiệm bảo quản phương tiện, hàng hóa và tuân thủ các quy định về an toàn giao thông." }
+            );
+        }
+
+        // ───────────────────────────────────────────────
+        // 🔹 DELIVERY RECORD TEMPLATES (MỚI)
+        // ───────────────────────────────────────────────
+        private static void SeedDeliveryRecordTemplates(ModelBuilder modelBuilder)
+        {
+            var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            // --- 1. Seed Templates ---
+            modelBuilder.Entity<DeliveryRecordTemplate>().HasData(
+                new DeliveryRecordTemplate
+                {
+                    DeliveryRecordTemplateId = PickupRecordTemplateID,
+                    TemplateName = "Biên bản Giao hàng (Tài xế nhận hàng)",
+                    Version = "1.0",
+                    Type = DeliveryRecordType.PICKUP,
+                    Status = DeliveryRecordTemplateStatus.ACTIVE,
+                    CreatedAt = seedTime
+                },
+                new DeliveryRecordTemplate
+                {
+                    DeliveryRecordTemplateId = DropoffRecordTemplateID,
+                    TemplateName = "Biên bản Trả hàng (Tài xế trả hàng)",
+                    Version = "1.0",
+                    Type = DeliveryRecordType.DROPOFF,
+                    Status = DeliveryRecordTemplateStatus.ACTIVE,
+                    CreatedAt = seedTime
+                }
+            );
+
+            // --- 2. Seed Terms (Các điều khoản liên kết) ---
+            modelBuilder.Entity<DeliveryRecordTerm>().HasData(
+                // Pickup Terms
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 1, Content = "Tài xế đã xác nhận số lượng, chủng loại hàng hóa đúng với thông tin trên ứng dụng." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 2, Content = "Tình trạng hàng hóa bên ngoài nguyên vẹn, không móp méo, ướt, hoặc rách vỡ." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 3, Content = "Tài xế đã chụp ảnh xác nhận tình trạng hàng hóa khi nhận." },
+
+                // Dropoff Terms
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 1, Content = "Người nhận đã xác nhận số lượng, chủng loại hàng hóa đúng với thông tin trên ứng dụng." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 2, Content = "Tình trạng hàng hóa bên ngoài nguyên vẹn. Người nhận không có khiếu nại về tình trạng bên ngoài của hàng hóa." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 3, Content = "Người nhận đã ký tên/chụp ảnh xác nhận đã nhận hàng." }
             );
         }
     }

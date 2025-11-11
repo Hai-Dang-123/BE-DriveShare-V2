@@ -197,5 +197,31 @@ namespace BLL.Services.Impletement
 
             return new ResponseDTO("Get VehicleImage successfully", 200, true, dto);
         }
+
+        public async Task AddImagesToVehicleAsync(Guid vehicleId, Guid userId, List<IFormFile> files)
+        {
+            if (files == null || !files.Any()) return;
+
+            // Upload song song
+            var uploadTasks = files
+                .Where(f => f != null && f.Length > 0)
+                .Select(file => _firebaseService.UploadFileAsync(file, userId, FirebaseFileType.VEHICLE_IMAGES));
+
+            var urls = await Task.WhenAll(uploadTasks);
+
+            // Add vào Repo
+            foreach (var url in urls)
+            {
+                var image = new VehicleImage
+                {
+                    VehicleImageId = Guid.NewGuid(),
+                    VehicleId = vehicleId,
+                    ImageURL = url,
+                    CreatedAt = DateTime.UtcNow
+                    // Caption có thể thêm sau nếu cần
+                };
+                await _unitOfWork.VehicleImageRepo.AddAsync(image);
+            }
+        }
     }
 }

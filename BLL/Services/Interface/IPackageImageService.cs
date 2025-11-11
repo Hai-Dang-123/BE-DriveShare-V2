@@ -1,4 +1,5 @@
 ﻿using Common.DTOs;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,5 +15,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> DeletePackageImageAsync(Guid packageImageId);
         Task<ResponseDTO> UpdatePackageImageAsync(UpdatePackageImageDTO updatePackageImageDTO);
         Task<ResponseDTO> GetPackageImageByIdAsync(Guid packageImageId);
+
+        Task AddImagesToPackageAsync(Guid packageId, Guid userId, List<IFormFile> files);
     }
 }

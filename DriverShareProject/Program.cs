@@ -55,13 +55,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 // Add custom middlewares
 app.UseApplicationMiddlewares();
 
 // Add CORS
-app.UseCorsPolicy();
+//app.UseCorsPolicy();
+
+app.UseCors("DefaultCorsPolicy");
 
 app.UseAuthentication();
 

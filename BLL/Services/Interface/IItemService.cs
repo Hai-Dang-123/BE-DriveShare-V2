@@ -12,9 +12,10 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> OwnerCreateItemAsync(ItemCreateDTO itemCreateDTO);
         Task<ResponseDTO> ProviderCreateItemAsync(ItemCreateDTO itemCreateDTO);
         Task<ResponseDTO> GetItemByIdAsync(Guid itemId);
-        Task<ResponseDTO> GetAllItemsAsync();
-        Task<ResponseDTO> GetItemsByOwnerIdAsync(Guid UserId);
+        Task<ResponseDTO> GetAllItemsAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetItemsByUserIdAsync(int pageNumber, int pageSize);
         Task<ResponseDTO> UpdateItemAsync(ItemUpdateDTO itemUpdateDTO);
         Task<ResponseDTO> DeleteItemAsync(Guid itemId);
+        Task<ResponseDTO> GetPendingItemsByUserIdAsync(int pageNumber, int pageSize);
     }
 }

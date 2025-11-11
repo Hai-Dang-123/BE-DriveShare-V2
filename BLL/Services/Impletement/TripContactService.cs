@@ -51,5 +51,26 @@ namespace BLL.Services.Impletement
             }
            
         }
+
+        public async Task CopyContactsFromPostAsync(Guid tripId, ICollection<PostContact> postContacts)
+        {
+            if (postContacts == null || !postContacts.Any())
+                throw new Exception("PostPackage không có thông tin liên hệ (PostContacts).");
+
+            foreach (var postContact in postContacts)
+            {
+                var tripContact = new TripContact
+                {
+                    TripContactId = Guid.NewGuid(),
+                    TripId = tripId,
+                    Type = postContact.Type, // SAO CHÉP
+                    FullName = postContact.FullName, // SAO CHÉP
+                    PhoneNumber = postContact.PhoneNumber, // SAO CHÉP
+                    Email = postContact.Email, // SAO CHÉP
+                    Note = postContact.Note // SAO CHÉP
+                };
+                await _unitOfWork.TripContactRepo.AddAsync(tripContact);
+            }
+        }
     }
 }

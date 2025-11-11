@@ -42,5 +42,28 @@ namespace DAL.Repositories.Implement
                 .Include(i => i.Owner)
                 .FirstOrDefaultAsync(i => i.ItemId == itemId);
         }
+
+
+        // Giả sử bạn có DbContext là _context
+        // và DbSet<Item> là _context.Items
+
+        public IQueryable<Item> GetItemsByUserIdQueryable(Guid userId)
+        {
+            // Quan trọng: Trả về IQueryable, không .ToListAsync()
+            return _context.Items
+                .AsNoTracking() // Tăng hiệu suất cho truy vấn đọc
+                .Where(i => i.OwnerId == userId || i.ProviderId == userId) // (Logic này dựa trên các entity của bạn, item có cả OwnerId và ProviderId)
+                .Include(i => i.ItemImages) // *BẮT BUỘC* Include để map DTO
+                .OrderByDescending(i => i.ItemId); // *NÊN CÓ* OrderBy để phân trang nhất quán
+        }
+
+        public IQueryable<Item> GetAllItemsQueryable()
+        {
+            // Quan trọng: Trả về IQueryable, không .ToListAsync()
+            return _context.Items
+                .AsNoTracking()
+                .Include(i => i.ItemImages) // *BẮT BUỘC* Include
+                .OrderByDescending(i => i.ItemId); // *NÊN CÓ* OrderBy
+        }
     }
 }

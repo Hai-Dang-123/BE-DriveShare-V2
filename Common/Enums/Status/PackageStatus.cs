@@ -8,11 +8,10 @@ namespace Common.Enums.Status
 {
     public enum PackageStatus
     {
-        PENDING,
-        OPEN,
-        CLOSED,
-        IN_PROGRESS,
-        DELETED,
-
+        PENDING,     // KHỞI TẠO
+        LOOKING_FOR_OWNER, // ĐANG TÌM CHỦ HÀNG
+        IN_PROGRESS, // ĐANG VẬN CHUYỂN
+        DELETED,    // XÓA
+        COMPLETED   // HOÀN THÀNH
     }
 }

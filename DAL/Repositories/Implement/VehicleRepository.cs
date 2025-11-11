@@ -37,5 +37,19 @@ namespace DAL.Repositories.Implement
                 .Where(v => v.OwnerId == ownerId && v.Status != Common.Enums.Status.VehicleStatus.DELETED)
                 .ToListAsync();
         }
+
+        public IQueryable<Vehicle> GetVehiclesByOwnerIdQueryable(Guid ownerId)
+        {
+            // Trả về IQueryable, không .ToListAsync()
+            return _context.Vehicles
+                .AsNoTracking()
+                .Where(v => v.OwnerId == ownerId)
+                // Include các bảng liên quan để map sang DTO
+                .Include(v => v.Owner)
+                .Include(v => v.VehicleType)
+                .Include(v => v.VehicleImages)
+                // (Không include VehicleDocuments ở đây để giữ cho list nhẹ)
+                .OrderByDescending(v => v.CreatedAt); // Luôn OrderBy khi paging
+        }
     }
 }

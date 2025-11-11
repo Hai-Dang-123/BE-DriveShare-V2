@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,7 +16,8 @@ namespace Common.DTOs
         public string Description { get; set; }
         public decimal? DeclaredValue { get; set; }
         public string Currency { get; set; } = "VND";
-        public decimal Price { get; set; }
+        //public decimal Price { get; set; }
+        public List<IFormFile> ItemImages { get; set; } 
     }
     public class ItemUpdateDTO
     {

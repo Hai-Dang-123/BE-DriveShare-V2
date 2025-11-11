@@ -10,5 +10,7 @@ namespace DAL.Repositories.Interface
     public interface IProviderRepository : IGenericRepository<Provider>
     {
         Task<Provider?> GetProviderByTaxCodeAsync(string taxCode);
+        Task<Provider?> GetProviderProfileAsync(Guid userId);
+
     }
 }

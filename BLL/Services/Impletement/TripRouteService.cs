@@ -150,5 +150,68 @@ namespace BLL.Services.Impletement
 
             return await GetTripRouteByIdAsync(trip.TripRouteId);
         }
+
+        public async Task<TripRoute> CreateAndAddTripRouteAsync(ShippingRoute shippingRoute, Vehicle vehicle)
+        {
+            // 1. Kiểm tra dữ liệu đầu vào
+            if (shippingRoute == null)
+            {
+                throw new ArgumentNullException(nameof(shippingRoute), "ShippingRoute (plan) cannot be null.");
+            }
+            if (vehicle == null || vehicle.VehicleType == null)
+            {
+                throw new ArgumentNullException(nameof(vehicle), "Vehicle or VehicleType cannot be null.");
+            }
+            if (shippingRoute.StartLocation.Latitude == 0 || shippingRoute.EndLocation.Latitude == 0)
+            {
+                throw new InvalidOperationException("ShippingRoute Start/End locations have not been geocoded.");
+            }
+
+            // 2. Chuẩn bị tham số cho API Route
+            var start = shippingRoute.StartLocation;
+            var end = shippingRoute.EndLocation;
+
+            // Map VehicleType
+            string vehicleTypeApi = "car";
+            int capacityKg = 0;
+            string vehicleTypeNameLower = vehicle.VehicleType.VehicleTypeName.ToLower();
+
+            if (vehicleTypeNameLower.Contains("tải") || vehicleTypeNameLower.Contains("truck"))
+            {
+                vehicleTypeApi = "truck";
+                capacityKg = (int)vehicle.PayloadInKg;
+            }
+            else if (vehicleTypeNameLower.Contains("máy") || vehicleTypeNameLower.Contains("motorcycle"))
+            {
+                vehicleTypeApi = "motorcycle";
+            }
+
+            // 3. Gọi VietMapService
+            var path = await _vietMapService.GetRouteAsync(start, end, vehicleTypeApi, capacityKg);
+
+            if (path == null)
+            {
+                // Ném lỗi để Transaction bên ngoài (trong TripService) có thể Rollback
+                throw new Exception("Failed to find a valid route from VietMap API.");
+            }
+
+            // 4. Tạo đối tượng TripRoute mới
+            var newTripRoute = new TripRoute
+            {
+                TripRouteId = Guid.NewGuid(),
+                RouteData = path.Points,
+                DistanceKm = (decimal)path.Distance / 1000m,
+                Duration = TimeSpan.FromMilliseconds(path.Time),
+                CreateAt = DateTime.UtcNow,
+                UpdateAt = DateTime.UtcNow
+            };
+
+            // 5. Thêm vào UoW (KHÔNG SAVE)
+            await _unitOfWork.TripRouteRepo.AddAsync(newTripRoute);
+
+            // 6. Trả về entity để TripService sử dụng
+            return newTripRoute;
+        }
     }
+
 }

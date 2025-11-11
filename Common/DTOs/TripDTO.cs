@@ -1,22 +1,43 @@
 ﻿using Common.Enums.Status;
 using Common.Enums.Type;
+using System.ComponentModel.DataAnnotations;
 
 namespace Common.DTOs
 {
-    public class TripCreateDTO
+    //public class TripCreateDTO
+    //{
+    //    public Guid VehicleId { get; set; }
+    //    public Guid ShippingRouteId { get; set; }
+    //    public Guid TripRouteId { get; set; }
+
+    //    public decimal TotalFare { get; set; }
+    //    public decimal ActualDistanceKm { get; set; }
+    //    public TimeSpan ActualDuration { get; set; }
+
+    //    public DateTime? ActualPickupTime { get; set; }
+    //    public DateTime? ActualCompletedTime { get; set; }
+    //}
+
+    public class TripCreateFromPostDTO
     {
-        public Guid VehicleId { get; set; }
-        public Guid ShippingRouteId { get; set; }
-        public Guid TripRouteId { get; set; }
+        [Required]
+        public Guid PostPackageId { get; set; } // Bài đăng họ chấp nhận
 
-        public decimal TotalFare { get; set; }
-        public decimal ActualDistanceKm { get; set; }
-        public TimeSpan ActualDuration { get; set; }
-
-        public DateTime? ActualPickupTime { get; set; }
-        public DateTime? ActualCompletedTime { get; set; }
+        [Required]
+        public Guid VehicleId { get; set; } // Xe họ sẽ dùng
     }
 
+
+
+    //public class TripContactInputDTO
+    //{
+    //    [Required]
+    //    public string FullName { get; set; } = string.Empty;
+    //    [Required]
+    //    public string PhoneNumber { get; set; } = string.Empty;
+    //    public string? Email { get; set; }
+    //    public string? Note { get; set; }
+    //}
     public class TripCreatedResultDTO
     {
         public Guid TripId { get; set; }
@@ -72,5 +93,6 @@ namespace Common.DTOs
         public string? ProviderTaxCode { get; set; }
         public decimal? ProviderRating { get; set; }
     }
-
 }
+
+//}

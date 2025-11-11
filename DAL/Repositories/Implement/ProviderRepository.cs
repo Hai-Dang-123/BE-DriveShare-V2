@@ -26,5 +26,16 @@ namespace DAL.Repositories.Implement
             }
             return await _context.Providers.FirstOrDefaultAsync(o => o.TaxCode == taxCode);
         }
+
+        public async Task<Provider?> GetProviderProfileAsync(Guid userId)
+        {
+            return await _context.Providers
+                .OfType<Provider>() // Lọc chỉ lấy Provider
+                .AsNoTracking()
+                .Include(p => p.Items)
+                .Include(p => p.Packages)
+                .Include(p => p.PostPackages)
+                .FirstOrDefaultAsync(p => p.UserId == userId);
+        }
     }
 }

@@ -13,6 +13,9 @@ namespace DAL.Repositories.Interface
         Task<IEnumerable<Item>> GetItemsByUserIdAsync(Guid UserId);
         Task<Item> GetItemByIdAsync(Guid itemId);
 
+        IQueryable<Item> GetItemsByUserIdQueryable(Guid userId);
+        IQueryable<Item> GetAllItemsQueryable();
+
 
 
     }

@@ -1,4 +1,5 @@
 ﻿using Common.DTOs;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Threading.Tasks;
 
@@ -11,5 +12,11 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> SoftDeleteAsync(Guid imageId);
         Task<ResponseDTO> GetAllAsync(Guid vehicleId);
         Task<ResponseDTO> GetByIdAsync(Guid imageId);
+
+        /// <summary>
+        /// Upload ảnh xe lên Firebase và AddAsync vào UnitOfWork.
+        /// KHÔNG SaveChanges.
+        /// </summary>
+        Task AddImagesToVehicleAsync(Guid vehicleId, Guid userId, List<IFormFile> files);
     }
 }

@@ -46,7 +46,9 @@ namespace DAL.UnitOfWork
         IVehicleRepository VehicleRepo { get; }
         IVehicleTypeRepository VehicleTypeRepo { get; }
         IWalletRepository WalletRepo { get; }
-        
+
+        IPostContactRepository PostContactRepo { get; }
+
 
         // Save changes
 

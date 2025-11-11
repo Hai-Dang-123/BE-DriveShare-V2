@@ -257,5 +257,54 @@ namespace BLL.Services.Impletement
                 };
             }
         }
+
+
+        //
+
+        public async Task AddImagesToItemAsync(Guid itemId, Guid userId, List<IFormFile> files)
+        {
+            if (files == null || !files.Any())
+            {
+                return; // Không có gì để upload
+            }
+
+            // Tối ưu: Upload song song tất cả các ảnh
+            var uploadTasks = new List<Task<(string Url, IFormFile File)>>();
+            foreach (var file in files)
+            {
+                if (file != null && file.Length > 0)
+                {
+                    // Thêm task upload vào danh sách
+                    uploadTasks.Add(UploadFileAndReturnUrlAsync(file, userId));
+                }
+            }
+
+            // Chờ tất cả các file upload xong
+            var uploadResults = await Task.WhenAll(uploadTasks);
+
+            // Tạo các đối tượng ItemImage và thêm vào Repo
+            foreach (var result in uploadResults)
+            {
+                var itemImage = new ItemImage
+                {
+                    ItemImageId = Guid.NewGuid(),
+                    ItemId = itemId,
+                    ItemImageURL = result.Url,
+                    Status = ItemImageStatus.Active
+                };
+
+                // Chỉ AddAsync, KHÔNG SaveChangeAsync
+                await _unitOfWork.ItemImageRepo.AddAsync(itemImage);
+            }
+        }
+
+        /// <summary>
+        /// Hàm helper riêng tư để bọc logic upload
+        /// </summary>
+        private async Task<(string Url, IFormFile File)> UploadFileAndReturnUrlAsync(IFormFile file, Guid userId)
+        {
+            var imageUrl = await _firebaseUploadService.UploadFileAsync(file, userId, FirebaseFileType.ITEM_IMAGES);
+            return (imageUrl, file);
+        }
     }
 }

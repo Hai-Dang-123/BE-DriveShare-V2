@@ -36,7 +36,6 @@ namespace DAL.Entities
         // 2. Chuyến đi này chở gói hàng nào? (Trip - Package 1-1)
 
         // 3. Lộ trình (dự kiến) của chuyến đi? (Trip - ShippingRoute 1-1)
-        public Guid ShippingRouteId { get; set; } // FK to ShippingRoute
 
         // 4. Lộ trình (chi tiết từ API map) của chuyến đi? (Trip - TripRoute 1-1)
         public Guid TripRouteId { get; set; } // FK to TripRoute

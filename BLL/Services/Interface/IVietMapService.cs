@@ -1,4 +1,5 @@
-﻿using Common.DTOs;
+﻿using BLL.Services.Impletement;
+using Common.DTOs;
 using Common.ValueObjects;
 using System;
 using System.Collections.Generic;
@@ -16,7 +17,7 @@ namespace BLL.Services.Interface
         /// <param name="text">Địa chỉ cần tìm</param>
         /// <param name="focusLatLon">Chuỗi "latitude,longitude" để ưu tiên kết quả</param>
         /// <returns>Danh sách kết quả VietMapGeocodeResult</returns>
-        Task<List<VietMapGeocodeResult>> SearchAsync(string text, string? focusLatLon = null);
+        Task<List<VietMapGeocodeResultV2>> SearchAsync(string text, string? focusLatLon = null);
 
         /// <summary>
         // Hàm helper để tìm và trả về tọa độ của địa chỉ

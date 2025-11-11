@@ -26,7 +26,9 @@ namespace DAL.Entities
         public List<string> HandlingAttributes { get; set; } = new List<string>();
         public string? OtherRequirements { get; set; }
 
-        
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+
         // Người tạo
         public virtual Owner? Owner { get; set; }
         public Guid? OwnerId { get; set; } // FK to Owner
@@ -40,9 +42,9 @@ namespace DAL.Entities
         public Guid ItemId { get; set; } // FK to Item
 
         public virtual PostPackage? PostPackage { get; set; } // Gói hàng này trong bài đăng nào
-        public Guid PostPackageId { get; set; }
+        public Guid? PostPackageId { get; set; }
         public virtual Trip? Trip { get; set; } // Gói hàng này trong chuyến đi nào
-        public Guid TripId { get; set; }
+        public Guid? TripId { get; set; }
 
         // Liên kết 1-n
         public virtual ICollection<PackageImage> PackageImages { get; set; } = new List<PackageImage>();

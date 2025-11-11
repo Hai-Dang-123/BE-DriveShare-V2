@@ -10,5 +10,7 @@ namespace DAL.Repositories.Interface
     public interface IOwnerRepository : IGenericRepository<Owner>
     {
         Task<Owner?> GetOwnerByTaxCodeAsync(string taxCode);
+
+        Task<Owner?> GetOwnerProfileAsync(Guid userId);
     }
 }

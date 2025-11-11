@@ -8,8 +8,9 @@ namespace Common.Enums.Status
 {
     public enum PostStatus
     {
-        OPEN,
-        DONE,
-        CANCELLED,
+        // ───────────────   ───────────────
+        OPEN, // KHỞI TẠO
+        DONE, // HOÀN THÀNH
+        DELETED // XÓA
     }
 }

@@ -17,13 +17,13 @@ namespace DriverShareProject.Controllers
             _packageService = packageService;
         }
         [HttpPost("owner-create-package")]
-        public async Task<IActionResult> OwnerCreatePackage([FromBody] PackageCreateDTO packageCreateDTO)
+        public async Task<IActionResult> OwnerCreatePackage([FromForm] PackageCreateDTO packageCreateDTO)
         {
             var result = await _packageService.OwnerCreatePackageAsync(packageCreateDTO);
             return StatusCode(result.StatusCode, result);
         }
         [HttpPost("provider-create-package")]
-        public async Task<IActionResult> ProviderCreatePackage([FromBody] PackageCreateDTO packageCreateDTO)
+        public async Task<IActionResult> ProviderCreatePackage([FromForm] PackageCreateDTO packageCreateDTO)
         {
             var result = await _packageService.ProviderCreatePackageAsync(packageCreateDTO);
             return StatusCode(result.StatusCode, result);
@@ -35,16 +35,18 @@ namespace DriverShareProject.Controllers
             var result = await _packageService.GetPackageByIdAsync(packageId);
             return StatusCode(result.StatusCode, result);
         }
+
         [HttpGet("get-all-packages")]
-        public async Task<IActionResult> GetAllPackages()
+        public async Task<IActionResult> GetAllPackages([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var result = await _packageService.GetAllPackagesAsync();
+            var result = await _packageService.GetAllPackagesAsync(pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
         }
+
         [HttpGet("get-packages-by-user")]
-        public async Task<IActionResult> GetPackagesByUser()
+        public async Task<IActionResult> GetPackagesByUser([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var result = await _packageService.GetPackagesByUserIdAsync();
+            var result = await _packageService.GetPackagesByUserIdAsync(pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
         }
         [HttpPut("update-package")]
@@ -57,6 +59,15 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> DeletePackage([FromRoute] Guid packageId)
         {
             var result = await _packageService.DeletePackageAsync(packageId);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("get-my-pending-packages")]
+        public async Task<IActionResult> GetMyPendingPackages(
+    [FromQuery] int pageNumber = 1,
+    [FromQuery] int pageSize = 10)
+        {
+            var result = await _packageService.GetMyPendingPackagesAsync(pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
         }
     }

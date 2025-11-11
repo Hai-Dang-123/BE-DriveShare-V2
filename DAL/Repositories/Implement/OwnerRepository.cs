@@ -26,5 +26,16 @@ namespace DAL.Repositories.Implement
             }
             return await _context.Owners.FirstOrDefaultAsync(o => o.TaxCode == taxCode);
         }
+
+        public async Task<Owner?> GetOwnerProfileAsync(Guid userId)
+        {
+            return await _context.Owners
+                .OfType<Owner>() // Lọc chỉ lấy Owner
+                .AsNoTracking()
+                .Include(o => o.Vehicles)
+                .Include(o => o.OwnerDriverLinks)
+                .Include(o => o.Trips)
+                .FirstOrDefaultAsync(o => o.UserId == userId);
+        }
     }
 }

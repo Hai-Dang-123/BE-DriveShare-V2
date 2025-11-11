@@ -11,5 +11,7 @@ namespace DAL.Repositories.Interface
     {
         Task<List<Vehicle>> GetAvailableVehiclesAsync();
         Task<List<Vehicle>> GetVehiclesByOwnerIdAsync(Guid ownerId);
+
+        IQueryable<Vehicle> GetVehiclesByOwnerIdQueryable(Guid ownerId);
     }
 }

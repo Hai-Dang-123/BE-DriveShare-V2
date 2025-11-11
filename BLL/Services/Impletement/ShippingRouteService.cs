@@ -66,5 +66,40 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Error saving Shipping Route: {ex.Message}", 500, false);
             }
         }
+        public async Task<ShippingRoute> CreateAndAddShippingRouteAsync(ShippingRouteInputDTO dto)
+        {
+            // 1. Geocode điểm đi
+            Location startLocation = await _vietMapService.GeocodeAsync(dto.StartLocation);
+            if (startLocation == null || startLocation.Latitude == 0)
+            {
+                // Ném lỗi để transaction bên ngoài có thể rollback
+                throw new Exception("Không thể Geocode địa điểm đi (StartLocation).");
+            }
+
+            // 2. Geocode điểm đến
+            Location endLocation = await _vietMapService.GeocodeAsync(dto.EndLocation);
+            if (endLocation == null || endLocation.Latitude == 0)
+            {
+                throw new Exception("Không thể Geocode địa điểm đến (EndLocation).");
+            }
+
+            // 3. Tạo đối tượng
+            var newShippingRoute = new ShippingRoute
+            {
+                ShippingRouteId = Guid.NewGuid(),
+                StartLocation = startLocation,
+                EndLocation = endLocation,
+                ExpectedPickupDate = dto.ExpectedPickupDate,
+                ExpectedDeliveryDate = dto.ExpectedDeliveryDate,
+                PickupTimeWindow = new TimeWindow(dto.StartTimeToPickup, dto.EndTimeToPickup),
+                DeliveryTimeWindow = new TimeWindow(dto.StartTimeToDelivery, dto.EndTimeToDelivery),
+            };
+
+            // 4. THÊM vào UnitOfWork (KHÔNG SAVE)
+            await _unitOfWork.ShippingRouteRepo.AddAsync(newShippingRoute);
+
+            // 5. Trả về đối tượng entity để service khác lấy ID
+            return newShippingRoute;
+        }
     }
 }

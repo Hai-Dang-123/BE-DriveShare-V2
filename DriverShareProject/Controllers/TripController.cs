@@ -16,11 +16,12 @@ namespace DriverShareProject.Controllers
             _tripService = tripService;
         }
 
-        [HttpPost("create-for-owner")]
-        public async Task<IActionResult> CreateForOwner([FromBody] TripCreateDTO dto)
+        [HttpPost("owner-create-from-post")]
+        public async Task<IActionResult> CreateTripFromPost(
+        [FromBody] TripCreateFromPostDTO dto) // <-- Dùng DTO mới
         {
-            var result = await _tripService.CreateForOwnerAsync(dto);
-            return Ok(result);
+            var result = await _tripService.CreateTripFromPostAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
 
         [HttpPut("change-status")]

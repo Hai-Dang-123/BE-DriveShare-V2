@@ -22,7 +22,6 @@ namespace DAL.Entities
         // --- GỢI Ý BẮT BUỘC (Navigation Properties - Dựa trên quan hệ 1-1) ---
 
         // Lộ trình này được sử dụng bởi Chuyến đi nào?
-        public virtual Trip? Trip { get; set; }
 
         // Lộ trình này được sử dụng bởi Bài đăng gói cước nào?
         public virtual PostPackage? PostPackage { get; set; }

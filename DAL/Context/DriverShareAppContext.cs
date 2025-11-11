@@ -551,11 +551,11 @@ namespace DAL.Context
             //    .WithOne(sr => sr.PostTrip)
             //    .HasForeignKey<PostTrip>(pt => pt.ShippingRouteId)
             //    .OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<Trip>()
-                .HasOne(t => t.ShippingRoute)
-                .WithOne(sr => sr.Trip)
-                .HasForeignKey<Trip>(t => t.ShippingRouteId)
-                .OnDelete(DeleteBehavior.Restrict);
+            //modelBuilder.Entity<Trip>()
+            //    .HasOne(t => t.ShippingRoute)
+            //    .WithOne(sr => sr.Trip)
+            //    .HasForeignKey<Trip>(t => t.ShippingRouteId)
+            //    .OnDelete(DeleteBehavior.Restrict);
 
             // Trip & TripRoute (1-1)
             modelBuilder.Entity<Trip>()

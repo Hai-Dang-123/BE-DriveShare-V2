@@ -1,5 +1,6 @@
 ﻿using Common.Enums.Status;
 using Common.ValueObjects;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 
@@ -17,6 +18,17 @@ namespace Common.DTOs
         public decimal VolumeInM3 { get; set; }
         public List<string>? Features { get; set; } = new();
         public Location? CurrentAddress { get; set; }
+
+        // --- THÊM 2 THUỘC TÍNH NÀY ---
+
+        // 1. Danh sách ảnh xe
+        // FE sẽ append: formData.append('VehicleImages', file1)
+        public List<IFormFile> VehicleImages { get; set; } = new List<IFormFile>();
+
+        // 2. Danh sách giấy tờ
+        // FE sẽ append: formData.append('Documents[0].DocumentType', 'REGISTRATION')
+        //               formData.append('Documents[0].FrontFile', file)
+        public List<VehicleDocumentInputDTO> Documents { get; set; } = new List<VehicleDocumentInputDTO>();
     }
 
     public class VehicleUpdateDTO : VehicleCreateDTO

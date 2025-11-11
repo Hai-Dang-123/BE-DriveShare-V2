@@ -12,6 +12,14 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateProviderPostPackageAsync(PostPackageCreateDTO postPackageCreateDTO);
         Task<ResponseDTO> ChangePostPackageStatusAsync(ChangePostPackageStatusDTO changePostPackageStatusDTO);
 
+        Task<ResponseDTO> GetAllPostPackagesAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetPostPackagesByProviderIdAsync(Guid providerId, int pageNumber, int pageSize);
+
+        Task<ResponseDTO> GetMyPostPackagesAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetPostPackageDetailsAsync(Guid postPackageId);
+
+        Task<ResponseDTO> GetOpenPostPackagesAsync(int pageNumber, int pageSize);
+
 
     }
 }

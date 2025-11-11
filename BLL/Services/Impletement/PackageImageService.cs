@@ -258,5 +258,37 @@ namespace BLL.Services.Impletement
                 };
             }
         }
+
+        public async Task AddImagesToPackageAsync(Guid packageId, Guid userId, List<IFormFile> files)
+        {
+            if (files == null || !files.Any())
+            {
+                return; // Không có file, bỏ qua
+            }
+
+            // 1. Upload song song tất cả file
+            var uploadTasks = files
+                .Where(f => f != null && f.Length > 0)
+                .Select(file => _firebaseService.UploadFileAsync(file, userId, FirebaseFileType.PACKAGE_IMAGES))
+                .ToList();
+
+            var imageUrls = await Task.WhenAll(uploadTasks);
+
+            // 2. Thêm tất cả ảnh vào UnitOfWork
+            foreach (var url in imageUrls)
+            {
+                var newImage = new PackageImage
+                {
+                    PackageImageId = Guid.NewGuid(),
+                    PackageId = packageId,
+                    PackageImageURL = url,
+                    CreatedAt = DateTime.UtcNow,
+                    Status = PackageImageStatus.Active
+                };
+
+                // Chỉ Add, KHÔNG Save
+                await _unitOfWork.PackageImageRepo.AddAsync(newImage);
+            }
+        }
     }
 }

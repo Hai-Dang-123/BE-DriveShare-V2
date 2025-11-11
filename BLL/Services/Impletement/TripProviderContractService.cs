@@ -249,5 +249,48 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"Error fetching contract detail: {ex.Message}", 500, false);
             }
         }
+
+        public async Task CreateAndAddContractAsync(Guid tripId, Guid ownerId, Guid providerId, decimal fare)
+        {
+            // 🔹 Lấy ContractTemplate mới nhất
+            var template = (await _unitOfWork.ContractTemplateRepo.GetAllAsync(
+                filter: t => t.Type == ContractType.PROVIDER_CONTRACT,
+                orderBy: q => q.OrderByDescending(t => t.Version)
+            )).FirstOrDefault();
+
+            // 🔹 Validation (Ném lỗi để Transaction bên ngoài Rollback)
+            if (template == null)
+                throw new Exception("Không tìm thấy Mẫu hợp đồng (Contract Template) cho Provider.");
+
+            // 🔹 Check nếu hợp đồng đã tồn tại
+            var existingContract = (await _unitOfWork.TripProviderContractRepo.GetAllAsync(
+                filter: c => c.TripId == tripId && c.CounterpartyId == providerId
+            )).FirstOrDefault();
+
+            if (existingContract != null)
+                throw new Exception("Hợp đồng đã tồn tại cho chuyến đi và nhà cung cấp này.");
+
+            // 🔹 Tạo hợp đồng mới
+            var contract = new TripProviderContract
+            {
+                ContractId = Guid.NewGuid(),
+                ContractCode = $"CON-PROV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                TripId = tripId,         // Từ tham số
+                OwnerId = ownerId,      // Từ tham số
+                CounterpartyId = providerId, // Từ tham số
+                ContractTemplateId = template.ContractTemplateId,
+                Version = template.Version,
+                Type = ContractType.PROVIDER_CONTRACT,
+                Status = ContractStatus.PENDING, // Chờ ký
+                CreateAt = DateTime.UtcNow,
+
+                // --- Gán giá trị từ tham số ---
+                ContractValue = fare,
+                Currency = "VND" // Giả định
+            };
+
+            // 🔹 Thêm vào UoW (KHÔNG SAVE)
+            await _unitOfWork.TripProviderContractRepo.AddAsync(contract);
+        }
     }
 }

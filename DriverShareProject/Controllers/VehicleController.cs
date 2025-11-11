@@ -1,5 +1,6 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
@@ -17,8 +18,9 @@ namespace DriverShareProject.Controllers
             _vehicleService = vehicleService;
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] VehicleCreateDTO dto)
+        [HttpPost("create")]
+        public async Task<IActionResult> CreateVehicle(
+        [FromForm] VehicleCreateDTO dto) 
         {
             var result = await _vehicleService.CreateAsync(dto);
             return StatusCode(result.StatusCode, result);
@@ -50,6 +52,24 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> GetById(Guid id)
         {
             var result = await _vehicleService.GetByIdAsync(id);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("get-my-vehicles")]
+        public async Task<IActionResult> GetMyVehicles(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
+        {
+            var result = await _vehicleService.GetMyVehiclesAsync(pageNumber, pageSize);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("get-my-active-vehicles")]
+        public async Task<IActionResult> GetMyActiveVehicles(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
+        {
+            var result = await _vehicleService.GetMyActiveVehiclesAsync(pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
         }
     }

@@ -12,5 +12,8 @@ namespace DAL.Repositories.Interface
         Task<BaseUser> FindByEmailAsync(string email);
         Task<BaseUser?> FindByEmailAndRoleAsync(string email, string roleName);
         Task<BaseUser> FindByPhoneNumberAsync(string phoneNumber);
+
+
+        Task<BaseUser?> GetBaseUserByIdAsync(Guid userId); // Fallback
     }
 }

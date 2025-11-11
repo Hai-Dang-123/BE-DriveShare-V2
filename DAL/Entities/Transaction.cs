@@ -1,10 +1,10 @@
-﻿using Common.Enums.Type;
+﻿using Common.Enums.Status;
+using Common.Enums.Type;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Transactions;
 
 namespace DAL.Entities
 {

@@ -4,7 +4,7 @@ namespace BLL.Services.Interface
 {
     public interface ITripService
     {
-        Task<ResponseDTO> CreateForOwnerAsync(TripCreateDTO dto);
+        Task<ResponseDTO> CreateTripFromPostAsync(TripCreateFromPostDTO dto);
         Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto);
         Task<ResponseDTO> GetAllTripByOwnerIdAsync(Guid ownerId);
         Task<ResponseDTO> GetAllTripByDriverIdAsync(Guid driverId);
