@@ -1,5 +1,4 @@
-﻿
-using Common.Settings;
+﻿using Common.Settings;
 using DAL.Context;
 using DriverShareProject.Extentions.BuilderExtensions;
 using DriverShareProject.Extentions.PolicyExtensions;
@@ -11,42 +10,53 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-
 builder.Services.AddControllers();
 
 // Add services
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 
-// ✅ Đăng ký DbContext (fix lỗi ConnectionString)
+// ✅ Đăng ký DbContext
 builder.Services.AddApplicationServices(builder.Configuration);
 
 builder.Services.AddControllers()
     .AddJsonOptions(opt =>
     {
-        opt.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         opt.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         opt.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
-
 builder.Services.RegisterAllServices(builder.Configuration);
 
-//Add config
+// Add config
 builder.AddAppConfiguration();
 
-//Add CORS policy
+// Add Authorization policies
 builder.Services.AddAuthorizationPolicies();
 
 
+// ======================================================================
+// ✅ FIX 1: ĐĂNG KÝ CORS GLOBAL
+// ======================================================================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 
+// ======================================================================
 var app = builder.Build();
+// ======================================================================
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -55,23 +65,19 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection();
-
 // Add custom middlewares
 app.UseApplicationMiddlewares();
 
-// Add CORS
-//app.UseCorsPolicy();
 
-app.UseCors("DefaultCorsPolicy");
+// ======================================================================
+// ✅ FIX 2: BẬT CORS đúng vị trí (PHẢI TRƯỚC Authentication/Authorization)
+// ======================================================================
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
-
 app.UseAuthorization();
 
+// Map Controllers
 app.MapControllers();
-
-// Add Routing
-//app.MapCustomEndpoints();
 
 app.Run();
