@@ -103,7 +103,7 @@ namespace BLL.Services.Impletement
             dto.LicenseClass = driver.LicenseClass;
             dto.LicenseExpiryDate = driver.LicenseExpiryDate;
             dto.IsLicenseVerified = driver.IsLicenseVerified;
-            dto.IsInTrip = driver.IsInTrip;
+            //dto.IsInTrip = driver.IsInTrip;
             dto.TotalTripsAssigned = driver.TripDriverAssignments?.Count ?? 0;
             dto.LinkedOwnersCount = driver.OwnerDriverLinks?.Count ?? 0;
             return dto;

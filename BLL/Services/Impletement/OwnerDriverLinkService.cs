@@ -4,6 +4,7 @@ using Common.DTOs;
 using Common.Enums.Status; // Đảm bảo using Enum này
 using DAL.Entities;
 using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -139,5 +140,63 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO("An error occurred while creating the link.", 500, false);
             }
         }
+
+        public async Task<ResponseDTO> GetDriversByOwnerAsync(int pageNumber = 1, int pageSize = 10)
+        {
+            try
+            {
+                // 1. Lấy OwnerId từ Token và xác thực
+                var ownerId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (ownerId == Guid.Empty || userRole != "Owner")
+                {
+                    return new ResponseDTO("Unauthorized: Chỉ 'Owner' mới có thể xem danh sách này.", 401, false);
+                }
+
+                // 2. Lấy IQueryable để phân trang
+                var query = _unitOfWork.OwnerDriverLinkRepo.GetAll()
+                    .Where(link => link.OwnerId == ownerId);
+
+                // 3. Đếm tổng số lượng (cho phân trang)
+                var totalCount = await query.CountAsync();
+                if (totalCount == 0)
+                {
+                    return new ResponseDTO("No drivers found for this owner.", 404, false);
+                }
+
+                // 4. Lấy dữ liệu (Sử dụng .Select() để tối ưu)
+                var links = await query
+                    .OrderByDescending(l => l.RequestedAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(link => new LinkedDriverDTO // Map sang DTO
+                    {
+                        OwnerDriverLinkId = link.OwnerDriverLinkId,
+                        DriverId = link.DriverId,
+                        FullName = link.Driver.FullName,
+                        PhoneNumber = link.Driver.PhoneNumber,
+                        AvatarUrl = link.Driver.AvatarUrl,
+                        LicenseNumber = link.Driver.LicenseNumber,
+                        Status = link.Status.ToString(), // Trả về "PENDING", "APPROVED", ...
+                        RequestedAt = link.RequestedAt,
+                        ApprovedAt = link.ApprovedAt
+                    })
+                    .ToListAsync();
+
+                // 5. Trả về kết quả phân trang
+                var paginatedResult = new PaginatedDTO<LinkedDriverDTO>(
+                    links, totalCount, pageNumber, pageSize
+                );
+
+                return new ResponseDTO("Get linked drivers successfully.", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting linked drivers: {ex.Message}");
+                return new ResponseDTO($"Error getting drivers: {ex.Message}", 500, false);
+            }
+        }
+
+
     }
 }

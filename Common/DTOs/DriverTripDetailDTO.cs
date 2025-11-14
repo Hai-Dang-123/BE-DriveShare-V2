@@ -41,6 +41,6 @@ namespace Common.DTOs
         // --- Current Driver’s Assignment Info ---
         public string? AssignmentType { get; set; } = string.Empty;          // Chính / Phụ
         public string? AssignmentStatus { get; set; } = string.Empty;        // Offered / Accepted / Completed
-        public string? DriverPaymentStatus { get; set; } = string.Empty;     // Paid / Unpaid
+        //public string? DriverPaymentStatus { get; set; } = string.Empty;     // Paid / Unpaid
     }
 }

@@ -117,5 +117,23 @@ namespace BLL.Services.Impletement
 
             return new ResponseDTO("Retrieved successfully", 200, true, dto);
         }
+
+        public async Task<DeliveryRecordTemplate> GetLatestTemplateByTypeAsync(DeliveryRecordType type)
+        {
+            // (Giả sử bạn có DeliveryRecordTemplateRepo trong UnitOfWork)
+            var query = _unitOfWork.DeliveryRecordTemplateRepo.GetAll()
+                .Where(t => t.Type == type && t.Status == DeliveryRecordTemplateStatus.ACTIVE) // Chỉ lấy template đang Active
+                .OrderByDescending(t => t.CreatedAt); // Lấy cái mới nhất
+
+            var template = await query.FirstOrDefaultAsync();
+
+            if (template == null)
+            {
+                // Đây là lỗi hệ thống nghiêm trọng
+                throw new Exception($"Không tìm thấy DeliveryRecordTemplate (ACTIVE) nào cho loại: {type}.");
+            }
+
+            return template;
+        }
     }
 }

@@ -39,7 +39,7 @@ namespace DAL.Entities
 
         // --- Trạng thái ---
         public AssignmentStatus AssignmentStatus { get; set; } // Offered, Accepted, Rejected, Completed...
-        public DriverPaymentStatus PaymentStatus { get; set; } // Unpaid, Paid
+        //public DriverPaymentStatus PaymentStatus { get; set; } // Unpaid, Paid
 
         // --- GỢI Ý BẮT BUỘC (Thuộc tính điều hướng) ---
         public virtual Trip Trip { get; set; } = null!;

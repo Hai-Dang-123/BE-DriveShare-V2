@@ -25,6 +25,8 @@ namespace Common.DTOs
 
         [Required]
         public Guid VehicleId { get; set; } // Xe họ sẽ dùng
+
+
     }
 
 

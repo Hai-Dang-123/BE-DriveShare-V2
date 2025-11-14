@@ -6,6 +6,7 @@ using Common.Enums.Status;
 using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
 
@@ -136,6 +137,7 @@ namespace BLL.Services.Implement
                     VehicleId = dto.VehicleId,
                     OwnerId = ownerId,
                     TripRouteId = newTripRoute.TripRouteId, // Tuyến đường thực tế
+                    ShippingRouteId = postPackage.ShippingRoute.ShippingRouteId,
                     TotalFare = postPackage.OfferedPrice, // Lấy giá từ bài đăng
                     ActualDistanceKm = newTripRoute.DistanceKm,
                     ActualDuration = newTripRoute.Duration,
@@ -222,40 +224,109 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"Error changing trip status: {ex.Message}", 500, false);
             }
         }
+        /*
+LƯU Ý: Đây chỉ là MỘT HÀM.
+Bạn hãy chép nội dung hàm này và dán THAY THẾ
+cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
+*/
+
         private bool IsValidTransition(TripStatus current, TripStatus next)
         {
+            // 1. Không thể chuyển trạng thái TỪ các trạng thái cuối cùng
+            if (current == TripStatus.COMPLETED || current == TripStatus.CANCELLED || current == TripStatus.DELETED)
+            {
+                return false;
+            }
 
+            // 2. Có thể Hủy (CANCELLED) từ bất kỳ đâu (trừ các trạng thái cuối)
+            if (next == TripStatus.CANCELLED)
+            {
+                return true;
+            }
+
+            // 3. Có thể Xóa (DELETED) từ bất kỳ đâu (trừ các trạng thái cuối)
+            if (next == TripStatus.DELETED)
+            {
+                return true;
+            }
+
+            // 4. Xử lý luồng tuyến tính (Linear Flow)
             return next switch
             {
-                TripStatus.LOOKING_FOR_DRIVER => current == TripStatus.CREATED,
-                TripStatus.READY_FOR_CONTRACT => current == TripStatus.LOOKING_FOR_DRIVER,
-                TripStatus.AWAITING_CONTRACT_SIGNATURE => current == TripStatus.READY_FOR_CONTRACT,
-                TripStatus.VEHICLE_HANDOVER => current == TripStatus.AWAITING_CONTRACT_SIGNATURE,
+                // Giai đoạn 1 (HĐ Provider)
+                // (CREATED -> AWAITING_PROVIDER_CONTRACT xảy ra trong CreateTripFromPostAsync)
+                // (AWAITING_PROVIDER_CONTRACT -> AWAITING_PROVIDER_PAYMENT xảy ra trong SignAsync của ContractService)
+                TripStatus.AWAITING_PROVIDER_PAYMENT => current == TripStatus.AWAITING_PROVIDER_CONTRACT,
+
+                // Giai đoạn 2 (Tìm Driver)
+                TripStatus.PENDING_DRIVER_ASSIGNMENT => current == TripStatus.AWAITING_PROVIDER_PAYMENT,
+                TripStatus.AWAITING_DRIVER_CONTRACT => current == TripStatus.PENDING_DRIVER_ASSIGNMENT,
+
+                // ⚠️ SỬA ĐỔI 1: Luồng thanh toán cọc cho Driver (Logic mới)
+                // (Sau khi ký HĐ Driver -> Chuyển sang đợi Owner trả tiền)
+                TripStatus.AWAITING_OWNER_PAYMENT => current == TripStatus.AWAITING_DRIVER_CONTRACT,
+
+                // Giai đoạn 3 (Chuẩn bị)
+                // ⚠️ SỬA ĐỔI 2: Cập nhật luồng vào Giai đoạn 3
+                TripStatus.READY_FOR_VEHICLE_HANDOVER =>
+                                            current == TripStatus.AWAITING_OWNER_PAYMENT || // 1. Lái xe thuê (đã trả cọc Escrow)
+                                            current == TripStatus.PENDING_DRIVER_ASSIGNMENT, // 2. Lái xe nội bộ (đã gán, không cần cọc)
+
+                TripStatus.VEHICLE_HANDOVER => current == TripStatus.READY_FOR_VEHICLE_HANDOVER,
                 TripStatus.LOADING => current == TripStatus.VEHICLE_HANDOVER,
+
+                // Giai đoạn 4 (Vận hành)
                 TripStatus.IN_TRANSIT => current == TripStatus.LOADING,
                 TripStatus.UNLOADING => current == TripStatus.IN_TRANSIT,
                 TripStatus.DELIVERED => current == TripStatus.UNLOADING,
+
+                // Giai đoạn 5 (Trả xe)
                 TripStatus.RETURNING_VEHICLE => current == TripStatus.DELIVERED,
-                TripStatus.COMPLETED => current == TripStatus.RETURNING_VEHICLE,
-                TripStatus.CANCELLED => current != TripStatus.COMPLETED && current != TripStatus.CANCELLED,
+                TripStatus.VEHICLE_RETURNED => current == TripStatus.RETURNING_VEHICLE,
+
+                // Giai đoạn 6 (Thanh toán)
+                TripStatus.AWAITING_FINAL_PROVIDER_PAYOUT => current == TripStatus.VEHICLE_RETURNED,
+                TripStatus.AWAITING_FINAL_DRIVER_PAYOUT => current == TripStatus.AWAITING_FINAL_PROVIDER_PAYOUT,
+                TripStatus.COMPLETED => current == TripStatus.AWAITING_FINAL_DRIVER_PAYOUT,
+
+                // Default case
                 _ => false
             };
         }
-        public async Task<ResponseDTO> GetAllTripByOwnerIdAsync(Guid ownerId)
+        public async Task<ResponseDTO> GetAllTripsByOwnerAsync(int pageNumber = 1, int pageSize = 10)
         {
             try
             {
-                // 🔹 1. Lấy danh sách Trip theo OwnerId
-                var trips = await _unitOfWork.TripRepo.GetAllAsync(
-                    filter: t => t.OwnerId == ownerId && t.Status != Common.Enums.Status.TripStatus.DELETED,
-                    includeProperties: "Vehicle,Vehicle.VehicleType,Owner,Packages,ShippingRoute,TripRoute,DriverAssignments.Driver,DriverContracts,ProviderContracts"
-                );
+                // 🔹 1. Lấy ID và Role từ Token
+                var ownerId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken(); // Giả sử hàm này tồn tại
+
+                // 🔹 2. Kiểm tra quyền
+                if (userRole != "Owner")
+                    return new ResponseDTO("Forbidden: Chỉ 'Owner' mới có thể truy cập.", 403, false);
+                if (ownerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized: Token không hợp lệ.", 401, false);
+
+                // 🔹 3. Lấy danh sách Trip (Vẫn lấy tất cả vì Repo không hỗ trợ Paging)
+                var trips = await _unitOfWork.TripRepo.GetAllAsync(
+          filter: t => t.OwnerId == ownerId && t.Status != Common.Enums.Status.TripStatus.DELETED,
+                    // Owner lấy tất cả contracts
+                    includeProperties: "Vehicle,Vehicle.VehicleType,Owner,Packages,ShippingRoute,ShippingRoute.StartLocation,ShippingRoute.EndLocation,TripRoute,DriverAssignments.Driver,DriverContracts,TripProviderContract"
+        );
 
                 if (trips == null || !trips.Any())
                     return new ResponseDTO("No trips found for this owner.", 404, false);
 
-                // 🔹 2. Map sang DTO
-                var result = trips.Select(t => new TripDetailDTO
+                // 🔹 4. Phân trang (In-Memory Paging - Cần cải thiện ở Repository)
+                var totalCount = trips.Count();
+                var pagedTrips = trips
+                  .OrderByDescending(t => t.CreateAt) // Sắp xếp để phân trang ổn định
+                            .Skip((pageNumber - 1) * pageSize)
+                  .Take(pageSize)
+                  .ToList();
+
+                // 🔹 5. Map sang DTO (Thêm kiểm tra null)
+                var mappedData = pagedTrips.Select(t => new TripDetailDTO
                 {
                     TripId = t.TripId,
                     TripCode = t.TripCode,
@@ -264,61 +335,84 @@ namespace BLL.Services.Implement
                     UpdateAt = t.UpdateAt,
 
                     VehicleId = t.VehicleId,
-                    VehicleModel = t.Vehicle.Model,
-                    VehiclePlate = t.Vehicle.PlateNumber,
-                    VehicleType = t.Vehicle.VehicleType.VehicleTypeName,
+                    VehicleModel = t.Vehicle?.Model ?? "N/A",
+                    VehiclePlate = t.Vehicle?.PlateNumber ?? "N/A",
+                    VehicleType = t.Vehicle?.VehicleType?.VehicleTypeName ?? "N/A",
 
                     OwnerId = t.OwnerId,
-                    OwnerName = t.Owner.FullName,
-                    OwnerCompany = t.Owner.CompanyName,
+                    OwnerName = t.Owner?.FullName ?? "N/A",
+                    OwnerCompany = t.Owner?.CompanyName ?? "N/A",
 
                     StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
                     EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
 
-                    // Tính thời gian dự kiến dựa trên hai mốc ExpectedPickupDate và ExpectedDeliveryDate
                     EstimatedDuration = (t.ShippingRoute != null &&
-                     t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
-                    ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate
-                    : TimeSpan.Zero,
+          t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
+          ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate
+          : TimeSpan.Zero,
 
                     PackageCodes = t.Packages.Select(p => p.PackageCode).ToList(),
-                    DriverNames = t.DriverAssignments.Select(a => a.Driver.FullName).ToList(),
+                    DriverNames = t.DriverAssignments.Select(a => a.Driver?.FullName ?? "N/A").ToList(),
                     TripRouteSummary = t.TripRoute != null
-                                  ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes"
-    :                             string.Empty,
+                 ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes"
+  : string.Empty,
 
-                    //ContractCodes = t.DriverContracts.Select(c => c.ContractCode)
-                    //                  .Concat(t.ProviderContracts.Select(c => c.ContractCode))
-                    //                  .ToList()
+                    // (DTO này không có Contracts, giữ nguyên)
+
                 }).ToList();
 
-                return new ResponseDTO("Get trips successfully", 200, true, result);
+                // 🔹 6. Trả về kết quả phân trang
+                var paginatedResult = new PaginatedDTO<TripDetailDTO>(
+          mappedData,
+          totalCount,
+          pageNumber,
+          pageSize
+        );
+
+                return new ResponseDTO("Get trips successfully", 200, true, paginatedResult);
             }
             catch (Exception ex)
             {
                 return new ResponseDTO($"Error getting trips: {ex.Message}", 500, false);
             }
         }
-        public async Task<ResponseDTO> GetAllTripByDriverIdAsync(Guid driverId)
+        public async Task<ResponseDTO> GetAllTripsByDriverAsync(int pageNumber = 1, int pageSize = 10)
         {
             try
             {
-                // 🔹 B1: Lấy tất cả các TripDriverAssignment của tài xế này
-                var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAllAsync(
-                    filter: a => a.DriverId == driverId
-                              && a.AssignmentStatus != AssignmentStatus.REJECTED
-                              && a.Trip.Status != TripStatus.DELETED,
-                    includeProperties: "Trip,Trip.Vehicle,Trip.Vehicle.VehicleType,Trip.Owner,Trip.ShippingRoute,Trip.TripRoute,Trip.Packages,Trip.DriverAssignments.Driver,Trip.DriverContracts,Trip.ProviderContracts"
-                );
+                // 🔹 1. Lấy ID và Role từ Token
+                var driverId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken(); // Giả sử hàm này tồn tại
+
+                // 🔹 2. Kiểm tra quyền
+                if (userRole != "Driver")
+                    return new ResponseDTO("Forbidden: Chỉ 'Driver' mới có thể truy cập.", 403, false);
+                if (driverId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized: Token không hợp lệ.", 401, false);
+
+                // 🔹 3. Lấy tất cả các TripDriverAssignment của tài xế này
+                var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAllAsync(
+          filter: a => a.DriverId == driverId
+               //&& a.AssignmentStatus != AssignmentStatus.REJECTED
+               && a.Trip.Status != TripStatus.DELETED,
+                    // Chỉ include những gì Driver cần (BỎ ProviderContracts)
+                    includeProperties: "Trip,Trip.Vehicle,Trip.Vehicle.VehicleType,Trip.Owner,Trip.ShippingRoute,Trip.ShippingRoute.StartLocation,Trip.ShippingRoute.EndLocation,Trip.TripRoute,Trip.Packages,Trip.DriverAssignments.Driver,Trip.DriverContracts"
+        );
 
                 if (assignments == null || !assignments.Any())
                     return new ResponseDTO("No trips found for this driver.", 404, false);
 
-                // 🔹 B2: Lấy danh sách các trip duy nhất
-                var trips = assignments.Select(a => a.Trip).Distinct().ToList();
+                // 🔹 4. Lấy danh sách các trip duy nhất và phân trang (In-Memory)
+                var trips = assignments.Select(a => a.Trip).Distinct();
+                var totalCount = trips.Count();
+                var pagedTrips = trips
+                  .OrderByDescending(t => t.CreateAt)
+                  .Skip((pageNumber - 1) * pageSize)
+                  .Take(pageSize)
+                  .ToList();
 
-                // 🔹 B3: Map dữ liệu sang DTO
-                var result = trips.Select(t =>
+                // 🔹 5. Map dữ liệu sang DTO (Thêm kiểm tra null)
+                var mappedData = pagedTrips.Select(t =>
                 {
                     var currentAssign = t.DriverAssignments.FirstOrDefault(a => a.DriverId == driverId);
 
@@ -329,80 +423,173 @@ namespace BLL.Services.Implement
                         Status = t.Status.ToString(),
                         CreateAt = t.CreateAt,
                         UpdateAt = t.UpdateAt,
-
-                        // --- Vehicle Info ---
                         VehicleId = t.VehicleId,
-                        VehicleModel = t.Vehicle?.Model ?? "",
-                        VehiclePlate = t.Vehicle?.PlateNumber ?? "",
-                        VehicleType = t.Vehicle?.VehicleType?.VehicleTypeName ?? "",
-
-                        // --- Owner Info ---
+                        VehicleModel = t.Vehicle?.Model ?? "N/A",
+                        VehiclePlate = t.Vehicle?.PlateNumber ?? "N/A",
+                        VehicleType = t.Vehicle?.VehicleType?.VehicleTypeName ?? "N/A",
                         OwnerId = t.OwnerId,
-                        OwnerName = t.Owner?.FullName ?? "",
-                        OwnerCompany = t.Owner?.CompanyName ?? "",
-
-                        // --- Shipping Route Info ---
-                        StartAddress = t.ShippingRoute?.StartLocation?.Address ?? "",
-                        EndAddress = t.ShippingRoute?.EndLocation?.Address ?? "",
+                        OwnerName = t.Owner?.FullName ?? "N/A",
+                        OwnerCompany = t.Owner?.CompanyName ?? "N/A",
+                        StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
+                        EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
                         EstimatedDuration = (t.ShippingRoute != null &&
-                                             t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
-                                            ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate
-                                            : TimeSpan.Zero,
-
-                        // --- Trip Route Info ---
+                                t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
+                                ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate
+                                : TimeSpan.Zero,
                         TripRouteSummary = t.TripRoute != null
-                            ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes"
-                            : string.Empty,
-
-                        // --- Packages & Contracts ---
+                        ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes"
+                        : string.Empty,
                         PackageCodes = t.Packages.Select(p => p.PackageCode).ToList(),
-                        //ContractCodes = t.DriverContracts.Select(c => c.ContractCode)
-                        //                  .Concat(t.ProviderContracts.Select(c => c.ContractCode))
-                        //                  .ToList(),
-
-                        // --- All Drivers assigned to this Trip ---
-                        DriverNames = t.DriverAssignments.Select(d => d.Driver.FullName).ToList(),
-
-                        // --- Current Driver’s Assignment info ---
+                        DriverNames = t.DriverAssignments.Select(d => d.Driver?.FullName ?? "N/A").ToList(),
                         AssignmentType = currentAssign?.Type.ToString() ?? "",
                         AssignmentStatus = currentAssign?.AssignmentStatus.ToString() ?? "",
-                        DriverPaymentStatus = currentAssign?.PaymentStatus.ToString() ?? ""
+                        //DriverPaymentStatus = currentAssign?.PaymentStatus.ToString() ?? ""
                     };
                 }).ToList();
 
-                return new ResponseDTO("Get trips successfully", 200, true, result);
+                // 🔹 6. Tạo kết quả phân trang
+                var paginatedResult = new PaginatedDTO<DriverTripDetailDTO>(
+          mappedData,
+          totalCount,
+          pageNumber,
+          pageSize
+        );
+
+                return new ResponseDTO("Get trips successfully", 200, true, paginatedResult);
             }
             catch (Exception ex)
             {
                 return new ResponseDTO($"Error getting trips by driver: {ex.Message}", 500, false);
             }
         }
+
+        public async Task<ResponseDTO> GetAllTripsByProviderAsync(int pageNumber = 1, int pageSize = 10)
+        {
+            try
+            {
+                // 🔹 1. Lấy ID và Role từ Token
+                var providerId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
+
+                // 🔹 2. Kiểm tra quyền
+                if (userRole != "Provider")
+                    return new ResponseDTO("Forbidden: Chỉ 'Provider' mới có thể truy cập.", 403, false);
+                if (providerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized: Token không hợp lệ.", 401, false);
+
+                // 🔹 3. Lấy tất cả các Hợp đồng (Contract) mà Provider này tham gia
+                var contracts = await _unitOfWork.TripProviderContractRepo.GetAllAsync(
+                    filter: c => c.CounterpartyId == providerId
+                           && c.Trip.Status != TripStatus.CANCELLED
+                           && c.Trip.Status != TripStatus.DELETED,
+                    // Include các thông tin mà Provider cần xem
+                    includeProperties: "Trip,Trip.Vehicle,Trip.Vehicle.VehicleType,Trip.Owner,Trip.ShippingRoute,Trip.ShippingRoute.StartLocation,Trip.ShippingRoute.EndLocation,Trip.TripRoute,Trip.Packages,Trip.DriverAssignments.Driver,Trip.DriverContracts"
+                );
+
+                if (contracts == null || !contracts.Any())
+                    return new ResponseDTO("No trips found for this provider.", 404, false);
+
+                // 🔹 4. Lấy danh sách các trip duy nhất và phân trang (In-Memory)
+                var trips = contracts.Select(c => c.Trip).Distinct();
+                var totalCount = trips.Count();
+                var pagedTrips = trips
+                    .OrderByDescending(t => t.CreateAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                // 🔹 5. Map sang DTO (Dùng chung TripDetailDTO với Owner)
+                var mappedData = pagedTrips.Select(t => new TripDetailDTO
+                {
+                    TripId = t.TripId,
+                    TripCode = t.TripCode,
+                    Status = t.Status.ToString(),
+                    CreateAt = t.CreateAt,
+                    UpdateAt = t.UpdateAt,
+
+                    VehicleId = t.VehicleId,
+                    VehicleModel = t.Vehicle?.Model ?? "N/A",
+                    VehiclePlate = t.Vehicle?.PlateNumber ?? "N/A",
+                    VehicleType = t.Vehicle?.VehicleType?.VehicleTypeName ?? "N/A",
+
+                    OwnerId = t.OwnerId,
+                    OwnerName = t.Owner?.FullName ?? "N/A",
+                    OwnerCompany = t.Owner?.CompanyName ?? "N/A",
+
+                    StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
+                    EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
+
+                    EstimatedDuration = (t.ShippingRoute != null &&
+                        t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
+                        ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate
+                        : TimeSpan.Zero,
+
+                    PackageCodes = t.Packages.Select(p => p.PackageCode).ToList(),
+                    DriverNames = t.DriverAssignments.Select(a => a.Driver?.FullName ?? "N/A").ToList(),
+                    TripRouteSummary = t.TripRoute != null
+                        ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes"
+                        : string.Empty,
+
+                }).ToList();
+
+                // 🔹 6. Trả về kết quả phân trang
+                var paginatedResult = new PaginatedDTO<TripDetailDTO>(
+                    mappedData,
+                    totalCount,
+                    pageNumber,
+                    pageSize
+                );
+
+                return new ResponseDTO("Get trips successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting trips by provider: {ex.Message}", 500, false);
+            }
+        }
+
+
         public async Task<ResponseDTO> GetTripByIdAsync(Guid tripId)
         {
             try
             {
+                // 🔹 1. Lấy ID và Role từ Token
                 var userId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
                 if (userId == Guid.Empty)
                     return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
-                // Include toàn bộ liên kết liên quan
-                var trips = await _unitOfWork.TripRepo.GetAllAsync(
+                // 🔹 2. TRUY VẤN SƠ BỘ (CHỈ ĐỂ XÁC THỰC)
+                var tripForAuth = await _unitOfWork.TripRepo.FirstOrDefaultAsync(
                     filter: t => t.TripId == tripId,
-                    includeProperties:
-                        "Vehicle,Vehicle.VehicleType,Owner," +
-                        "ShippingRoute,TripRoute," +
-                        "Packages,PostTrip,DriverAssignments.Driver," +
-                        "TripContacts,TripRouteSuggestions," +
-                        "DriverContracts,ProviderContracts," +
-                        "TripDeliveryRecords,Compensations,DeliveryIssues"
+                    // ⚠️ SỬA ĐỔI: Include thêm Hợp đồng Provider để kiểm tra
+                    includeProperties: "DriverAssignments,TripProviderContract"
                 );
 
-                var trip = trips.FirstOrDefault();
-                if (trip == null)
+                if (tripForAuth == null)
                     return new ResponseDTO("Trip not found", 404, false);
 
-                // 🧩 Mapping DTO
-                var dto = new TripDetailFullDTO
+                // 🔹 3. Kiểm tra quyền (Authorization)
+                bool isOwner = (userRole == "Owner" && tripForAuth.OwnerId == userId);
+
+                bool isAssignedDriver = (userRole == "Driver" &&
+                                       tripForAuth.DriverAssignments.Any(a => a.DriverId == userId));
+
+                // ⚠️ THÊM MỚI: Kiểm tra Provider (người ký HĐ)
+                bool isProvider = (userRole == "Provider" &&
+                                     tripForAuth.TripProviderContract != null &&
+                                     tripForAuth.TripProviderContract.CounterpartyId == userId);
+
+                // ⚠️ SỬA ĐỔI: Thêm logic isProvider
+                if (!isOwner && !isAssignedDriver && !isProvider)
+                    return new ResponseDTO("Forbidden: Bạn không có quyền xem chuyến đi này.", 403, false);
+
+                // 🔹 4. TÁCH TRUY VẤN (SPLIT QUERY)
+
+                // --- TRUY VẤN 4.1: Tải Dữ liệu Chính (Không có Collection) ---
+                var query = _unitOfWork.TripRepo.GetAll().Where(t => t.TripId == tripId);
+
+                var dto = await query.Select(trip => new TripDetailFullDTO
                 {
                     TripId = trip.TripId,
                     TripCode = trip.TripCode,
@@ -410,17 +597,21 @@ namespace BLL.Services.Implement
                     CreateAt = trip.CreateAt,
                     UpdateAt = trip.UpdateAt,
 
-                    // --- Vehicle ---
-                    Vehicle = new VehicleSummaryDTO
+                    // --- Vehicle (Safer) ---
+                    Vehicle = trip.Vehicle == null ? new() : new VehicleSummaryDTO
                     {
                         VehicleId = trip.Vehicle.VehicleId,
                         PlateNumber = trip.Vehicle.PlateNumber,
                         Model = trip.Vehicle.Model,
-                        VehicleTypeName = trip.Vehicle.VehicleType.VehicleTypeName
+                        VehicleTypeName = trip.Vehicle.VehicleType != null ? trip.Vehicle.VehicleType.VehicleTypeName : "N/A",
+                        ImageUrls = trip.Vehicle.VehicleImages != null ?
+                                        trip.Vehicle.VehicleImages
+                                        .Select(img => img.ImageURL)
+                                        .ToList() : new List<string>()
                     },
 
-                    // --- Owner ---
-                    Owner = new OwnerSummaryDTO
+                    // --- Owner (Safer) ---
+                    Owner = trip.Owner == null ? new() : new OwnerSummaryDTO
                     {
                         OwnerId = trip.OwnerId,
                         FullName = trip.Owner.FullName,
@@ -428,115 +619,229 @@ namespace BLL.Services.Implement
                         PhoneNumber = trip.Owner.PhoneNumber
                     },
 
-                    // --- Shipping Route ---
-                    ShippingRoute = new RouteDetailDTO
+                    // --- Shipping Route (Safer) ---
+                    ShippingRoute = trip.ShippingRoute == null ? new() : new RouteDetailDTO
                     {
-                        StartAddress = trip.ShippingRoute.StartLocation.Address,
-                        EndAddress = trip.ShippingRoute.EndLocation.Address,
+                        StartAddress = trip.ShippingRoute.StartLocation != null ? trip.ShippingRoute.StartLocation.Address : string.Empty,
+                        EndAddress = trip.ShippingRoute.EndLocation != null ? trip.ShippingRoute.EndLocation.Address : string.Empty,
                         EstimatedDuration = trip.ShippingRoute.ExpectedDeliveryDate - trip.ShippingRoute.ExpectedPickupDate
                     },
 
-                    // --- Trip Route ---
-                    TripRoute = new TripRouteSummaryDTO
+                    // --- Trip Route (Safer) ---
+                    TripRoute = trip.TripRoute == null ? new() : new TripRouteSummaryDTO
                     {
                         DistanceKm = trip.TripRoute.DistanceKm,
-                        DurationMinutes = trip.TripRoute.Duration.TotalMinutes
+                        DurationMinutes = trip.TripRoute.Duration.TotalMinutes,
+                        RouteData = trip.TripRoute.RouteData
                     },
 
-                    // --- Provider (nếu có PostTrip) ---
-                    Provider = trip.PostTrip != null ? new ProviderSummaryDTO
+                    // --- Provider (Safer) ---
+                    Provider = (trip.Type == Common.Enums.Type.TripType.FROM_PROVIDER && trip.PostTrip != null && trip.PostTrip.Owner != null)
+                        ? new ProviderSummaryDTO
+                        {
+                            ProviderId = trip.PostTrip.OwnerId,
+                            CompanyName = trip.PostTrip.Owner.CompanyName,
+                            TaxCode = trip.PostTrip.Owner.TaxCode,
+                            AverageRating = trip.PostTrip.Owner.AverageRating ?? 0
+                        } : null,
+
+                    // QUAN TRỌNG: Khởi tạo rỗng các List, chúng ta sẽ tải chúng sau
+                    Packages = new List<PackageSummaryDTO>(),
+                    Drivers = new List<TripDriverAssignmentDTO>(),
+                    Contacts = new List<TripContactDTO>(),
+                    DriverContracts = new List<ContractSummaryDTO>(),
+                    ProviderContracts = new ContractSummaryDTO(), // Sẽ tải sau
+                    DeliveryRecords = new List<TripDeliveryRecordDTO>(),
+                    Compensations = new List<TripCompensationDTO>(),
+                    Issues = new List<TripDeliveryIssueDTO>()
+
+                }).FirstOrDefaultAsync();
+
+                if (dto == null)
+                    return new ResponseDTO("Trip not found after main query.", 404, false);
+
+
+                // --- TRUY VẤN 4.2 -> 4.N: Tải riêng từng Collection (Siêu nhanh) ---
+
+                // Tải Packages (bao gồm Items)
+                dto.Packages = await _unitOfWork.PackageRepo.GetAll()
+                    .Where(p => p.TripId == tripId)
+                    .Select(p => new PackageSummaryDTO
                     {
-                        ProviderId = trip.PostTrip.OwnerId,
-                        CompanyName = trip.PostTrip.Owner.CompanyName,
-                        TaxCode = trip.PostTrip.Owner.TaxCode,
-                        AverageRating = trip.PostTrip.Owner.AverageRating ?? 0
-                    } : null,
+                        PackageId = p.PackageId,
+                        PackageCode = p.PackageCode,
+                        Weight = p.WeightKg,
+                        Volume = p.VolumeM3,
+                        ImageUrls = p.PackageImages != null ?
+                                        p.PackageImages
+                                        .Select(img => img.PackageImageURL)
+                                        .ToList() : new List<string>(),
+                        Items = (p.Item == null)
+                            ? new List<ItemSummaryDTO>()
+                            : new List<ItemSummaryDTO>
+                            {
+                        new ItemSummaryDTO
+                        {
+                            ItemId = p.Item.ItemId,
+                            ItemName = p.Item.ItemName,
+                            Description = p.Item.Description,
+                            DeclaredValue = p.Item.DeclaredValue ?? 0,
+                            Images = p.Item.ItemImages != null ?
+                                        p.Item.ItemImages
+                                        .Select(img => img.ItemImageURL)
+                                        .ToList() : new List<string>()
+                        }
+                            }
+                    }).ToListAsync();
 
-                    // --- Packages ---
-                    PackageCodes = trip.Packages.Select(p => p.PackageCode).ToList(),
-
-                    // --- Driver Assignments ---
-                    Drivers = trip.DriverAssignments.Select(d => new TripDriverAssignmentDTO
+                // Tải Drivers
+                dto.Drivers = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                    .Where(d => d.TripId == tripId)
+                    .Select(d => new TripDriverAssignmentDTO
                     {
                         DriverId = d.DriverId,
-                        FullName = d.Driver.FullName,
+                        FullName = d.Driver != null ? d.Driver.FullName : "N/A",
                         Type = d.Type.ToString(),
                         AssignmentStatus = d.AssignmentStatus.ToString(),
-                        PaymentStatus = d.PaymentStatus.ToString()
-                    }).ToList(),
+                        //PaymentStatus = d.PaymentStatus.ToString()
+                    }).ToListAsync();
 
-                    // --- Contacts ---
-                    Contacts = trip.TripContacts.Select(c => new TripContactDTO
+                // Tải Contacts
+                dto.Contacts = await _unitOfWork.TripContactRepo.GetAll()
+                    .Where(c => c.TripId == tripId)
+                    .Select(c => new TripContactDTO
                     {
                         TripContactId = c.TripContactId,
                         Type = c.Type.ToString(),
                         FullName = c.FullName,
                         PhoneNumber = c.PhoneNumber,
                         Note = c.Note
-                    }).ToList(),
+                    }).ToListAsync();
 
-                    // --- Driver Contracts ---
-                    DriverContracts = trip.DriverContracts.Select(c => new ContractSummaryDTO
+                // Tải Driver Contracts (với Terms và Chữ ký)
+                dto.DriverContracts = await _unitOfWork.TripDriverContractRepo.GetAll()
+                    .Where(c => c.TripId == tripId)
+                    .Select(c => new ContractSummaryDTO
                     {
-                        ContractId = c.ContractId,            
-                        ContractCode = c.ContractCode,         
-                        Status = c.Status.ToString(),         
-                        Type = c.Type.ToString(),             
-                        ContractValue = c.ContractValue ?? 0,  
-                        Currency = c.Currency,                 
+                        ContractId = c.ContractId,
+                        ContractCode = c.ContractCode,
+                        Status = c.Status.ToString(),
+                        Type = c.Type.ToString(),
+                        ContractValue = c.ContractValue ?? 0,
+                        Currency = c.Currency,
                         EffectiveDate = c.EffectiveDate,
                         ExpirationDate = c.ExpirationDate,
-                        FileURL = c.FileURL
-                    }).ToList(),
+                        FileURL = c.FileURL,
+                        OwnerSignAt = c.OwnerSignAt,
+                        OwnerSigned = c.OwnerSigned,
+                        CounterpartySignAt = c.CounterpartySignAt,
+                        CounterpartySigned = c.CounterpartySigned,
+                        Terms = (c.ContractTemplate != null && c.ContractTemplate.ContractTerms != null) ?
+                                    c.ContractTemplate.ContractTerms
+                                    .Select(t => new ContractTermInTripDTO
+                                    {
+                                        ContractTermId = t.ContractTermId,
+                                        Content = t.Content,
+                                        Order = t.Order,
+                                        ContractTemplateId = t.ContractTemplateId
+                                    })
+                                    .OrderBy(t => t.Order)
+                                    .ToList() : new List<ContractTermInTripDTO>()
+                    }).ToListAsync();
 
-                    //// --- Provider Contracts ---
-                    //ProviderContracts = trip.ProviderContracts.Select(c => new ContractSummaryDTO
-                    //{
-                    //    ContractId = c.ContractId,
-                    //    ContractCode = c.ContractCode,
-                    //    Status = c.Status.ToString(),
-                    //    Type = c.Type.ToString(),              // ✅ Enum ContractType (OwnerProvider)
-                    //    ContractValue = c.ContractValue ?? 0,
-                    //    Currency = c.Currency,
-                    //    EffectiveDate = c.EffectiveDate,
-                    //    ExpirationDate = c.ExpirationDate,
-                    //    FileURL = c.FileURL
-                    //}).ToList(),
+                // Tải Provider Contract (với Terms và Chữ ký)
+                // ⚠️ SỬA ĐỔI: Cho phép Owner HOẶC Provider tải hợp đồng này
+                if (isOwner || isProvider)
+                {
+                    dto.ProviderContracts = await _unitOfWork.TripProviderContractRepo.GetAll()
+                        .Where(c => c.TripId == tripId)
+                        .Select(c => new ContractSummaryDTO
+                        {
+                            ContractId = c.ContractId,
+                            ContractCode = c.ContractCode,
+                            Status = c.Status.ToString(),
+                            Type = c.Type.ToString(),
+                            ContractValue = c.ContractValue ?? 0,
+                            Currency = c.Currency,
+                            EffectiveDate = c.EffectiveDate,
+                            ExpirationDate = c.ExpirationDate,
+                            FileURL = c.FileURL,
+                            OwnerSignAt = c.OwnerSignAt,
+                            OwnerSigned = c.OwnerSigned,
+                            CounterpartySignAt = c.CounterpartySignAt,
+                            CounterpartySigned = c.CounterpartySigned,
+                            Terms = (c.ContractTemplate != null && c.ContractTemplate.ContractTerms != null) ?
+                                        c.ContractTemplate.ContractTerms
+                                        .Select(t => new ContractTermInTripDTO
+                                        {
+                                            ContractTermId = t.ContractTermId,
+                                            Content = t.Content,
+                                            Order = t.Order,
+                                            ContractTemplateId = t.ContractTemplateId
+                                        })
+                                        .OrderBy(t => t.Order)
+                                        .ToList() : new List<ContractTermInTripDTO>()
+                        }).FirstOrDefaultAsync() ?? new ContractSummaryDTO();
+                }
 
-
-                    // --- Delivery Records ---
-                    DeliveryRecords = trip.TripDeliveryRecords.Select(r => new TripDeliveryRecordDTO
+                // Tải Delivery Records (với Terms)
+                dto.DeliveryRecords = await _unitOfWork.TripDeliveryRecordRepo.GetAll()
+                    .Where(r => r.TripId == tripId)
+                    .Select(r => new TripDeliveryRecordDTO
                     {
                         TripDeliveryRecordId = r.DeliveryRecordId,
                         RecordType = r.Type.ToString(),
                         Note = r.Notes,
-                        CreateAt = r.CreatedAt
-                    }).ToList(),
+                        CreateAt = r.CreatedAt,
+                        Terms = (r.DeliveryRecordTemplate != null && r.DeliveryRecordTemplate.DeliveryRecordTerms != null) ?
+                                    r.DeliveryRecordTemplate.DeliveryRecordTerms
+                                    .Select(t => new DeliveryRecordTermInTripDTO
+                                    {
+                                        DeliveryRecordTermId = t.DeliveryRecordTermId,
+                                        Content = t.Content,
+                                        DisplayOrder = t.DisplayOrder
+                                    })
+                                    .OrderBy(t => t.DisplayOrder)
+                                    .ToList() : new List<DeliveryRecordTermInTripDTO>()
+                    }).ToListAsync();
 
-                    // --- Compensations ---
-                    Compensations = trip.Compensations.Select(cp => new TripCompensationDTO
-                    {
-                        TripCompensationId = cp.TripCompensationId,
-                        Reason = cp.Reason,
-                        Amount = cp.Amount
-                    }).ToList(),
+                // Tải Compensations
+                dto.Compensations = await _unitOfWork.TripCompensationRepo.GetAll()
+                     .Where(cp => cp.TripId == tripId)
+                     .Select(cp => new TripCompensationDTO
+                     {
+                         TripCompensationId = cp.TripCompensationId,
+                         Reason = cp.Reason,
+                         Amount = cp.Amount
+                     }).ToListAsync();
 
-                    // --- Delivery Issues ---
-                    Issues = trip.DeliveryIssues.Select(i => new TripDeliveryIssueDTO
+                // Tải Delivery Issues
+                dto.Issues = await _unitOfWork.TripDeliveryIssueRepo.GetAll()
+                    .Where(i => i.TripId == tripId)
+                    .Select(i => new TripDeliveryIssueDTO
                     {
                         TripDeliveryIssueId = i.TripDeliveryIssueId,
                         IssueType = i.IssueType.ToString(),
                         Description = i.Description,
                         Status = i.Status.ToString()
-                    }).ToList()
-                };
+                    }).ToListAsync();
 
+
+                // 🔹 5. Trả về DTO đã được điền đầy đủ
                 return new ResponseDTO("Get trip successfully", 200, true, dto);
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error fetching trip detail: {ex.Message} \n {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+                }
                 return new ResponseDTO($"Error fetching trip detail: {ex.Message}", 500, false);
             }
         }
+
     }
 }
+
+    

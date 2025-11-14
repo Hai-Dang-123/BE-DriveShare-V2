@@ -1,4 +1,6 @@
 ﻿using Common.DTOs;
+using Common.Enums.Type;
+using DAL.Entities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,5 +14,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> DeleteAsync(Guid id);
         Task<ResponseDTO> GetAllAsync();
         Task<ResponseDTO> GetByIdAsync(Guid id);
+
+        Task<DeliveryRecordTemplate> GetLatestTemplateByTypeAsync(DeliveryRecordType type);
     }
 }

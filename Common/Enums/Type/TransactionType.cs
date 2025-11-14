@@ -8,12 +8,17 @@ namespace Common.Enums.Type
 {
     public enum TransactionType
     {
-        TOPUP,         // Nạp tiền vào ví
-        WITHDRAWAL,    // Rút tiền ra khỏi ví
-        TRIP_PAYMENT,  // Thanh toán cho chuyến đi
-        DRIVER_PAYOUT, // Chi trả cho tài xế
-        PLATFORM_FEE,  // Phí nền tảng thu
+        // === CỘNG TIỀN (System -> User) ===
+        TOPUP,         // Nạp tiền
+        OWNER_PAYOUT,  // Trả tiền cho Owner (Giai đoạn cuối)
+        DRIVER_PAYOUT, // Trả tiền cho Driver (Giai đoạn cuối)
         REFUND,        // Hoàn tiền
+
+        // === TRỪ TIỀN (User -> System) ===
+        WITHDRAWAL,             // Rút tiền
+        TRIP_PAYMENT,           // Provider thanh toán cho Trip
+        PLATFORM_FEE,           // Phí nền tảng
+        DRIVER_SERVICE_PAYMENT  // Owner thanh toán tiền thuê tài xế (cho nền tảng giữ)
     }
 
 }

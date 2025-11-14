@@ -350,7 +350,7 @@ namespace BLL.Services.Impletement
                     LicenseClass = string.Empty,  // Thiếu trong DTO
                     LicenseExpiryDate = null,
                     IsLicenseVerified = false,
-                    IsInTrip = false
+                    DriverStatus = DriverStatus.AVAILABLE,
                 };
 
                 // Xử lý Avatar (nếu có)

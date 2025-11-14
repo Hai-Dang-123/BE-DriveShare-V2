@@ -29,7 +29,8 @@ namespace Common.DTOs
         public ProviderSummaryDTO? Provider { get; set; }
 
         // 🧩 Packages
-        public List<string> PackageCodes { get; set; } = new();
+        //public List<string> PackageCodes { get; set; } = new();
+        public List<PackageSummaryDTO> Packages { get; set; } = new();
 
         // 🧩 Drivers
         public List<TripDriverAssignmentDTO> Drivers { get; set; } = new();
@@ -39,7 +40,7 @@ namespace Common.DTOs
 
         // 🧩 Contracts
         public List<ContractSummaryDTO> DriverContracts { get; set; } = new();
-        public List<ContractSummaryDTO> ProviderContracts { get; set; } = new();
+        public ContractSummaryDTO ProviderContracts { get; set; } = new();
 
         // 🧩 Records, Compensation, Issues
         public List<TripDeliveryRecordDTO> DeliveryRecords { get; set; } = new();
@@ -53,7 +54,8 @@ namespace Common.DTOs
         public string PlateNumber { get; set; } = "";
         public string Model { get; set; } = "";
         public string VehicleTypeName { get; set; } = "";
-    }
+        public List<string> ImageUrls { get; set; } = new(); // 🚩 THÊM DÒNG NÀY
+    }
 
     public class OwnerSummaryDTO
     {
@@ -67,7 +69,7 @@ namespace Common.DTOs
     {
         public string StartAddress { get; set; } = "";
         public string EndAddress { get; set; } = "";
-        public decimal EstimatedDistanceKm { get; set; }
+        //public decimal EstimatedDistanceKm { get; set; }
         public TimeSpan EstimatedDuration { get; set; }
     }
 
@@ -75,6 +77,7 @@ namespace Common.DTOs
     {
         public decimal DistanceKm { get; set; }
         public double DurationMinutes { get; set; }
+        public string RouteData { get; set; } = string.Empty;
     }
 
     public class ProviderSummaryDTO
@@ -114,6 +117,13 @@ namespace Common.DTOs
         public DateTime? EffectiveDate { get; set; }
         public DateTime? ExpirationDate { get; set; }
         public string? FileURL { get; set; }
+        public List<ContractTermInTripDTO> Terms { get; set; } = new();
+
+        // ⚠️ THÊM MỚI: Thông tin chữ ký
+        public bool OwnerSigned { get; set; }
+        public DateTime? OwnerSignAt { get; set; }
+        public bool CounterpartySigned { get; set; }
+        public DateTime? CounterpartySignAt { get; set; }
     }
 
 
@@ -123,6 +133,21 @@ namespace Common.DTOs
         public string RecordType { get; set; } = "";
         public string? Note { get; set; }
         public DateTime CreateAt { get; set; }
+        public List<DeliveryRecordTermInTripDTO> Terms { get; set; } = new();
+    }
+    public class ContractTermInTripDTO
+    {
+        public Guid ContractTermId { get; set; }
+        public string Content { get; set; } = string.Empty;
+        public int Order { get; set; }
+        public Guid ContractTemplateId { get; set; }
+    }
+
+    public class DeliveryRecordTermInTripDTO
+    {
+        public Guid DeliveryRecordTermId { get; set; }
+        public string Content { get; set; } = string.Empty;
+        public int DisplayOrder { get; set; }
     }
 
     public class TripCompensationDTO
@@ -138,5 +163,27 @@ namespace Common.DTOs
         public string IssueType { get; set; } = "";
         public string Description { get; set; } = "";
         public string Status { get; set; } = "";
+    }
+
+
+
+    public class ItemSummaryDTO
+    {
+        public Guid ItemId { get; set; }
+        public string ItemName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public decimal DeclaredValue { get; set; }
+        // Sửa: Dùng ItemImageSummaryDTO (đã có ở cuối file của bạn)
+        public List<string> Images { get; set; } = new(); // 🚩 SỬA TỪ ItemImageDTO -> ItemImageSummaryDTO
+    }
+
+    public class PackageSummaryDTO
+    {
+        public Guid PackageId { get; set; }
+        public string PackageCode { get; set; } = string.Empty;
+        public decimal Weight { get; set; }
+        public decimal Volume { get; set; }
+        public List<string> ImageUrls { get; set; } = new(); // 🚩 THÊM DÒNG NÀY
+        public List<ItemSummaryDTO> Items { get; set; } = new();
     }
 }

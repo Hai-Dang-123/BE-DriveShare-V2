@@ -28,5 +28,19 @@ namespace DAL.Repositories.Implement
                     (link.Status == FleetJoinStatus.PENDING || link.Status == FleetJoinStatus.APPROVED));
         }
 
+        public async Task<bool> CheckLinkExistsAsync(Guid ownerId, Guid driverId, FleetJoinStatus? status = null)
+        {
+            var query = _context.OwnerDriverLinks.Where(l => l.OwnerId == ownerId && l.DriverId == driverId);
+
+            // Nếu status có giá trị (vd: APPROVED), lọc thêm theo status
+            if (status.HasValue)
+            {
+                query = query.Where(l => l.Status == status.Value);
+            }
+
+            // Trả về true nếu tìm thấy bất kỳ record nào khớp
+            return await query.AnyAsync();
+        }
+
     }
 }

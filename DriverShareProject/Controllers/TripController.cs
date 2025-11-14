@@ -7,7 +7,8 @@ namespace DriverShareProject.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class TripController : ControllerBase
+    //[Authorize] // 🚩 Bắt buộc tất cả API trong đây phải đăng nhập
+    public class TripController : ControllerBase
     {
         private readonly ITripService _tripService;
 
@@ -17,8 +18,9 @@ namespace DriverShareProject.Controllers
         }
 
         [HttpPost("owner-create-from-post")]
-        public async Task<IActionResult> CreateTripFromPost(
-        [FromBody] TripCreateFromPostDTO dto) // <-- Dùng DTO mới
+        //[Authorize(Roles = "Owner")] // 🚩 Chỉ Owner mới được gọi API này
+        public async Task<IActionResult> CreateTripFromPost(
+          [FromBody] TripCreateFromPostDTO dto)
         {
             var result = await _tripService.CreateTripFromPostAsync(dto);
             return StatusCode(result.StatusCode, result);
@@ -27,23 +29,55 @@ namespace DriverShareProject.Controllers
         [HttpPut("change-status")]
         public async Task<IActionResult> ChangeStatus([FromBody] ChangeTripStatusDTO dto)
         {
-            var result = await _tripService.ChangeTripStatusAsync(dto);
-            return Ok(result);
+            // LƯU Ý: Service của bạn chưa kiểm tra quyền (ví dụ: chỉ Owner/Driver của chuyến đi mới được đổi)
+            // Tạm thời [Authorize] ở class là đủ để biết user đã đăng nhập
+            var result = await _tripService.ChangeTripStatusAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
-        [HttpGet("owner/{ownerId}")]
-        public async Task<IActionResult> GetAllTripByOwnerId(Guid ownerId)
+
+        // ==========================================
+        // === 🚩 HÀM ĐÃ SỬA (OWNER) 🚩 ===
+        // ==========================================
+        [HttpGet("owner")]
+        //[Authorize(Roles = "Owner")] // 🚩 Chỉ Owner
+        public async Task<IActionResult> GetAllTripsByOwner(
+      [FromQuery] int pageNumber = 1,
+      [FromQuery] int pageSize = 10)
         {
-            var result = await _tripService.GetAllTripByOwnerIdAsync(ownerId);
-            return Ok(result);
+            // Service sẽ tự lấy OwnerId từ token
+            var result = await _tripService.GetAllTripsByOwnerAsync(pageNumber, pageSize);
+            return StatusCode(result.StatusCode, result);
         }
-        [HttpGet("driver/{driverId}")]
-        public async Task<IActionResult> GetAllTripByDriverId(Guid driverId)
+
+        // ==========================================
+        // === 🚩 HÀM ĐÃ SỬA (DRIVER) 🚩 ===
+        // ==========================================
+        [HttpGet("driver")]
+        //[Authorize(Roles = "Driver")] // 🚩 Chỉ Driver
+        public async Task<IActionResult> GetAllTripsByDriver(
+      [FromQuery] int pageNumber = 1,
+      [FromQuery] int pageSize = 10)
         {
-            var response = await _tripService.GetAllTripByDriverIdAsync(driverId);
+            // Service sẽ tự lấy DriverId từ token
+            var response = await _tripService.GetAllTripsByDriverAsync(pageNumber, pageSize);
             return StatusCode(response.StatusCode, response);
         }
-        [HttpGet("{tripId}")]
-        public async Task<IActionResult> GetTripById(Guid tripId)
+
+        // ⚠️ THÊM MỚI TẠI ĐÂY
+        [HttpGet("provider")]
+        //[Authorize(Roles = "Provider")] // Đảm bảo chỉ Provider mới gọi được
+        public async Task<IActionResult> GetAllTripsByProvider([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var response = await _tripService.GetAllTripsByProviderAsync(pageNumber, pageSize);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        // ==========================================
+        // === 🚩 HÀM ĐÃ SỬA (GetById) 🚩 ===
+        // ==========================================
+        [HttpGet("{tripId}")]
+        // (Không cần Role, vì Service sẽ kiểm tra (Owner CỦA CHUYẾN ĐI hoặc Driver ĐƯỢC GÁN))
+        public async Task<IActionResult> GetTripById(Guid tripId)
         {
             var response = await _tripService.GetTripByIdAsync(tripId);
             return StatusCode(response.StatusCode, response);

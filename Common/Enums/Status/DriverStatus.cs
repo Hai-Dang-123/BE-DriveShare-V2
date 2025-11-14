@@ -6,11 +6,9 @@ using System.Threading.Tasks;
 
 namespace Common.Enums.Status
 {
-    public enum AssignmentStatus
+    public enum DriverStatus
     {
-        //OFFERED,
-        ACCEPTED,
-        //REJECTED,
-        COMPLETED,
+        AVAILABLE,
+        UNAVAILABLE,
     }
 }

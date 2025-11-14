@@ -14,11 +14,11 @@ namespace DAL.Entities
         public string? Description { get; set; } = null!;
         //
         public decimal? DeclaredValue { get; set; } // Giá trị khai báo (quan trọng cho bồi thường)
+        //public int Quantity { get; set; } // Số lượng của hàng hóa
         public string Currency { get; set; } = "VND";
         //public string? ItemType { get; set; } // Loại hàng: "Dễ vỡ", "Đông lạnh", v.v.
         public Guid? OwnerId { get; set; } // FK to Owner
         public Guid? ProviderId { get; set; } // FK to Provider
-        
         public ItemStatus Status { get; set; }  // Trạng thái hiện tại của hàng hóa
         public virtual Owner? Owner { get; set; }
         public virtual Provider? Provider { get; set; }

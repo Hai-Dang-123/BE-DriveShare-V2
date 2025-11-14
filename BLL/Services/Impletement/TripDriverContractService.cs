@@ -256,5 +256,60 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"Error fetching contract detail: {ex.Message}", 500, false);
             }
         }
+
+        /// <summary>
+        /// (Nội bộ) Chỉ tạo Entity, KHÔNG SaveChanges, ném Exception nếu lỗi
+        /// </summary>
+        public async Task<TripDriverContract> CreateContractInternalAsync(CreateTripDriverContractDTO dto, Guid ownerId)
+        {
+            // (Logic này được lấy từ hàm CreateAsync gốc của bạn)
+            try
+            {
+                // Trip phải thuộc Owner
+                var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
+                if (trip == null || trip.OwnerId != ownerId)
+                    throw new Exception("Trip not found or not owned by current user"); // Ném lỗi
+
+                // Driver tồn tại?
+                var driver = await _unitOfWork.DriverRepo.GetByIdAsync(dto.DriverId);
+                if (driver == null)
+                    throw new Exception("Driver not found"); // Ném lỗi
+
+                // Template mới nhất loại DRIVER_CONTRACT
+                var template = (await _unitOfWork.ContractTemplateRepo.GetAllAsync(
+                    filter: t => t.Type == ContractType.DRIVER_CONTRACT,
+                    orderBy: q => q.OrderByDescending(x => x.Version)
+                )).FirstOrDefault();
+
+                if (template == null)
+                    throw new Exception("No Driver Contract Template found"); // Ném lỗi
+
+                // Tạo hợp đồng
+                var contract = new TripDriverContract
+                {
+                    ContractId = Guid.NewGuid(),
+                    ContractCode = $"CON-DRV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                    TripId = trip.TripId,
+                    OwnerId = ownerId,
+                    CounterpartyId = driver.UserId, // Driver kế thừa BaseUser → UserId
+                    ContractTemplateId = template.ContractTemplateId,
+                    Version = template.Version,
+                    Type = ContractType.DRIVER_CONTRACT,
+                    Status = ContractStatus.PENDING, // Luôn PENDING khi mới tạo
+                    CreateAt = DateTime.UtcNow
+                };
+
+                await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
+
+                // KHÔNG GỌI SaveChangeAsync() (Vì đây là hàm nội bộ)
+
+                return contract;
+            }
+            catch (Exception ex)
+            {
+                // Ném lỗi để Service gọi (TripDriverAssignmentService) có thể Rollback
+                throw new Exception($"Error creating internal driver contract: {ex.Message}", ex);
+            }
+        }
     }
 }
