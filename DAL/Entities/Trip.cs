@@ -39,6 +39,7 @@ namespace DAL.Entities
 
         // 4. Lộ trình (chi tiết từ API map) của chuyến đi? (Trip - TripRoute 1-1)
         public Guid TripRouteId { get; set; } // FK to TripRoute
+        public Guid ShippingRouteId { get; set; } // FK to ShippingRoute
 
 
         // --- GỢI Ý BẮT BUỘC (Thuộc tính điều hướng) ---

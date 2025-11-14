@@ -13,12 +13,12 @@ namespace DriverShareProject.Controllers
             _tripRouteService = tripRouteService;
         }
 
-        [HttpPost("generate/{tripId}")]
-        public async Task<IActionResult> GenerateTripRouteAsync(Guid tripId)
-        {
-            var response = await _tripRouteService.GenerateTripRouteAsync(tripId);
-            return StatusCode(response.StatusCode, response);
-        }
+        //[HttpPost("generate/{tripId}")]
+        //public async Task<IActionResult> GenerateTripRouteAsync(Guid tripId)
+        //{
+        //    var response = await _tripRouteService.GenerateTripRouteAsync(tripId);
+        //    return StatusCode(response.StatusCode, response);
+        //}
 
         [HttpGet("{tripRouteId}")]
         public async Task<IActionResult> GetTripRouteByIdAsync(Guid tripRouteId)

@@ -112,16 +112,24 @@ namespace BLL.Services.Implement
                 if (userId == Guid.Empty)
                     return new ResponseDTO("Unauthorized", 401, false);
 
+                // 1. Lấy Hợp đồng
                 var contract = await _unitOfWork.TripProviderContractRepo.GetByIdAsync(contractId);
                 if (contract == null)
                     return new ResponseDTO("Contract not found", 404, false);
 
+                // ⚠️ 2. Lấy Chuyến đi (Trip) liên quan
+                var trip = await _unitOfWork.TripRepo.GetByIdAsync(contract.TripId);
+                if (trip == null)
+                    return new ResponseDTO("Associated Trip not found for this contract", 404, false);
+
+                // 3. Xác thực quyền
                 bool isOwner = contract.OwnerId == userId;
                 bool isProvider = contract.CounterpartyId == userId;
 
                 if (!isOwner && !isProvider)
                     return new ResponseDTO("You are not authorized to sign this contract", 403, false);
 
+                // 4. Áp dụng chữ ký
                 if (isOwner)
                 {
                     if (contract.OwnerSigned)
@@ -137,21 +145,37 @@ namespace BLL.Services.Implement
                     contract.CounterpartySignAt = DateTime.UtcNow;
                 }
 
+                // ⚠️ 5. Cập nhật trạng thái (Contract VÀ Trip) dựa trên chữ ký
                 if (contract.OwnerSigned && contract.CounterpartySigned)
                 {
+                    // --- Cả hai đã ký ---
                     contract.Status = ContractStatus.COMPLETED;
                     contract.EffectiveDate = DateTime.UtcNow;
+
+                    // Cập nhật Trip sang trạng thái "Đợi Provider Thanh Toán"
+                    trip.Status = TripStatus.AWAITING_PROVIDER_PAYMENT;
+                }
+                else
+                {
+                    // --- Mới chỉ có 1 bên ký ---
+                    contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE;
+
+                    // Cập nhật Trip (hoặc giữ nguyên) trạng thái "Đợi Ký HĐ Provider"
+                    trip.Status = TripStatus.AWAITING_PROVIDER_CONTRACT;
                 }
 
+                // 6. Lưu thay đổi cho cả hai
                 await _unitOfWork.TripProviderContractRepo.UpdateAsync(contract);
+                await _unitOfWork.TripRepo.UpdateAsync(trip); // ⚠️ CẬP NHẬT TRIP
                 await _unitOfWork.SaveChangeAsync();
 
                 return new ResponseDTO("Contract signed successfully", 200, true, new
                 {
                     contract.ContractId,
-                    contract.Status,
+                    ContractStatus = contract.Status.ToString(), // Trả về status dạng string
                     contract.OwnerSigned,
-                    contract.CounterpartySigned
+                    contract.CounterpartySigned,
+                    TripStatus = trip.Status.ToString() // Trả về thêm trạng thái Trip
                 });
             }
             catch (Exception ex)

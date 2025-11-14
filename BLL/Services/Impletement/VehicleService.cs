@@ -37,7 +37,7 @@ namespace BLL.Services.Impletement
                     return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
                 // (Nếu CurrentAddress là string, bạn cần Geocode nó ở đây)
-                // Location currentAddress = await _vietMapService.GeocodeAsync(dto.CurrentAddressString);
+                 //Location currentAddress = await _vietMapService.GeocodeAsync(dto.CurrentAddressString);
 
                 // 1. Tạo Vehicle (Đối tượng chính)
                 var vehicle = new Vehicle

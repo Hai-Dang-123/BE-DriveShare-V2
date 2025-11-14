@@ -11,38 +11,38 @@ namespace DAL.Context
 {
     public class DbSeeder
     {
-        // Bỏ _context đi vì Seed dùng ModelBuilder
-        // private readonly DriverShareAppContext _context; 
-
         // ───────────────────────────────────────────────
-        // 🔹 ROLE IDs (Giữ nguyên)
+        // 🔹 ROLE IDs
         // ───────────────────────────────────────────────
         private static readonly Guid AdminRole = Guid.Parse("D4DAB1C3-6D48-4B23-8369-2D1C9C828F22");
         private static readonly Guid DriverRole = Guid.Parse("A1DAB1C3-6D48-4B23-8369-2D1C9C828F22");
         private static readonly Guid OwnerRole = Guid.Parse("B2DAB1C3-6D48-4B23-8369-2D1C9C828F22");
         private static readonly Guid StaffRole = Guid.Parse("E3DAB1C3-6D48-4B23-8369-2D1C9C828F22");
-        private static readonly Guid ProviderRole = Guid.Parse("F5DAB1C3-6D48-4B23-8369-2D1C9C828F22"); // Thêm Provider Role ID
+        private static readonly Guid ProviderRole = Guid.Parse("F5DAB1C3-6D48-4B23-8369-2D1C9C828F22");
 
         // ───────────────────────────────────────────────
-        // 🔹 USER IDs (Thêm ProviderID)
+        // 🔹 USER IDs
         // ───────────────────────────────────────────────
         private static readonly Guid AdminID = Guid.Parse("12345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid DriverID = Guid.Parse("22345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid OwnerID = Guid.Parse("32345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid StaffID = Guid.Parse("42345678-90AB-CDEF-1234-567890ABCDEF");
-        private static readonly Guid ProviderID = Guid.Parse("62345678-90AB-CDEF-1234-567890ABCDEF"); // Thêm Provider ID
+        private static readonly Guid ProviderID = Guid.Parse("62345678-90AB-CDEF-1234-567890ABCDEF");
+        private static readonly Guid DriverID_2 = Guid.Parse("22345678-90AB-CDEF-0002-567890ABCDEF");
 
         // ───────────────────────────────────────────────
-        // 🔹 WALLET IDs (Thêm mới)
+        // 🔹 WALLET IDs
         // ───────────────────────────────────────────────
-        private static readonly Guid AdminWalletID = Guid.NewGuid();
-        private static readonly Guid DriverWalletID = Guid.NewGuid();
-        private static readonly Guid OwnerWalletID = Guid.NewGuid();
-        private static readonly Guid StaffWalletID = Guid.NewGuid();
-        private static readonly Guid ProviderWalletID = Guid.NewGuid();
+        private static readonly Guid AdminWalletID = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        private static readonly Guid DriverWalletID = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        private static readonly Guid OwnerWalletID = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        private static readonly Guid StaffWalletID = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        private static readonly Guid ProviderWalletID = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        private static readonly Guid DriverWalletID_2 = Guid.Parse("66666666-6666-6666-6666-666666666666");
+
 
         // ───────────────────────────────────────────────
-        // 🔹 TEMPLATE IDs (MỚI)
+        // 🔹 TEMPLATE IDs
         // ───────────────────────────────────────────────
         private static readonly Guid ProviderContractTemplateID = Guid.Parse("C0100001-0001-0000-0000-000000000001");
         private static readonly Guid DriverContractTemplateID = Guid.Parse("C0200001-0002-0000-0000-000000000001");
@@ -50,25 +50,35 @@ namespace DAL.Context
         private static readonly Guid PickupRecordTemplateID = Guid.Parse("D0100001-0003-0000-0000-000000000001");
         private static readonly Guid DropoffRecordTemplateID = Guid.Parse("D0200001-0004-0000-0000-000000000001");
 
+        // ───────────────────────────────────────────────
+        // 🔹 VEHICLE TYPE IDs (⚠️ ĐÃ SỬA LỖI)
+        // ───────────────────────────────────────────────
+        private static readonly Guid VehicleTypeID_1T5 = Guid.Parse("A0000001-0001-0000-0000-000000000001"); // (Tên cũ: VTC-0001...)
+        private static readonly Guid VehicleTypeID_8T = Guid.Parse("A0000002-0002-0000-0000-000000000001"); // (Tên cũ: VTC-0002...)
+        private static readonly Guid VehicleTypeID_Container = Guid.Parse("A0000003-0003-0000-0000-000000000001"); // (Tên cũ: VTC-0003...)
+        private static readonly Guid VehicleTypeID_Refrigerated = Guid.Parse("A0000004-0004-0000-0000-000000000001"); // (Tên cũ: VTC-0004...)
+
 
         // ───────────────────────────────────────────────
-        // 🔹 HÀM SEED CHÍNH (Thêm các hàm seed mới)
+        // 🔹 HÀM SEED CHÍNH
         // ───────────────────────────────────────────────
         public static void Seed(ModelBuilder modelBuilder)
         {
             SeedRole(modelBuilder);
             SeedUser(modelBuilder);
-            SeedWallets(modelBuilder); 
+            SeedWallets(modelBuilder);
             SeedDriver(modelBuilder);
             SeedOwner(modelBuilder);
             SeedProvider(modelBuilder);
 
             SeedContractTemplates(modelBuilder);
             SeedDeliveryRecordTemplates(modelBuilder);
+
+            SeedVehicleType(modelBuilder);
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 ROLES (Thêm Provider Role)
+        // 🔹 ROLES
         // ───────────────────────────────────────────────
         private static void SeedRole(ModelBuilder modelBuilder)
         {
@@ -77,19 +87,16 @@ namespace DAL.Context
                 new Role { RoleId = DriverRole, RoleName = "Driver" },
                 new Role { RoleId = OwnerRole, RoleName = "Owner" },
                 new Role { RoleId = StaffRole, RoleName = "Staff" },
-                new Role { RoleId = ProviderRole, RoleName = "Provider" } // Thêm Provider Role
+                new Role { RoleId = ProviderRole, RoleName = "Provider" }
             );
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 USERS (Admin, Staff - Thêm WalletId, Address)
+        // 🔹 USERS (Admin, Staff)
         // ───────────────────────────────────────────────
         private static void SeedUser(ModelBuilder modelBuilder)
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm"; // Mật khẩu là "123"
-
-            // Tạo một địa chỉ mẫu
-            //var sampleAddress = new Location("123 Đường ABC", 10.7769, 106.7009); // Ví dụ: TP.HCM
 
             modelBuilder.Entity<BaseUser>().HasData(
                 new BaseUser
@@ -103,7 +110,6 @@ namespace DAL.Context
                     Status = UserStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
-                    //Address = sampleAddress,   // Gán Địa chỉ
                     IsEmailVerified = true,
                     IsPhoneVerified = true
                 },
@@ -118,7 +124,6 @@ namespace DAL.Context
                     Status = UserStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
-                    //Address = sampleAddress,  // Gán Địa chỉ
                     IsEmailVerified = true,
                     IsPhoneVerified = true
                 }
@@ -126,33 +131,35 @@ namespace DAL.Context
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 WALLETS (Thêm mới)
+        // 🔹 WALLETS (Đã sửa số dư)
         // ───────────────────────────────────────────────
         private static void SeedWallets(ModelBuilder modelBuilder)
         {
+            decimal initialBalance = 500000000m; // 500 triệu
+
             modelBuilder.Entity<Wallet>().HasData(
-                new Wallet { WalletId = AdminWalletID, UserId = AdminID, Balance = 1000000, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = DriverWalletID, UserId = DriverID, Balance = 50000, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = OwnerWalletID, UserId = OwnerID, Balance = 5000000, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = StaffWalletID, UserId = StaffID, Balance = 0, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = ProviderWalletID, UserId = ProviderID, Balance = 2000000, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow }
+                new Wallet { WalletId = AdminWalletID, UserId = AdminID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+                new Wallet { WalletId = DriverWalletID, UserId = DriverID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+                new Wallet { WalletId = OwnerWalletID, UserId = OwnerID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+                new Wallet { WalletId = StaffWalletID, UserId = StaffID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+                new Wallet { WalletId = ProviderWalletID, UserId = ProviderID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+                new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow }
             );
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 DRIVER (Thêm mới - Dùng Entity<Driver>)
+        // 🔹 DRIVER
         // ───────────────────────────────────────────────
         private static void SeedDriver(ModelBuilder modelBuilder)
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm"; // Mật khẩu là "123"
-            //var driverAddress = new Location("456 Đường XYZ", 10.8231, 106.6297); // Ví dụ: TP.HCM
 
             modelBuilder.Entity<Driver>().HasData(
                 new Driver
                 {
                     // --- BaseUser Fields ---
                     UserId = DriverID,
-                    FullName = "Driver_Name",
+                    FullName = "Tài xế Văn A",
                     Email = "driver@example.com",
                     PhoneNumber = "0987654321",
                     PasswordHash = fixedHashedPassword,
@@ -162,7 +169,6 @@ namespace DAL.Context
                     DateOfBirth = new DateTime(1990, 5, 15),
                     IsEmailVerified = true,
                     IsPhoneVerified = true,
-                    //Address = driverAddress,
                     RoleId = DriverRole,
 
                     // --- Driver Specific Fields ---
@@ -170,19 +176,40 @@ namespace DAL.Context
                     LicenseClass = "B2",
                     LicenseExpiryDate = DateTime.UtcNow.AddYears(5),
                     IsLicenseVerified = true,
-                    IsInTrip = false // Mặc định là không trong chuyến đi
+                    DriverStatus = DriverStatus.AVAILABLE
+                },
+                new Driver
+                {
+                    // --- BaseUser Fields ---
+                    UserId = DriverID_2,
+                    FullName = "Tài xế Văn B",
+                    Email = "driver2@example.com",
+                    PhoneNumber = "0987111222",
+                    PasswordHash = fixedHashedPassword,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdatedAt = DateTime.UtcNow,
+                    Status = UserStatus.ACTIVE,
+                    DateOfBirth = new DateTime(1995, 1, 1),
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    RoleId = DriverRole,
+
+                    // --- Driver Specific Fields ---
+                    LicenseNumber = "GPLX67890",
+                    LicenseClass = "C",
+                    LicenseExpiryDate = DateTime.UtcNow.AddYears(3),
+                    IsLicenseVerified = true,
+                    DriverStatus = DriverStatus.AVAILABLE
                 }
             );
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 OWNER (Thêm mới - Dùng Entity<Owner>)
+        // 🔹 OWNER
         // ───────────────────────────────────────────────
         private static void SeedOwner(ModelBuilder modelBuilder)
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm"; // Mật khẩu là "123"
-            //var ownerAddress = new Location("789 Đường LMN", 21.0285, 105.8542); // Ví dụ: Hà Nội
-            //var businessAddress = new Location("Lô A1, KCN Sóng Thần", 10.9171, 106.7513); // Ví dụ: Bình Dương
 
             modelBuilder.Entity<Owner>().HasData(
                 new Owner
@@ -199,26 +226,22 @@ namespace DAL.Context
                     DateOfBirth = new DateTime(1985, 10, 20),
                     IsEmailVerified = true,
                     IsPhoneVerified = true,
-                    //Address = ownerAddress,
                     RoleId = OwnerRole,
 
                     // --- Owner Specific Fields ---
                     CompanyName = "Công ty Vận Tải ABC",
                     TaxCode = "0312345678",
-                    //BusinessAddress = businessAddress,
-                    AverageRating = 4.5m // Có thể null
+                    AverageRating = 4.5m
                 }
             );
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 PROVIDER (Thêm mới - Dùng Entity<Provider>)
+        // 🔹 PROVIDER
         // ───────────────────────────────────────────────
         private static void SeedProvider(ModelBuilder modelBuilder)
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm"; // Mật khẩu là "123"
-            //var providerAddress = new Location("Khu phố 1, Phường PQR", 16.0479, 108.2209); // Ví dụ: Đà Nẵng
-            //var providerBusinessAddress = new Location("Số 10, Đường STU", 16.0544, 108.2022); // Ví dụ: Đà Nẵng
 
             modelBuilder.Entity<Provider>().HasData(
                 new Provider
@@ -235,27 +258,23 @@ namespace DAL.Context
                     DateOfBirth = new DateTime(1988, 3, 1),
                     IsEmailVerified = true,
                     IsPhoneVerified = true,
-                    //Address = providerAddress,
-                    RoleId = ProviderRole, // Gán đúng Role ID
+                    RoleId = ProviderRole,
 
                     // --- Provider Specific Fields ---
                     CompanyName = "Nhà cung cấp XYZ",
                     TaxCode = "0401234567",
-                    //BusinessAddress = providerBusinessAddress,
                     AverageRating = 4.8m
                 }
             );
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 CONTRACT TEMPLATES (MỚI)
+        // 🔹 CONTRACT TEMPLATES
         // ───────────────────────────────────────────────
         private static void SeedContractTemplates(ModelBuilder modelBuilder)
         {
-            // Dùng thời gian cố định cho seeding
             var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-            // --- 1. Seed Templates ---
             modelBuilder.Entity<ContractTemplate>().HasData(
                 new ContractTemplate
                 {
@@ -275,14 +294,12 @@ namespace DAL.Context
                 }
             );
 
-            // --- 2. Seed Terms (Các điều khoản liên kết) ---
             modelBuilder.Entity<ContractTerm>().HasData(
                 // Provider Terms
                 new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 1, Content = "Bên A (Chủ xe) đồng ý cung cấp dịch vụ vận tải theo các điều khoản đã thỏa thuận." },
                 new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 2, Content = "Bên B (Chủ hàng/Provider) đồng ý thanh toán cước phí vận chuyển đúng hạn." },
                 new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 3, Content = "Trách nhiệm bồi thường thiệt hại sẽ được áp dụng theo quy định hiện hành nếu hàng hóa bị hư hỏng, mất mát do lỗi của Bên A." },
                 new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 4, Content = "Hợp đồng có hiệu lực kể từ thời điểm cả hai bên xác nhận ký." },
-
                 // Driver Terms
                 new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 1, Content = "Bên A (Chủ xe) đồng ý thuê Bên B (Tài xế) để thực hiện các chuyến vận chuyển được chỉ định." },
                 new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 2, Content = "Bên B (Tài xế) có trách nhiệm bảo quản phương tiện, hàng hóa và tuân thủ các quy định về an toàn giao thông." }
@@ -290,13 +307,12 @@ namespace DAL.Context
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 DELIVERY RECORD TEMPLATES (MỚI)
+        // 🔹 DELIVERY RECORD TEMPLATES
         // ───────────────────────────────────────────────
         private static void SeedDeliveryRecordTemplates(ModelBuilder modelBuilder)
         {
             var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-            // --- 1. Seed Templates ---
             modelBuilder.Entity<DeliveryRecordTemplate>().HasData(
                 new DeliveryRecordTemplate
                 {
@@ -318,17 +334,48 @@ namespace DAL.Context
                 }
             );
 
-            // --- 2. Seed Terms (Các điều khoản liên kết) ---
             modelBuilder.Entity<DeliveryRecordTerm>().HasData(
                 // Pickup Terms
                 new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 1, Content = "Tài xế đã xác nhận số lượng, chủng loại hàng hóa đúng với thông tin trên ứng dụng." },
                 new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 2, Content = "Tình trạng hàng hóa bên ngoài nguyên vẹn, không móp méo, ướt, hoặc rách vỡ." },
                 new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 3, Content = "Tài xế đã chụp ảnh xác nhận tình trạng hàng hóa khi nhận." },
-
                 // Dropoff Terms
                 new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 1, Content = "Người nhận đã xác nhận số lượng, chủng loại hàng hóa đúng với thông tin trên ứng dụng." },
                 new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 2, Content = "Tình trạng hàng hóa bên ngoài nguyên vẹn. Người nhận không có khiếu nại về tình trạng bên ngoài của hàng hóa." },
                 new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 3, Content = "Người nhận đã ký tên/chụp ảnh xác nhận đã nhận hàng." }
+            );
+        }
+
+        // ───────────────────────────────────────────────
+        // 🔹 VEHICLE TYPES (Đã sửa loại xe)
+        // ───────────────────────────────────────────────
+        private static void SeedVehicleType(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<VehicleType>().HasData(
+                new VehicleType
+                {
+                    VehicleTypeId = VehicleTypeID_1T5,
+                    VehicleTypeName = "Xe tải 1.5 tấn",
+                    Description = "Xe tải hạng nhẹ, phù hợp chở hàng nội thành."
+                },
+                new VehicleType
+                {
+                    VehicleTypeId = VehicleTypeID_8T,
+                    VehicleTypeName = "Xe tải 8 tấn",
+                    Description = "Xe tải hạng trung (2 chân), chở hàng liên tỉnh."
+                },
+                new VehicleType
+                {
+                    VehicleTypeId = VehicleTypeID_Container,
+                    VehicleTypeName = "Xe đầu kéo",
+                    Description = "Xe đầu kéo chuyên dụng chở container 20ft hoặc 40ft."
+                },
+                new VehicleType
+                {
+                    VehicleTypeId = VehicleTypeID_Refrigerated, // Đổi từ Pickup
+                    VehicleTypeName = "Xe tải thùng lạnh",
+                    Description = "Xe tải chuyên dụng có thùng giữ nhiệt, chở hàng đông lạnh."
+                }
             );
         }
     }

@@ -369,7 +369,7 @@ namespace DAL.Context
                 .HasOne(t => t.Wallet)
                 .WithMany(w => w.Transactions)
                 .HasForeignKey(t => t.WalletId)
-                .OnDelete(DeleteBehavior.Restrict); // Xóa Ví thì xóa Lịch sử giao dịch
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Owner & Driver (N-N qua OwnerDriverLink)
             // .HasKey() đã được chuyển lên ConfigurePrimaryKeys
@@ -551,11 +551,11 @@ namespace DAL.Context
             //    .WithOne(sr => sr.PostTrip)
             //    .HasForeignKey<PostTrip>(pt => pt.ShippingRouteId)
             //    .OnDelete(DeleteBehavior.Restrict);
-            //modelBuilder.Entity<Trip>()
-            //    .HasOne(t => t.ShippingRoute)
-            //    .WithOne(sr => sr.Trip)
-            //    .HasForeignKey<Trip>(t => t.ShippingRouteId)
-            //    .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Trip>()
+                .HasOne(t => t.ShippingRoute)
+                .WithOne(sr => sr.Trip)
+                .HasForeignKey<Trip>(t => t.ShippingRouteId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Trip & TripRoute (1-1)
             modelBuilder.Entity<Trip>()

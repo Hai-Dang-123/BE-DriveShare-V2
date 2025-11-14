@@ -13,6 +13,9 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateTripDeliveryRecordAsync(TripDeliveryRecordCreateDTO tripDeliveryRecordDTO);
         Task<ResponseDTO?> GetByIdAsync(Guid tripDeliveryRecordId);
         Task<ResponseDTO> GetByTripIdAsync(Guid tripId);
-       Task <ResponseDTO> SignDeliveryRecordAsync(Guid tripDeliveryRecordId);
+        Task<ResponseDTO> SignDeliveryRecordAsync(Guid tripDeliveryRecordId);
+        Task CreateTripDeliveryRecordAsync(TripDeliveryRecordCreateDTO dto, Guid driverId);
     }
+        
+        
 }

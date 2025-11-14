@@ -17,7 +17,7 @@ namespace BLL.Services.Interface
         /// </summary>
         /// <param name="tripId">ID của Trip cần tạo tuyến đường</param>
         /// <returns>ResponseDTO chứa TripRouteId mới</returns>
-        Task<ResponseDTO> GenerateTripRouteAsync(Guid tripId);
+        //Task<ResponseDTO> GenerateTripRouteAsync(Guid tripId);
 
         /// <summary>
         /// Lấy thông tin TripRoute (đã được tạo) bằng ID của nó.

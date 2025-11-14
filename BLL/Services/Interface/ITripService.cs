@@ -6,8 +6,9 @@ namespace BLL.Services.Interface
     {
         Task<ResponseDTO> CreateTripFromPostAsync(TripCreateFromPostDTO dto);
         Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto);
-        Task<ResponseDTO> GetAllTripByOwnerIdAsync(Guid ownerId);
-        Task<ResponseDTO> GetAllTripByDriverIdAsync(Guid driverId);
+        Task<ResponseDTO> GetAllTripsByDriverAsync(int pageNumber = 1, int pageSize = 10);
+        Task<ResponseDTO> GetAllTripsByOwnerAsync(int pageNumber = 1, int pageSize = 10);
+        Task<ResponseDTO> GetAllTripsByProviderAsync(int pageNumber = 1, int pageSize = 10);
         Task<ResponseDTO> GetTripByIdAsync(Guid tripId);
 
     }

@@ -285,6 +285,46 @@ namespace BLL.Services.Impletement
                 };
             }
         }
-       
+
+        public async Task CreateTripDeliveryRecordAsync(TripDeliveryRecordCreateDTO dto, Guid driverId)
+        {
+            try
+            {
+                // Validate DriverId (service gọi đến phải đảm bảo driverId hợp lệ)
+                if (driverId == Guid.Empty)
+                {
+                    throw new ArgumentException("Invalid DriverId provided.", nameof(driverId));
+                }
+
+                var newTripDeliveryRecord = new TripDeliveryRecord
+                {
+                    DeliveryRecordId = Guid.NewGuid(),
+                    TripId = dto.TripId,
+                    DeliveryRecordTemplateId = dto.DeliveryRecordTempalteId,
+                    TripContactId = dto.StripContractId,
+                    DriverId = driverId, // ⚠️ SỬA ĐỔI: Lấy từ tham số
+                    CreatedAt = DateTime.UtcNow,
+                    Notes = dto.Notes,
+                    Type = dto.type,
+                    Status = DeliveryRecordStatus.PENDING
+                };
+
+                await _unitOfWork.TripDeliveryRecordRepo.AddAsync(newTripDeliveryRecord);
+
+                // ⚠️ LƯU Ý: 
+                // Hàm này không gọi SaveChangeAsync() hoặc CommitTransaction().
+                // Hàm GỌI (ví dụ: TripDriverAssignmentService) sẽ chịu trách nhiệm
+                // Commit Transaction sau khi gọi hàm này.
+            }
+            catch (Exception ex)
+            {
+                // Ghi log lỗi (nếu có logger)
+                // _logger.LogError(ex, "Error creating Trip Delivery Record internal.");
+
+                // ⚠️ SỬA ĐỔI: Ném Exception để hàm gọi xử lý Rollback
+                throw new Exception($"Error creating Trip Delivery Record: {ex.Message}", ex);
+            }
+        }
+
     }
 }
