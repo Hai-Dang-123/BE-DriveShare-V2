@@ -5,6 +5,7 @@ using Common.Enums.Status;
 using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
 
@@ -208,6 +209,102 @@ namespace BLL.Services.Implement
                 Description = t.Description,
                 ExternalTransactionCode = t.ExternalTransactionCode
             };
+        }
+
+
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                // 1. Lấy thông tin User
+                var userId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized: Invalid token", 401, false);
+
+                // 2. Lấy IQueryable cơ sở
+                var query = _unitOfWork.TransactionRepo.GetAll()
+                                     .AsNoTracking();
+
+                // 3. Lọc theo Vai trò (Authorization)
+                if (userRole == "Admin")
+                {
+                    // Admin: không cần lọc, thấy tất cả
+                }
+                else
+                {
+                    // User (Owner/Driver/Provider): Lọc theo WalletId của họ
+                    var wallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == userId);
+                    if (wallet == null)
+                    {
+                        // Mặc dù user tồn tại nhưng không có ví? Trả về rỗng.
+                        return new ResponseDTO("User wallet not found.", 404, false);
+                    }
+                    query = query.Where(t => t.WalletId == wallet.WalletId);
+                }
+
+                // 4. Đếm tổng số lượng (sau khi lọc)
+                var totalCount = await query.CountAsync();
+
+                // 5. Lấy dữ liệu của trang và Map sang DTO
+                var transactions = await query
+                    .OrderByDescending(t => t.CreatedAt) // Sắp xếp mới nhất trước
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                // 6. Map sang DTO (dùng hàm helper có sẵn)
+                var dtoList = transactions.Select(MapTransactionToDTO).ToList();
+
+                // 7. Tạo kết quả PaginatedDTO
+                var paginatedResult = new PaginatedDTO<TransactionDTO>(dtoList, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Retrieved transactions successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting transactions: {ex.Message}", 500, false);
+            }
+        }
+
+        // =========================================================
+        // 🔹 6. GET BY ID (Lọc theo Admin/User)
+        // =========================================================
+        public async Task<ResponseDTO> GetByIdAsync(Guid transactionId)
+        {
+            try
+            {
+                // 1. Lấy thông tin User
+                var userId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized: Invalid token", 401, false);
+
+                // 2. Lấy Transaction (Giả định GetByIdAsync KHÔNG include)
+                var transaction = await _unitOfWork.TransactionRepo.GetByIdAsync(transactionId);
+                if (transaction == null)
+                    return new ResponseDTO("Transaction not found", 404, false);
+
+                // 3. Lọc theo Vai trò (Authorization)
+                if (userRole != "Admin")
+                {
+                    // Nếu không phải Admin, kiểm tra xem có phải chủ Wallet không
+                    var wallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == userId);
+                    if (wallet == null || transaction.WalletId != wallet.WalletId)
+                    {
+                        return new ResponseDTO("Forbidden: You do not have access to this transaction", 403, false);
+                    }
+                }
+                // (Nếu là Admin thì bỏ qua, được phép xem)
+
+                // 4. Map và trả về (dùng hàm helper có sẵn)
+                var transactionDto = MapTransactionToDTO(transaction);
+                return new ResponseDTO("Transaction retrieved successfully", 200, true, transactionDto);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting transaction: {ex.Message}", 500, false);
+            }
         }
     }
 

@@ -37,6 +37,7 @@ namespace Common.DTOs
     {
         [Required]
         public Guid PostTripId { get; set; } // Tài xế ứng tuyển vào bài đăng nào?
+        public Guid PostTripDetailId { get; set; }
 
         [Required]
         [Range(0, (double)decimal.MaxValue)]

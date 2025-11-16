@@ -10,5 +10,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> SignAsync(Guid contractId);
         Task<ResponseDTO> GetByIdAsync(Guid contractId);
         Task CreateAndAddContractAsync(Guid tripId, Guid ownerId, Guid providerId, decimal fare);
+
+        Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
     }
 }

@@ -28,5 +28,9 @@ namespace BLL.Services.Interface
         /// ⚠️ SỬA ĐỔI: Trả về ResponseDTO
         /// </summary>
         Task<ResponseDTO> CreatePayoutAsync(InternalTransactionRequestDTO dto);
+
+
+        Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetByIdAsync(Guid transactionId);
     }
 }

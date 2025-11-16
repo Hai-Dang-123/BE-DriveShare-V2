@@ -12,9 +12,11 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateAsync(DeliveryRecordTemplateDTO dto);
         Task<ResponseDTO> UpdateAsync(Guid id, DeliveryRecordTemplateDTO dto);
         Task<ResponseDTO> DeleteAsync(Guid id);
-        Task<ResponseDTO> GetAllAsync();
-        Task<ResponseDTO> GetByIdAsync(Guid id);
 
+        // Sửa hàm này:
+        Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
+
+        Task<ResponseDTO> GetByIdAsync(Guid id);
         Task<DeliveryRecordTemplate> GetLatestTemplateByTypeAsync(DeliveryRecordType type);
     }
 }

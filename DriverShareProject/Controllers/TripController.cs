@@ -82,5 +82,13 @@ namespace DriverShareProject.Controllers
             var response = await _tripService.GetTripByIdAsync(tripId);
             return StatusCode(response.StatusCode, response);
         }
+
+        [HttpGet("all")]
+        //[Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAllTrips([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var response = await _tripService.GetAllAsync(pageNumber, pageSize);
+            return StatusCode(response.StatusCode, response);
+        }
     }
 }

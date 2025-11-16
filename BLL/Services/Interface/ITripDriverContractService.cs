@@ -11,5 +11,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> SignAsync(Guid contractId);
         Task<ResponseDTO> GetByIdAsync(Guid contractId);
         Task<TripDriverContract> CreateContractInternalAsync(CreateTripDriverContractDTO dto, Guid ownerId);
+
+        Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
     }
 }

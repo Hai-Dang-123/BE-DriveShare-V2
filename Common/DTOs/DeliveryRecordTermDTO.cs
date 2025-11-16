@@ -9,7 +9,8 @@ namespace Common.DTOs
     public class DeliveryRecordTermDTO
     {
         public Guid DeliveryRecordTermId { get; set; }
-        public string Content { get; set; } = null!;
+        public Guid DeliveryRecordTemplateId { get; set; }
+        public string Content { get; set; }
         public int DisplayOrder { get; set; }
     }
 }

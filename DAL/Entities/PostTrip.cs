@@ -21,7 +21,7 @@ namespace DAL.Entities
         public DateTime UpdateAt { get; set; } = DateTime.Now;
 
         // --- Yêu cầu cho tài xế/xe ---
-        public DriverType Type { get; set; } // Loại tài xế (chính, phụ)
+        //public DriverType Type { get; set; } // Loại tài xế (chính, phụ)
         public decimal? RequiredPayloadInKg { get; set; } // Yêu cầu trọng tải
 
         // --- GỢI Ý BẮT BUỘC (Dựa trên sơ đồ quan hệ) ---

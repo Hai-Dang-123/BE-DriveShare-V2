@@ -143,52 +143,78 @@ namespace BLL.Services.Impletement
         }
 
         // GET ALL
-        public async Task<ResponseDTO> GetAllAsync()
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber = 1, int pageSize = 10)
         {
-            var vehicles = await _unitOfWork.VehicleRepo.GetAllAsync(
-                filter: v => v.Status != VehicleStatus.DELETED,
-                includeProperties: "Owner,VehicleType,VehicleImages"
-            );
-
-            var result = vehicles.Select(v => new VehicleDetailDTO
+            try
             {
-                VehicleId = v.VehicleId,
-                PlateNumber = v.PlateNumber,
-                Model = v.Model,
-                Brand = v.Brand,
-                Color = v.Color,
-                YearOfManufacture = v.YearOfManufacture,
-                PayloadInKg = v.PayloadInKg,
-                VolumeInM3 = v.VolumeInM3,
-                Status = v.Status,
+                // 1. Lấy IQueryable (Giả định .GetAll() trả về IQueryable)
+                var query = _unitOfWork.VehicleRepo.GetAll()
+                    .AsNoTracking()
+                    .Where(v => v.Status != VehicleStatus.DELETED);
 
-                // 🧩 Thêm VehicleType object
-                VehicleType = new VehicleTypeDTO
-                {
-                    VehicleTypeId = v.VehicleType.VehicleTypeId,
-                    VehicleTypeName = v.VehicleType.VehicleTypeName,
-                    Description = v.VehicleType.Description
-                },
+                // 2. Thêm các Includes (thay vì dùng includeProperties)
+                query = query
+                    .Include(v => v.Owner)
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.VehicleImages);
 
-                // 🧩 Thêm Owner object
-                Owner = new GetDetailOwnerDTO
-                {
-                    UserId = v.Owner.UserId,
-                    FullName = v.Owner.FullName,
-                    CompanyName = v.Owner.CompanyName
-                },
+                // 3. Đếm tổng số (trên DB)
+                var totalCount = await query.CountAsync();
 
-                // 🧩 Thêm danh sách ảnh
-                ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
-                {
-                    VehicleImageId = i.VehicleImageId,
-                    ImageURL = i.ImageURL,
-                    Caption = i.Caption,
-                    CreatedAt = i.CreatedAt
-                }).ToList()
-            }).ToList();
+                // 4. Lấy dữ liệu của trang và Map sang DTO (trên DB)
+                var result = await query
+                    .OrderByDescending(v => v.CreatedAt) // ⚠️ Luôn OrderBy khi paging
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(v => new VehicleDetailDTO // Map DTO
+                    {
+                        VehicleId = v.VehicleId,
+                        PlateNumber = v.PlateNumber,
+                        Model = v.Model,
+                        Brand = v.Brand,
+                        Color = v.Color,
+                        YearOfManufacture = v.YearOfManufacture,
+                        PayloadInKg = v.PayloadInKg,
+                        VolumeInM3 = v.VolumeInM3,
+                        Status = v.Status,
 
-            return new ResponseDTO("Get all vehicles successfully", 200, true, result);
+                        // 🧩 Thêm VehicleType object
+                        VehicleType = new VehicleTypeDTO
+                        {
+                            VehicleTypeId = v.VehicleType.VehicleTypeId,
+                            VehicleTypeName = v.VehicleType.VehicleTypeName,
+                            Description = v.VehicleType.Description
+                        },
+
+                        // 🧩 Thêm Owner object
+                        Owner = new GetDetailOwnerDTO
+                        {
+                            UserId = v.Owner.UserId,
+                            FullName = v.Owner.FullName,
+                            CompanyName = v.Owner.CompanyName
+                        },
+
+                        // 🧩 Thêm danh sách ảnh
+                        ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
+                        {
+                            VehicleImageId = i.VehicleImageId,
+                            ImageURL = i.ImageURL,
+                            Caption = i.Caption,
+                            CreatedAt = i.CreatedAt
+                        }).ToList()
+                    })
+                    .ToListAsync(); // 5. Thực thi query
+
+                // 6. Gói kết quả vào PaginatedDTO
+                var paginatedResult = new PaginatedDTO<VehicleDetailDTO>(result, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Get all vehicles successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                // Thêm try-catch
+                return new ResponseDTO($"Error getting vehicles: {ex.Message}", 500, false);
+            }
         }
 
 

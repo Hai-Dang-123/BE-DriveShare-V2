@@ -75,27 +75,53 @@ namespace BLL.Services.Impletement
             return new ResponseDTO("Deleted successfully", 200, true);
         }
 
-        public async Task<ResponseDTO> GetAllAsync()
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
         {
-            var templates = await _unitOfWork.DeliveryRecordTemplateRepo.GetAll()
-                .Include(t => t.DeliveryRecordTerms) // Eager loading DeliveryRecordTerms
-                .Select(t => new DeliveryRecordTemplateDTO
-                {
-                    DeliveryRecordTemplateId = t.DeliveryRecordTemplateId,
-                    TemplateName = t.TemplateName,
-                    Version = t.Version,
-                    Type = t.Type.ToString(),
-                    CreatedAt = t.CreatedAt,
-                    DeliveryRecordTerms = t.DeliveryRecordTerms.Select(term => new DeliveryRecordTermDTO
-                    {
-                        DeliveryRecordTermId = term.DeliveryRecordTermId,
-                        Content = term.Content,
-                        DisplayOrder = term.DisplayOrder
-                    }).ToList()
-                })
-                .ToListAsync();
+            try
+            {
+                var query = _unitOfWork.DeliveryRecordTemplateRepo.GetAll()
+                    .AsNoTracking()
+                    // Vì bạn có logic Soft Delete, chúng ta LỌC BỎ những cái đã xóa
+                    .Where(t => t.Status != DeliveryRecordTemplateStatus.DELETED)
+                    .Include(t => t.DeliveryRecordTerms); // Eager loading DeliveryRecordTerms
 
-            return new ResponseDTO("Retrieved successfully", 200, true, templates);
+                // 1. Đếm tổng số (trên DB)
+                var totalCount = await query.CountAsync();
+
+                // 2. Lấy dữ liệu của trang (trên DB)
+                var templates = await query
+                    .OrderByDescending(t => t.CreatedAt) // Thêm OrderBy cho phân trang ổn định
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(t => new DeliveryRecordTemplateDTO
+                    {
+                        DeliveryRecordTemplateId = t.DeliveryRecordTemplateId,
+                        TemplateName = t.TemplateName,
+                        Version = t.Version,
+                        Type = t.Type.ToString(),
+                        CreatedAt = t.CreatedAt,
+                        // Sắp xếp các terms con theo DisplayOrder
+                        DeliveryRecordTerms = t.DeliveryRecordTerms
+                                               .OrderBy(term => term.DisplayOrder)
+                                               .Select(term => new DeliveryRecordTermDTO
+                                               {
+                                                   DeliveryRecordTermId = term.DeliveryRecordTermId,
+                                                   DeliveryRecordTemplateId = term.DeliveryRecordTemplateId,
+                                                   Content = term.Content,
+                                                   DisplayOrder = term.DisplayOrder
+                                               }).ToList()
+                    })
+                    .ToListAsync();
+
+                // 3. Tạo đối tượng PaginatedDTO
+                var paginatedResult = new PaginatedDTO<DeliveryRecordTemplateDTO>(templates, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Retrieved successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting templates: {ex.Message}", 500, false);
+            }
         }
 
         public async Task<ResponseDTO> GetByIdAsync(Guid id)

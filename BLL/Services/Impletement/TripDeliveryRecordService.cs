@@ -6,6 +6,7 @@ using DAL.Entities;
 using DAL.Repositories.Interface;
 using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -323,6 +324,134 @@ namespace BLL.Services.Impletement
 
                 // ⚠️ SỬA ĐỔI: Ném Exception để hàm gọi xử lý Rollback
                 throw new Exception($"Error creating Trip Delivery Record: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                // 1. Lấy thông tin User
+                var userId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (userId == Guid.Empty)
+                {
+                    return new ResponseDTO
+                    {
+                        IsSuccess = false,
+                        StatusCode = StatusCodes.Status401Unauthorized,
+                        Message = "Unauthorized: Invalid token"
+                    };
+                }
+
+                // 2. Lấy IQueryable cơ sở (Giả định có .GetAll() trả về IQueryable)
+                var query = _unitOfWork.TripDeliveryRecordRepo.GetAll()
+                                     .AsNoTracking();
+
+                // 3. Lọc theo Vai trò (Authorization)
+                if (userRole == "Admin")
+                {
+                    // Admin: không cần lọc, thấy tất cả
+                }
+                else if (userRole == "Owner")
+                {
+                    // Owner: Lọc theo các Trip thuộc sở hữu của họ
+                    // (Cần Include Trip để lọc)
+                    query = query.Where(r => r.Trip.OwnerId == userId);
+                }
+                else if (userRole == "Driver")
+                {
+                    // Driver: Lọc theo các record gán cho họ
+                    query = query.Where(r => r.DriverId == userId);
+                }
+                else
+                {
+                    // Các vai trò khác không có quyền xem
+                    return new ResponseDTO
+                    {
+                        IsSuccess = false,
+                        StatusCode = StatusCodes.Status403Forbidden,
+                        Message = "Forbidden: You do not have permission to access all records."
+                    };
+                }
+
+                // 4. Include các dữ liệu liên quan (giống hệt GetByTripIdAsync)
+                query = query
+                    .Include(r => r.TripContact)
+                    .Include(r => r.DeliveryRecordTemplate)
+                        .ThenInclude(t => t.DeliveryRecordTerms);
+
+                // 5. Đếm tổng số lượng (sau khi lọc)
+                var totalCount = await query.CountAsync();
+
+                // 6. Lấy dữ liệu của trang và Map sang DTO
+                var records = await query
+                    .OrderByDescending(r => r.CreatedAt) // Sắp xếp
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(r => new TripDeliveryRecordReadDTO // Dùng DTO y hệt GetByTripId
+                    {
+                        TripId = r.TripId,
+                        DeliveryRecordTempalteId = r.DeliveryRecordTemplateId,
+                        StripContractId = r.TripContactId,
+                        type = r.Type.ToString(),
+                        Status = r.Status.ToString(),
+                        Notes = r.Notes,
+                        DriverSignatureUrl = r.DriverSignatureUrl,
+                        DriverSignedAt = r.DriverSignedAt,
+                        ContactSignatureUrl = r.ContactSignatureUrl,
+                        ContactSignedAt = r.ContactSignedAt,
+
+                        tripContact = r.TripContact != null
+                            ? new TripContactDTO
+                            {
+                                TripContactId = r.TripContact.TripContactId,
+                                Type = r.TripContact.Type.ToString(),
+                                FullName = r.TripContact.FullName,
+                                PhoneNumber = r.TripContact.PhoneNumber,
+                                Note = r.TripContact.Note
+                            }
+                            : null,
+
+                        deliveryRecordTemplate = r.DeliveryRecordTemplate != null
+                            ? new DeliveryRecordTemplateDTO
+                            {
+                                DeliveryRecordTemplateId = r.DeliveryRecordTemplate.DeliveryRecordTemplateId,
+                                TemplateName = r.DeliveryRecordTemplate.TemplateName,
+                                Version = r.DeliveryRecordTemplate.Version,
+                                Type = r.DeliveryRecordTemplate.Type.ToString(),
+                                CreatedAt = r.DeliveryRecordTemplate.CreatedAt,
+                                DeliveryRecordTerms = r.DeliveryRecordTemplate.DeliveryRecordTerms
+                                    .Select(term => new DeliveryRecordTermDTO
+                                    {
+                                        DeliveryRecordTermId = term.DeliveryRecordTermId,
+                                        Content = term.Content,
+                                        DisplayOrder = term.DisplayOrder
+                                    }).ToList()
+                            }
+                            : null
+                    })
+                    .ToListAsync();
+
+                // 7. Tạo kết quả PaginatedDTO
+                var paginatedResult = new PaginatedDTO<TripDeliveryRecordReadDTO>(records, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO
+                {
+                    IsSuccess = true,
+                    StatusCode = StatusCodes.Status200OK,
+                    Message = "Trip Delivery Records retrieved successfully.",
+                    Result = paginatedResult
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO
+                {
+                    IsSuccess = false,
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Message = $"Error retrieving Trip Delivery Records: {ex.Message}"
+                };
             }
         }
 

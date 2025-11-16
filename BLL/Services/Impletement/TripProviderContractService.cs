@@ -5,6 +5,7 @@ using Common.Enums.Status;
 using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -315,6 +316,85 @@ namespace BLL.Services.Implement
 
             // 🔹 Thêm vào UoW (KHÔNG SAVE)
             await _unitOfWork.TripProviderContractRepo.AddAsync(contract);
+        }
+
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                // 1. Lấy thông tin User
+                var userId = _userUtility.GetUserIdFromToken();
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized: Invalid token", 401, false);
+
+                // 2. Lấy IQueryable cơ sở
+                var query = _unitOfWork.TripProviderContractRepo.GetAll()
+                                     .AsNoTracking();
+
+                // 3. Lọc theo Vai trò (Authorization)
+                if (userRole == "Owner")
+                {
+                    query = query.Where(c => c.OwnerId == userId);
+                }
+                else if (userRole == "Provider")
+                {
+                    query = query.Where(c => c.CounterpartyId == userId);
+                }
+                else if (userRole == "Admin")
+                {
+                    // Admin: không cần lọc
+                }
+                else
+                {
+                    // Các vai trò khác (ví dụ: Driver) không được xem
+                    return new ResponseDTO("Forbidden: You do not have permission", 403, false);
+                }
+
+                // 4. Đếm tổng số lượng (sau khi lọc)
+                var totalCount = await query.CountAsync();
+
+                // 5. Lấy dữ liệu của trang và Map sang DTO
+                // (Dùng DTO tóm tắt, giống DTO trả về của hàm Create/GetById)
+                var contractsDto = await query
+                    .Include(c => c.Trip)
+                    .Include(c => c.Owner)
+                    .Include(c => c.Counterparty) // (Provider)
+                    .Include(c => c.ContractTemplate)
+                    .OrderByDescending(c => c.CreateAt) // Sắp xếp mới nhất trước
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(c => new TripProviderContractDTO // Map trên DB
+                    {
+                        ContractId = c.ContractId,
+                        ContractCode = c.ContractCode,
+                        TripId = c.TripId,
+                        TripCode = c.Trip != null ? c.Trip.TripCode : "N/A",
+                        OwnerId = c.OwnerId,
+                        OwnerName = c.Owner != null ? c.Owner.FullName : "N/A",
+                        ProviderId = c.CounterpartyId,
+                        ProviderName = c.Counterparty != null ? c.Counterparty.FullName : "N/A",
+                        ContractTemplateId = c.ContractTemplateId,
+                        TemplateName = c.ContractTemplate != null ? c.ContractTemplate.ContractTemplateName : "N/A",
+                        Version = c.Version,
+                        Status = c.Status,
+                        Type = c.Type,
+                        CreateAt = c.CreateAt,
+                        EffectiveDate = c.EffectiveDate,
+                        OwnerSigned = c.OwnerSigned,
+                        ProviderSigned = c.CounterpartySigned
+                    })
+                    .ToListAsync();
+
+                // 6. Tạo kết quả PaginatedDTO
+                var paginatedResult = new PaginatedDTO<TripProviderContractDTO>(contractsDto, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Retrieved provider contracts successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting provider contracts: {ex.Message}", 500, false);
+            }
         }
     }
 }

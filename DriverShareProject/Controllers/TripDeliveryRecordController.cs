@@ -43,5 +43,20 @@ namespace DriverShareProject.Controllers
             var result = await _tripDeliveryRecordService.SignDeliveryRecordAsync(tripDeliveryRecordId);
             return StatusCode(result.StatusCode, result);
         }
+
+        /// <summary>
+        /// [User] Lấy tất cả biên bản liên quan đến user (có phân trang).
+        /// (Admin thấy tất cả, Owner/Driver thấy của mình)
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetAllRecords([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var response = await _tripDeliveryRecordService.GetAllAsync(pageNumber, pageSize);
+            return StatusCode(response.StatusCode, response);
+        }
+
+       
+
+      
     }
 }

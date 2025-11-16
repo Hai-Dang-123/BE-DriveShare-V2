@@ -42,10 +42,10 @@ namespace DriverShareProject.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAllVehicles([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var result = await _vehicleService.GetAllAsync();
-            return StatusCode(result.StatusCode, result);
+            var response = await _vehicleService.GetAllAsync(pageNumber, pageSize);
+            return StatusCode(response.StatusCode, response);
         }
 
         [HttpGet("{id:guid}")]

@@ -34,5 +34,25 @@ namespace DriverShareProject.Controllers
             var response = await _tripProviderContractService.GetByIdAsync(contractId);
             return StatusCode(response.StatusCode, response);
         }
+
+        /// <summary>
+        /// [Owner/Provider] Lấy danh sách Hợp đồng Nhà cung cấp (có phân trang).
+        /// </summary>
+        [HttpGet("provider-contracts")]
+        public async Task<IActionResult> GetAllProviderContracts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var response = await _tripProviderContractService.GetAllAsync(pageNumber, pageSize);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        /// <summary>
+        /// [Owner/Provider] Lấy chi tiết Hợp đồng Nhà cung cấp.
+        /// </summary>
+        [HttpGet("provider-contracts/{id}")]
+        public async Task<IActionResult> GetProviderContractById(Guid id)
+        {
+            var response = await _tripProviderContractService.GetByIdAsync(id);
+            return StatusCode(response.StatusCode, response);
+        }
     }
 }

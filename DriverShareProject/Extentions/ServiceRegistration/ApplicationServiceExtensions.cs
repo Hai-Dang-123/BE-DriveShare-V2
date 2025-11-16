@@ -66,6 +66,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IWalletService, WalletService>();
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<ITripDriverAssignmentService, TripDriverAssignmentService>();
+            services.AddScoped<IPostTripService, PostTripService>();
 
             services.AddScoped<IVietMapService, VietMapService>();
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();

@@ -1,0 +1,271 @@
+﻿using BLL.Services.Interface;
+using BLL.Utilities;
+using Common.DTOs;
+using Common.Enums.Status;
+using DAL.Entities;
+using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace BLL.Services.Impletement
+{
+    public class PostTripService : IPostTripService
+    {
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly UserUtility _userUtility;
+
+        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility)
+        {
+            _unitOfWork = unitOfWork;
+            _userUtility = userUtility;
+        }
+
+        // 1. CREATE POST TRIP
+        public async Task<ResponseDTO> CreatePostTripAsync(PostTripCreateDTO dto)
+        {
+            try
+            {
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
+
+                var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
+                if (trip == null || trip.OwnerId != ownerId)
+                    return new ResponseDTO("Trip not found or does not belong to this owner", 404, false);
+
+                var postTrip = new PostTrip
+                {
+                    PostTripId = Guid.NewGuid(),
+                    OwnerId = ownerId,
+                    TripId = dto.TripId,
+                    Title = dto.Title,
+                    Description = dto.Description,
+                    // [XÓA BỎ] - Type không còn ở đây
+                    RequiredPayloadInKg = dto.RequiredPayloadInKg,
+                    Status = PostStatus.OPEN,
+                    CreateAt = DateTime.Now,
+                    UpdateAt = DateTime.Now,
+                };
+
+                foreach (var detailDto in dto.PostTripDetails)
+                {
+                    var detail = new PostTripDetail
+                    {
+                        PostTripDetailId = Guid.NewGuid(),
+                        PostTripId = postTrip.PostTripId,
+                        Type = detailDto.Type,
+                        RequiredCount = detailDto.RequiredCount,
+                        PricePerPerson = detailDto.PricePerPerson,
+                        PickupLocation = detailDto.PickupLocation,
+                        DropoffLocation = detailDto.DropoffLocation,
+                        MustPickAtGarage = detailDto.MustPickAtGarage,
+                        MustDropAtGarage = detailDto.MustDropAtGarage
+                    };
+                    postTrip.PostTripDetails.Add(detail);
+                }
+
+                await _unitOfWork.PostTripRepo.AddAsync(postTrip);
+                await _unitOfWork.SaveChangeAsync();
+
+                var result = new { PostTripId = postTrip.PostTripId };
+                return new ResponseDTO("Create Post Trip Successfully!", 201, true, result);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error while creating Post Trip: {ex.Message}", 500, false);
+            }
+        }
+
+        // 2. GET ALL (Public) - Phân trang VÀ Lọc OPEN
+        public async Task<ResponseDTO> GetAllOpenPostTripsAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                var query = _unitOfWork.PostTripRepo.GetAll()
+                                         .AsNoTracking()
+                                         .Where(p => p.Status == PostStatus.OPEN);
+
+                // [SỬA ĐỔI] - Gọi hàm Include đầy đủ
+                query = IncludeFullPostTripData(query);
+
+                var totalCount = await query.CountAsync();
+
+                var postTrips = await query
+                    .OrderByDescending(p => p.CreateAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var result = postTrips.Select(p => MapToPostTripViewDTO(p)).ToList();
+                var paginatedResult = new PaginatedDTO<PostTripViewDTO>(result, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Get all open post trips successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error while getting post trips: {ex.Message}", 500, false);
+            }
+        }
+
+        // 3. GET ALL BY OWNER ID (Private) - CÓ PHÂN TRANG
+        public async Task<ResponseDTO> GetMyPostTripsAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
+
+                var query = _unitOfWork.PostTripRepo.GetAll()
+                                         .AsNoTracking()
+                                         .Where(p => p.OwnerId == ownerId && p.Status != PostStatus.DELETED);
+
+                // [SỬA ĐỔI] - Gọi hàm Include đầy đủ
+                query = IncludeFullPostTripData(query);
+
+                var totalCount = await query.CountAsync();
+
+                var postTrips = await query
+                    .OrderByDescending(p => p.CreateAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var result = postTrips.Select(p => MapToPostTripViewDTO(p)).ToList();
+                var paginatedResult = new PaginatedDTO<PostTripViewDTO>(result, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Get my post trips successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error while getting my post trips: {ex.Message}", 500, false);
+            }
+        }
+
+        // 4. GET BY ID
+        public async Task<ResponseDTO> GetPostTripByIdAsync(Guid postTripId)
+        {
+            try
+            {
+                var userId = _userUtility.GetUserIdFromToken();
+
+                var query = _unitOfWork.PostTripRepo.GetAll()
+                                         .Where(p => p.PostTripId == postTripId);
+
+                // [SỬA ĐỔI] - Gọi hàm Include đầy đủ
+                query = IncludeFullPostTripData(query);
+
+                var postTrip = await query.FirstOrDefaultAsync();
+
+                if (postTrip == null)
+                {
+                    return new ResponseDTO("Post Trip not found", 404, false);
+                }
+
+                bool isPubliclyVisible = postTrip.Status == PostStatus.OPEN;
+                bool isOwner = (userId != Guid.Empty && postTrip.OwnerId == userId);
+
+                if (!isPubliclyVisible && !isOwner)
+                {
+                    return new ResponseDTO("Forbidden: You do not have permission to view this post", 403, false);
+                }
+
+                var result = MapToPostTripViewDTO(postTrip);
+                return new ResponseDTO("Get Post Trip successfully", 200, true, result);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error while getting post trip: {ex.Message}", 500, false);
+            }
+        }
+
+        // ----- HELPER ĐỂ GỌI INCLUDE (Tái sử dụng) -----
+
+        /// <summary>
+        /// Thêm các Include cần thiết để MapToPostTripViewDTO có "đủ thông tin"
+        /// </summary>
+        private IQueryable<PostTrip> IncludeFullPostTripData(IQueryable<PostTrip> query)
+        {
+            return query
+                .Include(p => p.Owner) // Lấy thông tin Owner
+                .Include(p => p.PostTripDetails) // Lấy các slot
+                                                 // Include thông tin Trip (Lộ trình)
+                .Include(p => p.Trip)
+                    .ThenInclude(t => t.ShippingRoute)
+                        .ThenInclude(sr => sr.StartLocation)
+                .Include(p => p.Trip)
+                    .ThenInclude(t => t.ShippingRoute)
+                        .ThenInclude(sr => sr.EndLocation)
+                .Include(p => p.Trip)
+                    .ThenInclude(t => t.ShippingRoute)
+                        .ThenInclude(sr => sr.PickupTimeWindow)
+                // [THÊM MỚI] - Include thông tin Xe (Vehicle)
+                .Include(p => p.Trip)
+                    .ThenInclude(t => t.Vehicle)
+                        .ThenInclude(v => v.VehicleType)
+                // [THÊM MỚI] - Include thông tin Hàng hóa (Packages)
+                .Include(p => p.Trip)
+                    .ThenInclude(t => t.Packages);
+        }
+
+
+        // ----- HÀM HELPER MAP DTO (ĐÃ CẬP NHẬT) -----
+        private PostTripViewDTO MapToPostTripViewDTO(PostTrip p)
+        {
+            if (p == null) return null;
+
+            return new PostTripViewDTO
+            {
+                PostTripId = p.PostTripId,
+                Title = p.Title,
+                Description = p.Description,
+                Status = p.Status,
+                CreateAt = p.CreateAt,
+                UpdateAt = p.UpdateAt,
+                // [XÓA BỎ] - Type không còn
+                RequiredPayloadInKg = p.RequiredPayloadInKg,
+
+                // Map Owner (nếu đã Include)
+                Owner = p.Owner == null ? null : new OwnerSimpleDTO
+                {
+                    UserId = p.Owner.UserId,
+                    FullName = p.Owner.FullName,
+                    CompanyName = p.Owner.CompanyName,
+                    AvatarUrl = p.Owner.AvatarUrl // (Giả định)
+                },
+
+                // [SỬA ĐỔI] - Map Trip với đầy đủ thông tin
+                Trip = p.Trip == null ? null : new TripSummaryForPostDTO
+                {
+                    TripId = p.Trip.TripId,
+                    StartLocationName = p.Trip.ShippingRoute?.StartLocation?.Address ?? string.Empty,
+                    EndLocationName = p.Trip.ShippingRoute?.EndLocation?.Address ?? string.Empty,
+                    StartTime = p.Trip.ShippingRoute?.PickupTimeWindow?.StartTime ?? default(TimeOnly),
+
+                    // --- THÔNG TIN MỚI ĐÃ INCLUDE ---
+                    VehicleModel = p.Trip.Vehicle?.Model,
+                    VehiclePlate = p.Trip.Vehicle?.PlateNumber,
+                    VehicleType = p.Trip.Vehicle?.VehicleType?.VehicleTypeName,
+                    PackageCount = p.Trip.Packages?.Count ?? 0,
+                    //TripDescription = p.Trip. // (Giả định Trip có trường Description)
+                },
+
+                // Map danh sách con (nếu đã Include)
+                PostTripDetails = p.PostTripDetails.Select(d => new PostTripDetailViewDTO
+                {
+                    PostTripDetailId = d.PostTripDetailId,
+                    Type = d.Type,
+                    RequiredCount = d.RequiredCount,
+                    PricePerPerson = d.PricePerPerson,
+                    TotalBudget = d.TotalBudget,
+                    PickupLocation = d.PickupLocation,
+                    DropoffLocation = d.DropoffLocation,
+                    MustPickAtGarage = d.MustPickAtGarage,
+                    MustDropAtGarage = d.MustDropAtGarage
+                }).ToList()
+            };
+        }
+    }
+}
