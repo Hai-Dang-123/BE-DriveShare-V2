@@ -143,30 +143,60 @@ namespace BLL.Services.Impletement
         }
 
         // GET ALL
-        public async Task<ResponseDTO> GetAllAsync(int pageNumber = 1, int pageSize = 10)
+        public async Task<ResponseDTO> GetAllAsync(
+      int pageNumber = 1,
+      int pageSize = 10,
+      string? search = null,
+      string? sortBy = null,
+      string? sortOrder = "ASC")
         {
             try
             {
-                // 1. Lấy IQueryable (Giả định .GetAll() trả về IQueryable)
-                var query = _unitOfWork.VehicleRepo.GetAll()
+                // ========= 1) BASE QUERY =========
+                IQueryable<Vehicle> baseQuery = _unitOfWork.VehicleRepo.GetAll()
+                    .Where(v => v.Status != VehicleStatus.DELETED)
                     .AsNoTracking()
-                    .Where(v => v.Status != VehicleStatus.DELETED);
-
-                // 2. Thêm các Includes (thay vì dùng includeProperties)
-                query = query
                     .Include(v => v.Owner)
                     .Include(v => v.VehicleType)
-                    .Include(v => v.VehicleImages);
+                    .Include(v => v.VehicleImages)
+                    .Include(v => v.VehicleDocuments);
 
-                // 3. Đếm tổng số (trên DB)
-                var totalCount = await query.CountAsync();
+                // ========= 2) SEARCH =========
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    string s = search.Trim().ToLower();
 
-                // 4. Lấy dữ liệu của trang và Map sang DTO (trên DB)
-                var result = await query
-                    .OrderByDescending(v => v.CreatedAt) // ⚠️ Luôn OrderBy khi paging
+                    baseQuery = baseQuery.Where(v =>
+                        v.PlateNumber.ToLower().Contains(s) ||
+                        v.Brand.ToLower().Contains(s) ||
+                        v.Model.ToLower().Contains(s) ||
+                        v.Owner.FullName.ToLower().Contains(s)
+                    );
+                }
+
+                // ========= 3) SORTING =========
+                sortBy = (sortBy ?? "").Trim().ToLower();
+                sortOrder = (sortOrder ?? "ASC").Trim().ToUpper();
+                bool desc = sortOrder == "DESC";
+
+                baseQuery = sortBy switch
+                {
+                    "brand" => desc ? baseQuery.OrderByDescending(v => v.Brand) : baseQuery.OrderBy(v => v.Brand),
+                    "model" => desc ? baseQuery.OrderByDescending(v => v.Model) : baseQuery.OrderBy(v => v.Model),
+                    "year" => desc ? baseQuery.OrderByDescending(v => v.YearOfManufacture) : baseQuery.OrderBy(v => v.YearOfManufacture),
+                    "payload" => desc ? baseQuery.OrderByDescending(v => v.PayloadInKg) : baseQuery.OrderBy(v => v.PayloadInKg),
+                    "volume" => desc ? baseQuery.OrderByDescending(v => v.VolumeInM3) : baseQuery.OrderBy(v => v.VolumeInM3),
+                    "createdat" => desc ? baseQuery.OrderByDescending(v => v.CreatedAt) : baseQuery.OrderBy(v => v.CreatedAt),
+                    _ => baseQuery.OrderByDescending(v => v.CreatedAt) // default
+                };
+
+                // ========= 4) PAGINATION =========
+                int totalCount = await baseQuery.CountAsync();
+
+                var vehicles = await baseQuery
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(v => new VehicleDetailDTO // Map DTO
+                    .Select(v => new VehicleDetailDTO
                     {
                         VehicleId = v.VehicleId,
                         PlateNumber = v.PlateNumber,
@@ -178,7 +208,7 @@ namespace BLL.Services.Impletement
                         VolumeInM3 = v.VolumeInM3,
                         Status = v.Status,
 
-                        // 🧩 Thêm VehicleType object
+                        // VEHICLE TYPE
                         VehicleType = new VehicleTypeDTO
                         {
                             VehicleTypeId = v.VehicleType.VehicleTypeId,
@@ -186,7 +216,7 @@ namespace BLL.Services.Impletement
                             Description = v.VehicleType.Description
                         },
 
-                        // 🧩 Thêm Owner object
+                        // OWNER
                         Owner = new GetDetailOwnerDTO
                         {
                             UserId = v.Owner.UserId,
@@ -194,28 +224,48 @@ namespace BLL.Services.Impletement
                             CompanyName = v.Owner.CompanyName
                         },
 
-                        // 🧩 Thêm danh sách ảnh
-                        ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
-                        {
-                            VehicleImageId = i.VehicleImageId,
-                            ImageURL = i.ImageURL,
-                            Caption = i.Caption,
-                            CreatedAt = i.CreatedAt
-                        }).ToList()
+                        // IMAGES
+                        ImageUrls = v.VehicleImages
+                            .Select(img => new VehicleImageDetailDTO
+                            {
+                                VehicleImageId = img.VehicleImageId,
+                                VehicleId = img.VehicleId,
+                                ImageURL = img.ImageURL,
+                                Caption = img.Caption,
+                                CreatedAt = img.CreatedAt
+                            })
+                            .ToList(),
+
+                        // DOCUMENTS
+                        Documents = v.VehicleDocuments
+                            .Select(d => new VehicleDocumentDetailDTO
+                            {
+                                VehicleDocumentId = d.VehicleDocumentId,
+                                DocumentType = d.DocumentType,
+                                FrontDocumentUrl = d.FrontDocumentUrl,
+                                BackDocumentUrl = d.BackDocumentUrl,
+                                ExpirationDate = d.ExpirationDate,
+                                Status = d.Status,
+                                AdminNotes = d.AdminNotes,
+                                CreatedAt = d.CreatedAt,
+                                ProcessedAt = d.ProcessedAt
+                            })
+                            .ToList()
                     })
-                    .ToListAsync(); // 5. Thực thi query
+                    .ToListAsync();
 
-                // 6. Gói kết quả vào PaginatedDTO
-                var paginatedResult = new PaginatedDTO<VehicleDetailDTO>(result, totalCount, pageNumber, pageSize);
+                var paginated = new PaginatedDTO<VehicleDetailDTO>(
+                    vehicles, totalCount, pageNumber, pageSize);
 
-                return new ResponseDTO("Get all vehicles successfully", 200, true, paginatedResult);
+                return new ResponseDTO("Success", 200, true, paginated);
             }
             catch (Exception ex)
             {
-                // Thêm try-catch
                 return new ResponseDTO($"Error getting vehicles: {ex.Message}", 500, false);
             }
         }
+
+
 
 
         // GET BY ID

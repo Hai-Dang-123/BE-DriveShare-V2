@@ -27,38 +27,76 @@ namespace BLL.Services.Impletement
         // =========================================================
         // 🔹 1. GET ALL (Cho Admin, có Paging)
         // =========================================================
-        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
+        public async Task<ResponseDTO> GetAllAsync(
+       int pageNumber,
+       int pageSize,
+       string search = null,
+       string sortField = null,
+       string sortDirection = "ASC"
+   )
         {
             try
             {
-                // 1. Chỉ Admin
-                var adminRole = _userUtility.GetUserRoleFromToken();
-                if (adminRole != "Admin")
-                {
-                    return new ResponseDTO("Forbidden: Access denied", 403, false);
-                }
+                var allowedRoles = new[] { "Provider", "Driver", "Owner" };
 
-                // 2. Lấy IQueryable (Giả định .GetAll() trả về IQueryable)
                 var query = _unitOfWork.BaseUserRepo.GetAll()
                     .AsNoTracking()
-                    .Where(u => u.Status != Common.Enums.Status.UserStatus.DELETED)
-                    .Include(u => u.Role); // Include Role để lấy RoleName
+                    .Include(u => u.Role)
+                    .Where(u =>
+                        u.Status != Common.Enums.Status.UserStatus.DELETED &&
+                        allowedRoles.Contains(u.Role.RoleName)
+                    );
 
-                // 3. Đếm tổng số
+                // ================================
+                // 1️⃣ SEARCH
+                // ================================
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var keyword = search.Trim().ToLower();
+
+                    query = query.Where(u =>
+                        (u.FullName != null && u.FullName.ToLower().Contains(keyword)) ||
+                        (u.Email != null && u.Email.ToLower().Contains(keyword)) ||
+                        (u.PhoneNumber != null && u.PhoneNumber.Contains(keyword))
+                    );
+                }
+
+                // ================================
+                // 2️⃣ SORT
+                // ================================
+                bool desc = sortDirection?.ToUpper() == "DESC";
+
+                query = sortField?.ToLower() switch
+                {
+                    "fullname" => desc ? query.OrderByDescending(u => u.FullName)
+                                       : query.OrderBy(u => u.FullName),
+
+                    "email" => desc ? query.OrderByDescending(u => u.Email)
+                                    : query.OrderBy(u => u.Email),
+
+                    "createdat" => desc ? query.OrderByDescending(u => u.CreatedAt)
+                                        : query.OrderBy(u => u.CreatedAt),
+
+                    "role" => desc ? query.OrderByDescending(u => u.Role.RoleName)
+                                   : query.OrderBy(u => u.Role.RoleName),
+
+                    _ => query.OrderBy(u => u.FullName)   // Mặc định
+                };
+
+                // ================================
+                // 3️⃣ PAGING
+                // ================================
                 var totalCount = await query.CountAsync();
 
-                // 4. Lấy dữ liệu của trang
                 var users = await query
-                    .OrderBy(u => u.FullName)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync();
 
-                // 5. Map sang DTO (Dùng lại hàm Map của bạn)
                 var dtoList = users.Select(u => MapToBaseProfileDTO(u)).ToList();
 
-                // 6. Trả về
                 var paginatedResult = new PaginatedDTO<BaseProfileDTO>(dtoList, totalCount, pageNumber, pageSize);
+
                 return new ResponseDTO("Retrieved all users successfully", 200, true, paginatedResult);
             }
             catch (Exception ex)
@@ -68,6 +106,7 @@ namespace BLL.Services.Impletement
         }
 
 
+
         // =========================================================
         // 🔹 2. GET BY ID (Cho Admin, chi tiết theo Role)
         // =========================================================
@@ -75,12 +114,6 @@ namespace BLL.Services.Impletement
         {
             try
             {
-                // 1. Chỉ Admin
-                var adminRole = _userUtility.GetUserRoleFromToken();
-                if (adminRole != "Admin")
-                {
-                    return new ResponseDTO("Forbidden: Access denied", 403, false);
-                }
 
                 // 2. Lấy BaseUser VÀ Role để xác định loại User
                 var baseUser = await _unitOfWork.BaseUserRepo.GetAll()

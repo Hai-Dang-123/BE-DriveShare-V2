@@ -119,11 +119,57 @@ namespace BLL.Services.Impletement
 
         // ----- CÁC HÀM MỚI ĐỂ GET VÀ PHÂN TRANG -----
 
-        public async Task<ResponseDTO> GetAllPostPackagesAsync(int pageNumber, int pageSize)
+        public async Task<ResponseDTO> GetAllPostPackagesAsync(
+      int pageNumber,
+      int pageSize,
+      string? search = null,
+      string? sortBy = "created",
+      string? sortOrder = "desc")
         {
             try
             {
-                var query = _unitOfWork.PostPackageRepo.GetAllQueryable();
+                var query = _unitOfWork.PostPackageRepo
+                    .GetAllQueryable()
+                    .Include(p => p.Provider)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
+                    .Include(p => p.Packages)
+                    .AsQueryable();
+
+            
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    search = search.Trim().ToLower();
+
+                    query = query.Where(p =>
+                        p.Title.ToLower().Contains(search) ||
+                        p.Description.ToLower().Contains(search) ||
+                        p.Provider.FullName.ToLower().Contains(search) ||
+                        p.ShippingRoute.StartLocation.Address.ToLower().Contains(search) ||
+                        p.ShippingRoute.EndLocation.Address.ToLower().Contains(search)
+                    );
+                }
+
+               
+                sortBy = sortBy?.ToLower();
+                sortOrder = sortOrder?.ToLower() ?? "desc";
+
+                query = (sortBy, sortOrder) switch
+                {
+                    ("title", "asc") => query.OrderBy(p => p.Title),
+                    ("title", "desc") => query.OrderByDescending(p => p.Title),
+
+                    ("price", "asc") => query.OrderBy(p => p.OfferedPrice),
+                    ("price", "desc") => query.OrderByDescending(p => p.OfferedPrice),
+
+                    ("packages", "asc") => query.OrderBy(p => p.Packages.Count),
+                    ("packages", "desc") => query.OrderByDescending(p => p.Packages.Count),
+
+                    ("created", "asc") => query.OrderBy(p => p.Created),
+                    _ => query.OrderByDescending(p => p.Created), // default
+                };
+
+          
                 var totalCount = await query.CountAsync();
 
                 var pagedData = await query
@@ -131,10 +177,10 @@ namespace BLL.Services.Impletement
                     .Take(pageSize)
                     .ToListAsync();
 
-                // Map Entity sang DTO
                 var dtos = pagedData.Select(MapToReadDTO).ToList();
 
-                var paginatedResult = new PaginatedDTO<PostPackageReadDTO>(dtos, totalCount, pageNumber, pageSize);
+                var paginatedResult = new PaginatedDTO<PostPackageReadDTO>(
+                    dtos, totalCount, pageNumber, pageSize);
 
                 return new ResponseDTO
                 {
@@ -146,9 +192,15 @@ namespace BLL.Services.Impletement
             }
             catch (Exception ex)
             {
-                return new ResponseDTO { /* Lỗi 500 */ Message = ex.Message };
+                return new ResponseDTO
+                {
+                    IsSuccess = false,
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Message = ex.Message
+                };
             }
         }
+
 
         public async Task<ResponseDTO> GetPostPackagesByProviderIdAsync(Guid providerId, int pageNumber, int pageSize)
         {

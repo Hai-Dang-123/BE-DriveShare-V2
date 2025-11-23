@@ -9,7 +9,13 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateAsync(VehicleCreateDTO dto);
         Task<ResponseDTO> UpdateAsync(VehicleUpdateDTO dto);
         Task<ResponseDTO> SoftDeleteAsync(Guid id);
-        Task<ResponseDTO> GetAllAsync(int pageNumber = 1, int pageSize = 10);
+        Task<ResponseDTO> GetAllAsync(
+            int pageNumber = 1,
+            int pageSize = 10,
+            string? search = null,
+            string? sortBy = null,
+            string? sortOrder = "ASC"
+        );
         Task<ResponseDTO> GetByIdAsync(Guid id);
 
         Task<ResponseDTO> GetMyVehiclesAsync(int pageNumber, int pageSize);

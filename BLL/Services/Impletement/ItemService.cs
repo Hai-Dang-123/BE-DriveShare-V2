@@ -388,18 +388,57 @@ namespace BLL.Services.Impletement
             }
         }
 
-        public async Task<ResponseDTO> GetAllItemsAsync(int pageNumber, int pageSize)
+        public async Task<ResponseDTO> GetAllItemsAsync(
+      int pageNumber,
+      int pageSize,
+      string? search,
+      string? sortBy,
+      string? sortOrder
+  )
         {
             try
             {
-                // BƯỚC 1: Lấy IQueryable
-                var itemsQuery = _unitOfWork.ItemRepo.GetAllItemsQueryable();
+                // 1) Lấy IQueryable gốc
+                var query = _unitOfWork.ItemRepo.GetAllItemsQueryable();
 
-                // BƯỚC 2: Đếm tổng số
-                var totalCount = await itemsQuery.CountAsync();
+                // 2) SEARCH
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    string keyword = search.Trim().ToLower();
 
-                // BƯỚC 3: Lấy dữ liệu + Map DTO
-                var itemDTOs = await itemsQuery
+                    query = query.Where(x =>
+                        x.ItemName.ToLower().Contains(keyword) ||
+                        (x.Description != null && x.Description.ToLower().Contains(keyword)) ||
+                        (x.OwnerId != null && x.OwnerId.ToString().ToLower().Contains(keyword)) ||
+                        (x.ProviderId != null && x.ProviderId.ToString().ToLower().Contains(keyword))
+                    );
+                }
+
+                // 3) SORTING
+                sortBy = (sortBy ?? "itemname").Trim().ToLower();
+                sortOrder = (sortOrder ?? "ASC").Trim().ToUpper();
+
+                bool desc = sortOrder == "DESC";
+
+                query = sortBy switch
+                {
+                    "itemname" => desc ? query.OrderByDescending(x => x.ItemName)
+                                       : query.OrderBy(x => x.ItemName),
+
+                    "declaredvalue" => desc ? query.OrderByDescending(x => x.DeclaredValue)
+                                            : query.OrderBy(x => x.DeclaredValue),
+
+                    "status" => desc ? query.OrderByDescending(x => x.Status)
+                                     : query.OrderBy(x => x.Status),
+
+                    // Item KHÔNG CÓ CREATED – nên không sort theo created nữa
+                    _ => query.OrderBy(x => x.ItemName)   // default
+                };
+
+                // 4) Pagination
+                int totalCount = await query.CountAsync();
+
+                var list = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .Select(item => new ItemReadDTO
@@ -412,17 +451,16 @@ namespace BLL.Services.Impletement
                         OwnerId = item.OwnerId,
                         ProviderId = item.ProviderId,
                         Status = item.Status.ToString(),
-                        ImageUrls = item.ItemImages.Select(pi => new ItemImageReadDTO
+                        ImageUrls = item.ItemImages.Select(img => new ItemImageReadDTO
                         {
-                            ItemImageId = pi.ItemImageId,
-                            ItemId = pi.ItemId,
-                            ImageUrl = pi.ItemImageURL
-                        }).ToList() ?? new List<ItemImageReadDTO>()
+                            ItemImageId = img.ItemImageId,
+                            ItemId = img.ItemId,
+                            ImageUrl = img.ItemImageURL
+                        }).ToList()
                     })
                     .ToListAsync();
 
-                // BƯỚC 4: Tạo PaginatedDTO
-                var paginatedResult = new PaginatedDTO<ItemReadDTO>(itemDTOs, totalCount, pageNumber, pageSize);
+                var paginatedResult = new PaginatedDTO<ItemReadDTO>(list, totalCount, pageNumber, pageSize);
 
                 return new ResponseDTO
                 {
@@ -438,11 +476,11 @@ namespace BLL.Services.Impletement
                 {
                     IsSuccess = false,
                     StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = "An error occurred while retrieving items.",
-                    Result = ex.Message
+                    Message = $"An error occurred: {ex.Message}"
                 };
             }
         }
+
 
         public async Task<ResponseDTO> GetPendingItemsByUserIdAsync(int pageNumber, int pageSize)
         {

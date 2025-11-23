@@ -37,9 +37,22 @@ namespace DriverShareProject.Controllers
         }
 
         [HttpGet("get-all-packages")]
-        public async Task<IActionResult> GetAllPackages([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetAllPackages(
+    [FromQuery] int pageNumber = 1,
+    [FromQuery] int pageSize = 10,
+    [FromQuery] string? search = null,
+    [FromQuery] string? sortBy = null,
+    [FromQuery] string? sortOrder = "ASC"
+)
         {
-            var result = await _packageService.GetAllPackagesAsync(pageNumber, pageSize);
+            var result = await _packageService.GetAllPackagesAsync(
+                pageNumber,
+                pageSize,
+                search,
+                sortBy,
+                sortOrder
+            );
+
             return StatusCode(result.StatusCode, result);
         }
 

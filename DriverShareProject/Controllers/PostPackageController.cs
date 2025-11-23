@@ -1,8 +1,8 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Threading.Tasks;
 
 namespace DriverShareProject.Controllers
 {
@@ -11,32 +11,44 @@ namespace DriverShareProject.Controllers
     public class PostPackageController : ControllerBase
     {
         private readonly IPostPackageService _postPackageService;
+
         public PostPackageController(IPostPackageService postPackageService)
         {
             _postPackageService = postPackageService;
         }
         [HttpPost("create-provider-post-package")]
-        public async Task<IActionResult> CreateProviderPostPackage([FromBody] PostPackageCreateDTO postPackageCreateDTO)
+        public async Task<IActionResult> CreateProviderPostPackage([FromBody] PostPackageCreateDTO dto)
         {
-            var response = await _postPackageService.CreateProviderPostPackageAsync(postPackageCreateDTO);
+            var response = await _postPackageService.CreateProviderPostPackageAsync(dto);
             return StatusCode(response.StatusCode, response);
         }
         [HttpPut("change-post-package-status")]
-        public async Task<IActionResult> ChangePostPackageStatus([FromBody] ChangePostPackageStatusDTO changePostPackageStatusDTO)
+        public async Task<IActionResult> ChangePostPackageStatus([FromBody] ChangePostPackageStatusDTO dto)
         {
-            var response = await _postPackageService.ChangePostPackageStatusAsync(changePostPackageStatusDTO);
+            var response = await _postPackageService.ChangePostPackageStatusAsync(dto);
             return StatusCode(response.StatusCode, response);
         }
 
         [HttpGet("get-all")]
         public async Task<IActionResult> GetAll(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10)
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortOrder = "ASC"
+        )
         {
-            var result = await _postPackageService.GetAllPostPackagesAsync(pageNumber, pageSize);
+            var result = await _postPackageService.GetAllPostPackagesAsync(
+                pageNumber,
+                pageSize,
+                search,
+                sortBy,
+                sortOrder
+            );
+
             return StatusCode(result.StatusCode, result);
         }
-
+       
         [HttpGet("get-by-provider/{providerId}")]
         public async Task<IActionResult> GetByProvider(
             [FromRoute] Guid providerId,
@@ -46,14 +58,18 @@ namespace DriverShareProject.Controllers
             var result = await _postPackageService.GetPostPackagesByProviderIdAsync(providerId, pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
         }
+
+       
         [HttpGet("get-my-posts")]
         public async Task<IActionResult> GetMyPostPackages(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10)
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var result = await _postPackageService.GetMyPostPackagesAsync(pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
         }
+
+       
         [HttpGet("get-details/{postPackageId}")]
         public async Task<IActionResult> GetPostPackageDetails([FromRoute] Guid postPackageId)
         {
@@ -61,10 +77,11 @@ namespace DriverShareProject.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
-        [HttpGet("get-open")] // Lấy các bài đăng đang MỞ
+        
+        [HttpGet("get-open")]
         public async Task<IActionResult> GetOpenPostPackages(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10)
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var result = await _postPackageService.GetOpenPostPackagesAsync(pageNumber, pageSize);
             return StatusCode(result.StatusCode, result);
