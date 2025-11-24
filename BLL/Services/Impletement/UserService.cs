@@ -258,6 +258,7 @@ namespace BLL.Services.Impletement
         // =========================================================
         private BaseProfileDTO MapToBaseProfile(BaseUser user, BaseProfileDTO dto)
         {
+            dto.UserId = user.UserId;
             dto.FullName = user.FullName;
             dto.Email = user.Email;
             dto.PhoneNumber = user.PhoneNumber;

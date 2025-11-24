@@ -16,4 +16,17 @@ namespace Common.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime? VerifiedAt { get; set; }
     }
+    public class UserWithDocumentsDTO
+    {
+        public Guid UserId { get; set; }
+        public string FullName { get; set; } = null!;
+        public string Email { get; set; } = null!;
+        public string PhoneNumber { get; set; } = null!;
+        public string? AvatarUrl { get; set; }
+        public string RoleName { get; set; } = null!;
+        public string Status { get; set; } = null!;
+        public DateTime CreatedAt { get; set; }
+
+        public IEnumerable<UserDocumentDTO> Documents { get; set; } = new List<UserDocumentDTO>();
+    }
 }
