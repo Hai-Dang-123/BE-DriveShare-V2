@@ -26,7 +26,7 @@ namespace DriverShareProject.Controllers
         //[Authorize] // Bắt buộc có token
         public async Task<IActionResult> CheckCCCDStatus()
         {
-            var response = await _userDocumentService.CheckCCCDVerifiedAsync();
+            var response = await _service.CheckCCCDVerifiedAsync();
             return StatusCode(response.StatusCode, response);
         }
 

@@ -242,11 +242,11 @@ namespace BLL.Services.Impletement
                             .Select(d => new VehicleDocumentDetailDTO
                             {
                                 VehicleDocumentId = d.VehicleDocumentId,
-                                DocumentType = d.DocumentType,
+                                DocumentType = d.DocumentType.ToString(),
                                 FrontDocumentUrl = d.FrontDocumentUrl,
                                 BackDocumentUrl = d.BackDocumentUrl,
                                 ExpirationDate = d.ExpirationDate,
-                                Status = d.Status,
+                                Status = d.Status.ToString(),
                                 AdminNotes = d.AdminNotes,
                                 CreatedAt = d.CreatedAt,
                                 ProcessedAt = d.ProcessedAt
