@@ -22,6 +22,7 @@ namespace DAL.Repositories.Implement
         {
             return await _context.TripDeliveryRecords
                 .Include(tdr => tdr.TripContact)
+
                 .Include(tdr => tdr.DeliveryRecordTemplate)
                     .ThenInclude(tpl => tpl.DeliveryRecordTerms)
                 .FirstOrDefaultAsync(tdr => tdr.DeliveryRecordId  == tripDeliveryRecordId);
@@ -35,6 +36,23 @@ namespace DAL.Repositories.Implement
                     .ThenInclude(tpl => tpl.DeliveryRecordTerms)
                 .Where(tdr => tdr.TripId == tripId)
                 .ToListAsync();
+        }
+
+        public async Task<TripDeliveryRecord?> GetByIdWithDetailsForDriverAsync(Guid id)
+        {
+            return await _context.TripDeliveryRecords
+                .Include(r => r.TripContact) // Include người ký
+                .Include(tdr => tdr.Driver)
+                .Include(r => r.DeliveryRecordTemplate) // Include template
+                    .ThenInclude(t => t.DeliveryRecordTerms) // Include điều khoản
+                .Include(r => r.Trip) // Include chuyến đi
+                    .ThenInclude(t => t.Packages) // Include gói hàng
+                        .ThenInclude(p => p.Item) // Include chi tiết sản phẩm
+                            .ThenInclude(i => i.ItemImages) // Include ảnh sản phẩm (nếu cần).
+                 .Include(r => r.Trip)
+                    .ThenInclude(t => t.Packages)
+                        .ThenInclude(p => p.PackageImages) // Include ảnh gói hàng (nếu cần)
+                .FirstOrDefaultAsync(r => r.DeliveryRecordId == id || r.DeliveryRecordId == id); // Tùy tên khóa chính của bạn
         }
     }
 }

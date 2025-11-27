@@ -16,7 +16,6 @@ namespace DAL.Entities
         public TripStatus Status { get; set; }
         public DateTime CreateAt { get; set; } = DateTime.Now;
         public DateTime UpdateAt { get; set; } = DateTime.Now;
-
         public TripType Type { get; set; } // Enum (OwnerCreated, FromProvider)
 
         // --- Chi phí & Thời gian thực tế ---
@@ -48,8 +47,6 @@ namespace DAL.Entities
         public virtual Owner Owner { get; set; } = null!;
 
         public virtual TripProviderContract? TripProviderContract { get; set; } // Nếu chuyến đi này do Nhà cung cấp tạo
-
-
 
         // Liên kết 1-1
         public virtual ICollection<Package> Packages { get; set; } = new List<Package>();

@@ -7,6 +7,7 @@ using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Threading.Tasks;
 
@@ -20,9 +21,12 @@ namespace BLL.Services.Implement
         private readonly ITripRouteService _tripRouteService;
         private readonly ITripContactService _tripContactService;
         private readonly ITripProviderContractService _tripProviderContractService;
+        private readonly ITripDeliveryRecordService _tripDeliveryRecordService;
+        private readonly IEmailService _emailService;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
 
 
-        public TripService(IUnitOfWork unitOfWork, UserUtility userUtility, IVietMapService vietMapService, ITripRouteService tripRouteService, ITripContactService tripContactService, ITripProviderContractService tripProviderContractService)
+        public TripService(IUnitOfWork unitOfWork, UserUtility userUtility, IVietMapService vietMapService, ITripRouteService tripRouteService, ITripContactService tripContactService, ITripProviderContractService tripProviderContractService, ITripDeliveryRecordService tripDeliveryRecordService, IEmailService emailService, IServiceScopeFactory serviceScopeFactory)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -30,6 +34,9 @@ namespace BLL.Services.Implement
             _tripRouteService = tripRouteService;
             _tripContactService = tripContactService;
             _tripProviderContractService = tripProviderContractService;
+            _tripDeliveryRecordService = tripDeliveryRecordService;
+            _emailService = emailService;
+            _serviceScopeFactory = serviceScopeFactory;
         }
 
         //public async Task<ResponseDTO> CreateForOwnerAsync(TripCreateDTO dto)
@@ -85,60 +92,230 @@ namespace BLL.Services.Implement
         //}
 
 
+        //public async Task<ResponseDTO> CreateTripFromPostAsync(TripCreateFromPostDTO dto)
+        //{
+        //    // Bắt đầu Transaction
+        //    await _unitOfWork.BeginTransactionAsync();
+        //    try
+        //    {
+        //        // 1. VALIDATE OWNER (Lấy ID từ Token)
+        //        var ownerId = _userUtility.GetUserIdFromToken();
+        //        if (ownerId == Guid.Empty)
+        //            throw new Exception("Unauthorized or invalid token");
+
+        //        // 2. VALIDATE POST PACKAGE (Lấy hết dữ liệu liên quan)
+        //        var postPackage = await _unitOfWork.PostPackageRepo.FirstOrDefaultAsync(
+        //            p => p.PostPackageId == dto.PostPackageId,
+        //            // Include tất cả mọi thứ chúng ta cần
+        //            includeProperties: "ShippingRoute,PostContacts,Provider,Packages"
+        //        );
+        //        if (postPackage == null)
+        //            throw new Exception("Không tìm thấy Bài đăng (PostPackage).");
+        //        if (postPackage.Status != PostStatus.OPEN)
+        //            throw new Exception("Bài đăng này đã đóng hoặc đã được nhận.");
+        //        if (postPackage.ShippingRoute == null)
+        //            throw new Exception("Bài đăng thiếu thông tin Lộ trình (ShippingRoute).");
+        //        if (postPackage.Provider == null)
+        //            throw new Exception("Bài đăng thiếu thông tin Nhà cung cấp (Provider).");
+
+        //        // 3. VALIDATE VEHICLE (Kiểm tra sở hữu và lấy VehicleType)
+        //        var vehicle = await _unitOfWork.VehicleRepo.FirstOrDefaultAsync(
+        //            v => v.VehicleId == dto.VehicleId && v.OwnerId == ownerId,
+        //            includeProperties: "VehicleType"
+        //        );
+        //        if (vehicle == null)
+        //            throw new Exception("Xe (Vehicle) không tìm thấy hoặc không thuộc về bạn.");
+
+        //        // 4. GỌI SERVICE 1: TẠO TRIPROUTE
+        //        // (Service này gọi VietMap và AddAsync)
+        //        var newTripRoute = await _tripRouteService.CreateAndAddTripRouteAsync(
+        //            postPackage.ShippingRoute, vehicle
+        //        );
+
+        //        // 5. TẠO TRIP (Entity chính)
+        //        var trip = new Trip
+        //        {
+        //            TripId = Guid.NewGuid(),
+        //            TripCode = GenerateTripCode(),
+        //            Status = TripStatus.CREATED,
+        //            Type = TripType.FROM_PROVIDER, // (Type mới)
+        //            CreateAt = DateTime.UtcNow,
+        //            UpdateAt = DateTime.UtcNow,
+        //            VehicleId = dto.VehicleId,
+        //            OwnerId = ownerId,
+        //            TripRouteId = newTripRoute.TripRouteId, // Tuyến đường thực tế
+        //            ShippingRouteId = postPackage.ShippingRoute.ShippingRouteId,
+        //            TotalFare = postPackage.OfferedPrice, // Lấy giá từ bài đăng
+        //            ActualDistanceKm = newTripRoute.DistanceKm,
+        //            ActualDuration = newTripRoute.Duration,
+        //            ActualPickupTime = null,
+        //            ActualCompletedTime = null
+        //        };
+        //        await _unitOfWork.TripRepo.AddAsync(trip);
+
+        //        // 6. GỌI SERVICE 2: TẠO CONTRACT
+        //        // (Service này AddAsync)
+        //        await _tripProviderContractService.CreateAndAddContractAsync(
+        //            trip.TripId, ownerId, postPackage.ProviderId, postPackage.OfferedPrice
+        //        );
+
+        //        // 7. GỌI SERVICE 3: SAO CHÉP CONTACTS
+        //        // (Service này AddAsync - logic "lấy từ post contact")
+        //        await _tripContactService.CopyContactsFromPostAsync(
+        //            trip.TripId, postPackage.PostContacts
+        //        );
+
+        //        // 8. CẬP NHẬT TRẠNG THÁI (PostPackage và Packages)
+        //        postPackage.Status = PostStatus.DONE; // Đánh dấu bài đăng là "Đã nhận"
+        //        await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
+
+        //        // Gán TripId và cập nhật trạng thái cho tất cả Package trong bài đăng
+        //        foreach (var pkg in postPackage.Packages)
+        //        {
+        //            pkg.TripId = trip.TripId;
+        //            pkg.OwnerId = ownerId; // Owner nhận gói hàng này
+        //            pkg.Status = PackageStatus.IN_PROGRESS;
+        //            await _unitOfWork.PackageRepo.UpdateAsync(pkg);
+        //        }
+
+        //        // 9. LƯU TẤT CẢ (COMMIT)
+        //        await _unitOfWork.CommitTransactionAsync();
+
+        //        // 10. Trả về kết quả
+        //        var result = new TripCreatedResultDTO
+        //        {
+        //            TripId = trip.TripId,
+        //            TripCode = trip.TripCode,
+        //            Status = trip.Status
+        //        };
+        //        return new ResponseDTO("Nhận chuyến và tạo Trip thành công!", 201, true, result);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await _unitOfWork.RollbackTransactionAsync();
+        //        return new ResponseDTO($"Lỗi khi nhận chuyến: {ex.Message}", 400, false);
+        //    }
+        //}
+
         public async Task<ResponseDTO> CreateTripFromPostAsync(TripCreateFromPostDTO dto)
         {
             // Bắt đầu Transaction
             await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 1. VALIDATE OWNER (Lấy ID từ Token)
+                // 1. VALIDATE OWNER
                 var ownerId = _userUtility.GetUserIdFromToken();
                 if (ownerId == Guid.Empty)
                     throw new Exception("Unauthorized or invalid token");
 
-                // 2. VALIDATE POST PACKAGE (Lấy hết dữ liệu liên quan)
+                // 2. VALIDATE POST PACKAGE
                 var postPackage = await _unitOfWork.PostPackageRepo.FirstOrDefaultAsync(
                     p => p.PostPackageId == dto.PostPackageId,
-                    // Include tất cả mọi thứ chúng ta cần
                     includeProperties: "ShippingRoute,PostContacts,Provider,Packages"
                 );
-                if (postPackage == null)
-                    throw new Exception("Không tìm thấy Bài đăng (PostPackage).");
-                if (postPackage.Status != PostStatus.OPEN)
-                    throw new Exception("Bài đăng này đã đóng hoặc đã được nhận.");
-                if (postPackage.ShippingRoute == null)
-                    throw new Exception("Bài đăng thiếu thông tin Lộ trình (ShippingRoute).");
-                if (postPackage.Provider == null)
-                    throw new Exception("Bài đăng thiếu thông tin Nhà cung cấp (Provider).");
 
-                // 3. VALIDATE VEHICLE (Kiểm tra sở hữu và lấy VehicleType)
+                if (postPackage == null) throw new Exception("Không tìm thấy Bài đăng (PostPackage).");
+                if (postPackage.Status != PostStatus.OPEN) throw new Exception("Bài đăng này đã đóng hoặc đã được nhận.");
+                if (postPackage.ShippingRoute == null) throw new Exception("Bài đăng thiếu thông tin Lộ trình.");
+                if (postPackage.Provider == null) throw new Exception("Bài đăng thiếu thông tin Nhà cung cấp.");
+
+                // 3. VALIDATE VEHICLE
                 var vehicle = await _unitOfWork.VehicleRepo.FirstOrDefaultAsync(
                     v => v.VehicleId == dto.VehicleId && v.OwnerId == ownerId,
                     includeProperties: "VehicleType"
                 );
-                if (vehicle == null)
-                    throw new Exception("Xe (Vehicle) không tìm thấy hoặc không thuộc về bạn.");
+                if (vehicle == null) throw new Exception("Xe (Vehicle) không tìm thấy hoặc không thuộc về bạn.");
+
+                // =======================================================================
+                // 🛑 3.1 (FIXED) VALIDATE VEHICLE SCHEDULE (KIỂM TRA TRÙNG LỊCH)
+                // =======================================================================
+
+                var route = postPackage.ShippingRoute;
+
+                // A. Hợp nhất Ngày + Giờ để tạo mốc thời gian chính xác cho CHUYẾN MỚI
+                // Lưu ý: DateTime không bao giờ null, nên bỏ check HasValue. 
+                // Chỉ check TimeWindow có null không thôi.
+
+                TimeSpan startTimeSpan = TimeSpan.Zero;
+                if (route.PickupTimeWindow != null && route.PickupTimeWindow.StartTime != null)
+                {
+                    startTimeSpan = route.PickupTimeWindow.StartTime.Value.ToTimeSpan();
+                }
+
+                TimeSpan endTimeSpan = new TimeSpan(23, 59, 59); // Mặc định cuối ngày nếu không có giờ
+                if (route.DeliveryTimeWindow != null && route.DeliveryTimeWindow.EndTime != null)
+                {
+                    endTimeSpan = route.DeliveryTimeWindow.EndTime.Value.ToTimeSpan();
+                }
+
+                // Mốc thời gian đầy đủ (Ngày + Giờ)
+                var newStartFull = route.ExpectedPickupDate.Date.Add(startTimeSpan);
+                var newEndFull = route.ExpectedDeliveryDate.Date.Add(endTimeSpan);
+
+                if (newStartFull >= newEndFull)
+                {
+                    throw new Exception("Thời gian Lấy hàng phải nhỏ hơn thời gian Giao hàng.");
+                }
+
+                // B. Lấy danh sách các chuyến ĐANG HOẠT ĐỘNG của xe này về RAM
+                // (Tránh lỗi SQL không dịch được phép cộng ngày giờ phức tạp)
+                var activeTrips = await _unitOfWork.TripRepo.GetAll()
+                    .Include(t => t.ShippingRoute)
+                    .Where(t => t.VehicleId == dto.VehicleId &&
+                                t.Status != TripStatus.COMPLETED &&
+                                t.Status != TripStatus.CANCELLED &&
+                                t.Status != TripStatus.DELETED)
+                    .ToListAsync(); // <--- Tải về RAM ở đây
+
+                // C. Duyệt danh sách để kiểm tra trùng lặp 
+
+
+                foreach (var existingTrip in activeTrips)
+                {
+                    var exRoute = existingTrip.ShippingRoute;
+                    if (exRoute == null) continue;
+
+                    // Tính toán thời gian cho chuyến cũ (Tương tự như trên)
+                    TimeSpan exStartSpan = TimeSpan.Zero;
+                    if (exRoute.PickupTimeWindow != null && exRoute.PickupTimeWindow.StartTime != null)
+                        exStartSpan = exRoute.PickupTimeWindow.StartTime.Value.ToTimeSpan();
+
+                    TimeSpan exEndSpan = new TimeSpan(23, 59, 59);
+                    if (exRoute.DeliveryTimeWindow != null && exRoute.DeliveryTimeWindow.EndTime != null)
+                        exEndSpan = exRoute.DeliveryTimeWindow.EndTime.Value.ToTimeSpan();
+
+                    var exStartFull = exRoute.ExpectedPickupDate.Date.Add(exStartSpan);
+                    var exEndFull = exRoute.ExpectedDeliveryDate.Date.Add(exEndSpan);
+
+                    // LOGIC OVERLAP: (Chuyến cũ bắt đầu TRƯỚC KHI chuyến mới kết thúc) VÀ (Chuyến cũ kết thúc SAU KHI chuyến mới bắt đầu)
+                    if (exStartFull < newEndFull && exEndFull > newStartFull)
+                    {
+                        throw new Exception($"Xe {vehicle.PlateNumber} bị trùng lịch với chuyến {existingTrip.TripCode} " +
+                                            $"({exStartFull:dd/MM HH:mm} - {exEndFull:dd/MM HH:mm}).");
+                    }
+                }
+
+                // =======================================================================
 
                 // 4. GỌI SERVICE 1: TẠO TRIPROUTE
-                // (Service này gọi VietMap và AddAsync)
                 var newTripRoute = await _tripRouteService.CreateAndAddTripRouteAsync(
                     postPackage.ShippingRoute, vehicle
                 );
 
-                // 5. TẠO TRIP (Entity chính)
+                // 5. TẠO TRIP
                 var trip = new Trip
                 {
                     TripId = Guid.NewGuid(),
                     TripCode = GenerateTripCode(),
-                    Status = TripStatus.CREATED,
-                    Type = TripType.FROM_PROVIDER, // (Type mới)
+                    Status = TripStatus.AWAITING_OWNER_CONTRACT,
+                    Type = TripType.FROM_PROVIDER,
                     CreateAt = DateTime.UtcNow,
                     UpdateAt = DateTime.UtcNow,
                     VehicleId = dto.VehicleId,
                     OwnerId = ownerId,
-                    TripRouteId = newTripRoute.TripRouteId, // Tuyến đường thực tế
+                    TripRouteId = newTripRoute.TripRouteId,
                     ShippingRouteId = postPackage.ShippingRoute.ShippingRouteId,
-                    TotalFare = postPackage.OfferedPrice, // Lấy giá từ bài đăng
+                    TotalFare = postPackage.OfferedPrice,
                     ActualDistanceKm = newTripRoute.DistanceKm,
                     ActualDuration = newTripRoute.Duration,
                     ActualPickupTime = null,
@@ -147,34 +324,31 @@ namespace BLL.Services.Implement
                 await _unitOfWork.TripRepo.AddAsync(trip);
 
                 // 6. GỌI SERVICE 2: TẠO CONTRACT
-                // (Service này AddAsync)
                 await _tripProviderContractService.CreateAndAddContractAsync(
                     trip.TripId, ownerId, postPackage.ProviderId, postPackage.OfferedPrice
                 );
 
                 // 7. GỌI SERVICE 3: SAO CHÉP CONTACTS
-                // (Service này AddAsync - logic "lấy từ post contact")
                 await _tripContactService.CopyContactsFromPostAsync(
                     trip.TripId, postPackage.PostContacts
                 );
 
-                // 8. CẬP NHẬT TRẠNG THÁI (PostPackage và Packages)
-                postPackage.Status = PostStatus.DONE; // Đánh dấu bài đăng là "Đã nhận"
+                // 8. CẬP NHẬT TRẠNG THÁI
+                postPackage.Status = PostStatus.DONE;
                 await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
 
-                // Gán TripId và cập nhật trạng thái cho tất cả Package trong bài đăng
                 foreach (var pkg in postPackage.Packages)
                 {
                     pkg.TripId = trip.TripId;
-                    pkg.OwnerId = ownerId; // Owner nhận gói hàng này
+                    pkg.OwnerId = ownerId;
                     pkg.Status = PackageStatus.IN_PROGRESS;
                     await _unitOfWork.PackageRepo.UpdateAsync(pkg);
                 }
 
-                // 9. LƯU TẤT CẢ (COMMIT)
+                // 9. COMMIT
                 await _unitOfWork.CommitTransactionAsync();
 
-                // 10. Trả về kết quả
+                // 10. RETURN
                 var result = new TripCreatedResultDTO
                 {
                     TripId = trip.TripId,
@@ -201,27 +375,314 @@ namespace BLL.Services.Implement
 
         public async Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto)
         {
+            // 1. Bắt đầu Transaction lớn
+            await _unitOfWork.BeginTransactionAsync();
+
+            // Khai báo biến lưu kết quả tài chính để dùng cho email sau khi commit
+            decimal ownerReceived = 0;
+            decimal providerPaid = 0;
+
+            // Lưu danh sách tài xế đã được trả tiền để gửi mail {DriverId, Amount}
+            var paidDriversMap = new Dictionary<Guid, decimal>();
+
             try
             {
+                // 2. Lấy Trip
                 var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
                 if (trip == null)
+                {
+                    await _unitOfWork.RollbackTransactionAsync();
                     return new ResponseDTO("Trip not found.", 404, false);
+                }
 
-                // Validate chuyển trạng thái
-                if (!IsValidTransition(trip.Status, dto.NewStatus))
-                    return new ResponseDTO($"Invalid status transition: {trip.Status} → {dto.NewStatus}", 400, false);
+                // Lưu lại tổng tiền Provider đã trả
+                providerPaid = trip.TotalFare;
 
+                // 3. Cập nhật trạng thái cơ bản
                 trip.Status = dto.NewStatus;
                 trip.UpdateAt = DateTime.UtcNow;
+
+                if (dto.NewStatus == TripStatus.LOADING) trip.ActualPickupTime = DateTime.UtcNow;
+                if (dto.NewStatus == TripStatus.COMPLETED) trip.ActualCompletedTime = DateTime.UtcNow;
 
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
                 await _unitOfWork.SaveChangeAsync();
 
-                return new ResponseDTO($"Trip status changed to {dto.NewStatus}", 200, true);
+                // =================================================================
+                // 🚀 A. LOGIC GỬI EMAIL LINK KÝ TÊN (LOADING / UNLOADING)
+                // =================================================================
+                if (dto.NewStatus == TripStatus.LOADING)
+                {
+                    var pickupRecord = await _unitOfWork.TripDeliveryRecordRepo.GetAll()
+                        .FirstOrDefaultAsync(r => r.TripId == trip.TripId && r.Type == DeliveryRecordType.PICKUP);
+
+                    if (pickupRecord != null && pickupRecord.ContactSigned != true)
+                    {
+                        await _tripDeliveryRecordService.SendAccessLinkToContactAsync(pickupRecord.DeliveryRecordId);
+                    }
+                }
+                else if (dto.NewStatus == TripStatus.UNLOADING)
+                {
+                    var dropoffRecord = await _unitOfWork.TripDeliveryRecordRepo.GetAll()
+                        .FirstOrDefaultAsync(r => r.TripId == trip.TripId && r.Type == DeliveryRecordType.DROPOFF);
+
+                    if (dropoffRecord != null && dropoffRecord.ContactSigned != true)
+                    {
+                        await _tripDeliveryRecordService.SendAccessLinkToContactAsync(dropoffRecord.DeliveryRecordId);
+                    }
+                }
+
+                // =================================================================
+                // 💰 B. LOGIC THANH TOÁN KHI HOÀN THÀNH (COMPLETED)
+                // =================================================================
+                if (dto.NewStatus == TripStatus.COMPLETED)
+                {
+                    // --- 1. TRẢ TIỀN CHO OWNER ---
+                    try
+                    {
+                        var ownerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == trip.OwnerId);
+                        if (ownerWallet == null) throw new Exception("Owner wallet not found");
+                        if (ownerWallet.Status != WalletStatus.ACTIVE) throw new Exception("Owner wallet is locked");
+
+                        decimal platformFee = trip.TotalFare * 0.1m; // Phí sàn 10%
+                        ownerReceived = trip.TotalFare - platformFee; // Tiền thực nhận
+
+                        ownerWallet.Balance += ownerReceived;
+                        ownerWallet.LastUpdatedAt = DateTime.UtcNow;
+                        await _unitOfWork.WalletRepo.UpdateAsync(ownerWallet);
+
+                        var ownerTx = new Transaction
+                        {
+                            TransactionId = Guid.NewGuid(),
+                            WalletId = ownerWallet.WalletId,
+                            TripId = trip.TripId,
+                            Amount = ownerReceived,
+                            Type = TransactionType.OWNER_PAYOUT,
+                            Status = TransactionStatus.SUCCEEDED,
+                            Description = $"Nhận thanh toán hoàn thành chuyến {trip.TripCode} (đã trừ phí sàn)",
+                            BalanceBefore = ownerWallet.Balance - ownerReceived,
+                            BalanceAfter = ownerWallet.Balance,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _unitOfWork.TransactionRepo.AddAsync(ownerTx);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Xử lý lỗi Owner -> Rollback trạng thái Trip
+                        trip.Status = TripStatus.AWAITING_FINAL_PROVIDER_PAYOUT;
+                        await _unitOfWork.TripRepo.UpdateAsync(trip);
+                        await _unitOfWork.CommitTransactionAsync();
+                        return new ResponseDTO($"Lỗi thanh toán Owner: {ex.Message}", 500, false);
+                    }
+
+                    // --- 2. TRẢ TIỀN CHO CÁC DRIVER (CHÍNH + PHỤ) ---
+                    try
+                    {
+                        // Lấy tất cả tài xế đã nhận việc nhưng chưa được trả tiền
+                        var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                            .Where(a => a.TripId == trip.TripId
+                                     && a.AssignmentStatus == AssignmentStatus.ACCEPTED
+                                     && a.PaymentStatus != DriverPaymentStatus.PAID)
+                            .ToListAsync();
+
+                        foreach (var assign in assignments)
+                        {
+                            var driverWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == assign.DriverId);
+
+                            // Nếu driver không có ví -> Skip hoặc log, không chặn luồng chung
+                            if (driverWallet != null && driverWallet.Status == WalletStatus.ACTIVE)
+                            {
+                                decimal driverPayout = assign.TotalAmount;
+
+                                driverWallet.Balance += driverPayout;
+                                driverWallet.LastUpdatedAt = DateTime.UtcNow;
+                                await _unitOfWork.WalletRepo.UpdateAsync(driverWallet);
+
+                                assign.PaymentStatus = DriverPaymentStatus.PAID;
+                                assign.UpdateAt = DateTime.UtcNow;
+                                await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
+
+                                var driverTx = new Transaction
+                                {
+                                    TransactionId = Guid.NewGuid(),
+                                    WalletId = driverWallet.WalletId,
+                                    TripId = trip.TripId,
+                                    Amount = driverPayout,
+                                    Type = TransactionType.DRIVER_PAYOUT,
+                                    Status = TransactionStatus.SUCCEEDED,
+                                    Description = $"Nhận lương chuyến {trip.TripCode} ({assign.Type})",
+                                    BalanceBefore = driverWallet.Balance - driverPayout,
+                                    BalanceAfter = driverWallet.Balance,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                await _unitOfWork.TransactionRepo.AddAsync(driverTx);
+
+                                // Lưu lại để gửi mail
+                                if (!paidDriversMap.ContainsKey(assign.DriverId))
+                                {
+                                    paidDriversMap.Add(assign.DriverId, driverPayout);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Xử lý lỗi Driver -> Owner đã nhận tiền, Driver chưa nhận -> Treo trạng thái
+                        trip.Status = TripStatus.AWAITING_FINAL_DRIVER_PAYOUT;
+                        await _unitOfWork.TripRepo.UpdateAsync(trip);
+                        await _unitOfWork.CommitTransactionAsync();
+                        return new ResponseDTO($"Lỗi thanh toán Driver: {ex.Message}", 500, false);
+                    }
+                }
+
+                // 4. COMMIT THÀNH CÔNG
+                await _unitOfWork.CommitTransactionAsync();
+
+                // =================================================================
+                // 📩 C. GỬI EMAIL BÁO CÁO HOÀN THÀNH (Background Task)
+                // =================================================================
+                if (dto.NewStatus == TripStatus.COMPLETED)
+                {
+                    // Capture local variables for Thread Safety
+                    var tripIdLocal = trip.TripId;
+                    var ownerIdLocal = trip.OwnerId;
+                    var providerPaidLocal = providerPaid;
+                    var ownerReceivedLocal = ownerReceived;
+                    var paidDriversLocal = new Dictionary<Guid, decimal>(paidDriversMap); // Clone map
+
+                    _ = Task.Run(async () =>
+                    {
+                        // ⚠️ TẠO SCOPE MỚI ĐỂ TRÁNH LỖI DISPOSED CONTEXT
+                        using (var scope = _serviceScopeFactory.CreateScope())
+                        {
+                            var scopedUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                            var scopedEmailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+                            try
+                            {
+                                // Query Trip Full Info trong scope mới
+                                var tripFull = await scopedUow.TripRepo.GetAll()
+                                    .Include(t => t.ShippingRoute)
+                                    .Include(t => t.Vehicle).ThenInclude(v => v.VehicleType)
+                                    .Include(t => t.Packages)
+                                    .Include(t => t.TripProviderContract)
+                                    .AsNoTracking()
+                                    .FirstOrDefaultAsync(t => t.TripId == tripIdLocal);
+
+                                if (tripFull == null) return;
+
+                                // Safe access location string
+                                var startAddr = tripFull.ShippingRoute?.StartLocation?.Address ?? "N/A";
+                                var endAddr = tripFull.ShippingRoute?.EndLocation?.Address ?? "N/A";
+
+                                // Model cơ bản
+                                var commonData = new TripCompletionReportModel
+                                {
+                                    TripCode = tripFull.TripCode,
+                                    CompletedAt = DateTime.UtcNow.AddHours(7).ToString("HH:mm dd/MM/yyyy"),
+                                    StartAddress = startAddr,
+                                    EndAddress = endAddr,
+                                    DistanceKm = (double)tripFull.ActualDistanceKm,
+                                    VehiclePlate = tripFull.Vehicle?.PlateNumber ?? "N/A",
+                                    VehicleType = tripFull.Vehicle?.VehicleType?.VehicleTypeName ?? "N/A",
+                                    PackageCount = tripFull.Packages?.Count ?? 0,
+                                    TotalPayload = tripFull.Packages?.Sum(p => p.WeightKg) ?? 0
+                                };
+
+                                // 1. Gửi cho Provider
+                                if (tripFull.TripProviderContract != null)
+                                {
+                                    var provider = await scopedUow.BaseUserRepo.GetByIdAsync(tripFull.TripProviderContract.CounterpartyId);
+                                    if (provider != null)
+                                    {
+                                        var pReport = commonData.Clone();
+                                        pReport.RecipientName = provider.FullName;
+                                        pReport.Role = "Provider";
+                                        pReport.IsIncome = false;
+                                        pReport.Amount = providerPaidLocal;
+                                        pReport.FinancialDescription = "TỔNG CHI PHÍ VẬN CHUYỂN";
+
+                                        await scopedEmailService.SendTripCompletionEmailAsync(provider.Email, pReport);
+                                    }
+                                }
+
+                                // 2. Gửi cho Owner
+                                var owner = await scopedUow.BaseUserRepo.GetByIdAsync(ownerIdLocal);
+                                if (owner != null)
+                                {
+                                    var oReport = commonData.Clone();
+                                    oReport.RecipientName = owner.FullName;
+                                    oReport.Role = "Owner";
+                                    oReport.IsIncome = true;
+                                    oReport.Amount = ownerReceivedLocal;
+                                    oReport.FinancialDescription = "DOANH THU THỰC NHẬN (SAU PHÍ)";
+
+                                    await scopedEmailService.SendTripCompletionEmailAsync(owner.Email, oReport);
+                                }
+
+                                // 3. Gửi cho TẤT CẢ Driver đã được trả tiền
+                                foreach (var pd in paidDriversLocal)
+                                {
+                                    var driver = await scopedUow.BaseUserRepo.GetByIdAsync(pd.Key);
+                                    if (driver != null)
+                                    {
+                                        var dReport = commonData.Clone();
+                                        dReport.RecipientName = driver.FullName;
+                                        dReport.Role = "Driver";
+                                        dReport.IsIncome = true;
+                                        dReport.Amount = pd.Value; // Số tiền cụ thể của driver này
+                                        dReport.FinancialDescription = "TIỀN CÔNG / LƯƠNG CHUYẾN";
+
+                                        await scopedEmailService.SendTripCompletionEmailAsync(driver.Email, dReport);
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error sending completion emails: {ex.Message}");
+                            }
+                        } // End Scope
+                    });
+                }
+
+                return new ResponseDTO($"Trip status changed to {dto.NewStatus} successfully.", 200, true);
             }
             catch (Exception ex)
             {
+                await _unitOfWork.RollbackTransactionAsync();
                 return new ResponseDTO($"Error changing trip status: {ex.Message}", 500, false);
+            }
+        }
+
+        public class TripCompletionReportModel
+        {
+            public string TripCode { get; set; }
+            public string CompletedAt { get; set; }
+
+            // Thông tin lộ trình
+            public string StartAddress { get; set; }
+            public string EndAddress { get; set; }
+            public double DistanceKm { get; set; }
+
+            // Thông tin xe & Hàng
+            public string VehiclePlate { get; set; }
+            public string VehicleType { get; set; }
+            public int PackageCount { get; set; }
+            public decimal TotalPayload { get; set; }
+
+            // Tài chính (Sẽ hiển thị khác nhau tùy Role)
+            public decimal Amount { get; set; } // Số tiền
+            public bool IsIncome { get; set; } // True: Tiền vào (Xanh), False: Tiền ra (Đỏ)
+            public string FinancialDescription { get; set; } // Ví dụ: "Doanh thu thuần", "Chi phí vận chuyển"
+
+            // Thông tin người nhận
+            public string RecipientName { get; set; }
+            public string Role { get; set; } // "Provider", "Owner", "Driver"
+
+            // ✅ THÊM HÀM NÀY ĐỂ SỬA LỖI PROTECTED MEMBERWISECLONE
+            public TripCompletionReportModel Clone()
+            {
+                return (TripCompletionReportModel)this.MemberwiseClone();
             }
         }
         /*
@@ -276,8 +737,8 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                 TripStatus.LOADING => current == TripStatus.VEHICLE_HANDOVER,
 
                 // Giai đoạn 4 (Vận hành)
-                TripStatus.IN_TRANSIT => current == TripStatus.LOADING,
-                TripStatus.UNLOADING => current == TripStatus.IN_TRANSIT,
+                //TripStatus.IN_TRANSIT => current == TripStatus.LOADING,
+                //TripStatus.UNLOADING => current == TripStatus.IN_TRANSIT,
                 TripStatus.DELIVERED => current == TripStatus.UNLOADING,
 
                 // Giai đoạn 5 (Trả xe)
@@ -547,6 +1008,69 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                 return new ResponseDTO($"Error getting trips by provider: {ex.Message}", 500, false);
             }
         }
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
+        {
+            try
+            {
+                // 1. Chỉ Admin mới có quyền
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (userRole != "Admin")
+                {
+                    return new ResponseDTO("Forbidden: Chỉ 'Admin' mới có thể truy cập.", 403, false);
+                }
+
+                // 2. Lấy IQueryable (đã lọc DELETED)
+                var query = _unitOfWork.TripRepo.GetAll()
+                    .AsNoTracking()
+                    .Where(t => t.Status != TripStatus.DELETED);
+
+                // 3. Include dữ liệu
+                query = IncludeTripDetails(query);
+
+                // 4. Đếm tổng số
+                var totalCount = await query.CountAsync();
+
+                // 5. Lấy dữ liệu của trang
+                var pagedTrips = await query
+                    .OrderByDescending(t => t.CreateAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                // 6. Map (Dùng chung DTO với Owner)
+                var mappedData = pagedTrips.Select(t => new TripDetailDTO
+                {
+                    TripId = t.TripId,
+                    TripCode = t.TripCode,
+                    Status = t.Status.ToString(),
+                    CreateAt = t.CreateAt,
+                    UpdateAt = t.UpdateAt,
+                    VehicleId = t.VehicleId,
+                    VehicleModel = t.Vehicle?.Model ?? "N/A",
+                    VehiclePlate = t.Vehicle?.PlateNumber ?? "N/A",
+                    VehicleType = t.Vehicle?.VehicleType?.VehicleTypeName ?? "N/A",
+                    OwnerId = t.OwnerId,
+                    OwnerName = t.Owner?.FullName ?? "N/A",
+                    OwnerCompany = t.Owner?.CompanyName ?? "N/A",
+                    StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
+                    EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
+                    EstimatedDuration = (t.ShippingRoute != null && t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
+                                        ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate : TimeSpan.Zero,
+                    PackageCodes = t.Packages.Select(p => p.PackageCode).ToList(),
+                    DriverNames = t.DriverAssignments.Select(a => a.Driver?.FullName ?? "N/A").ToList(),
+                    TripRouteSummary = t.TripRoute != null
+                                       ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes" : string.Empty,
+                }).ToList();
+
+                // 7. Trả về
+                var paginatedResult = new PaginatedDTO<TripDetailDTO>(mappedData, totalCount, pageNumber, pageSize);
+                return new ResponseDTO("Get all trips successfully (Admin)", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting all trips: {ex.Message}", 500, false);
+            }
+        }
 
 
         public async Task<ResponseDTO> GetTripByIdAsync(Guid tripId)
@@ -581,8 +1105,8 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                                      tripForAuth.TripProviderContract.CounterpartyId == userId);
 
                 // ⚠️ SỬA ĐỔI: Thêm logic isProvider
-                if (!isOwner && !isAssignedDriver && !isProvider)
-                    return new ResponseDTO("Forbidden: Bạn không có quyền xem chuyến đi này.", 403, false);
+                //if (!isOwner && !isAssignedDriver && !isProvider)
+                //    return new ResponseDTO("Forbidden: Bạn không có quyền xem chuyến đi này.", 403, false);   // NHỚ LÀ PHẢI SỬA CHỖ NÀY NHÉ
 
                 // 🔹 4. TÁCH TRUY VẤN (SPLIT QUERY)
 
@@ -736,6 +1260,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         OwnerSigned = c.OwnerSigned,
                         CounterpartySignAt = c.CounterpartySignAt,
                         CounterpartySigned = c.CounterpartySigned,
+                        CounterpartyId = c.CounterpartyId,
                         Terms = (c.ContractTemplate != null && c.ContractTemplate.ContractTerms != null) ?
                                     c.ContractTemplate.ContractTerms
                                     .Select(t => new ContractTermInTripDTO
@@ -793,6 +1318,13 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         RecordType = r.Type.ToString(),
                         Note = r.Notes,
                         CreateAt = r.CreatedAt,
+                        ContactSigned = r.ContactSigned,
+                        ContactSignedAt = r.ContactSignedAt,
+                        DriverId = r.DriverId,
+                        DriverSigned = r.DriverSigned,
+                        DriverSignedAt = r.DriverSignedAt,
+                        TripContactId = r.TripContactId,
+                        Status = r.Status.ToString(),
                         Terms = (r.DeliveryRecordTemplate != null && r.DeliveryRecordTemplate.DeliveryRecordTerms != null) ?
                                     r.DeliveryRecordTemplate.DeliveryRecordTerms
                                     .Select(t => new DeliveryRecordTermInTripDTO
@@ -841,69 +1373,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
             }
         }
 
-        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
-        {
-            try
-            {
-                // 1. Chỉ Admin mới có quyền
-                var userRole = _userUtility.GetUserRoleFromToken();
-                if (userRole != "Admin")
-                {
-                    return new ResponseDTO("Forbidden: Chỉ 'Admin' mới có thể truy cập.", 403, false);
-                }
-
-                // 2. Lấy IQueryable (đã lọc DELETED)
-                var query = _unitOfWork.TripRepo.GetAll()
-                    .AsNoTracking()
-                    .Where(t => t.Status != TripStatus.DELETED);
-
-                // 3. Include dữ liệu
-                query = IncludeTripDetails(query);
-
-                // 4. Đếm tổng số
-                var totalCount = await query.CountAsync();
-
-                // 5. Lấy dữ liệu của trang
-                var pagedTrips = await query
-                    .OrderByDescending(t => t.CreateAt)
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                // 6. Map (Dùng chung DTO với Owner)
-                var mappedData = pagedTrips.Select(t => new TripDetailDTO
-                {
-                    TripId = t.TripId,
-                    TripCode = t.TripCode,
-                    Status = t.Status.ToString(),
-                    CreateAt = t.CreateAt,
-                    UpdateAt = t.UpdateAt,
-                    VehicleId = t.VehicleId,
-                    VehicleModel = t.Vehicle?.Model ?? "N/A",
-                    VehiclePlate = t.Vehicle?.PlateNumber ?? "N/A",
-                    VehicleType = t.Vehicle?.VehicleType?.VehicleTypeName ?? "N/A",
-                    OwnerId = t.OwnerId,
-                    OwnerName = t.Owner?.FullName ?? "N/A",
-                    OwnerCompany = t.Owner?.CompanyName ?? "N/A",
-                    StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
-                    EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
-                    EstimatedDuration = (t.ShippingRoute != null && t.ShippingRoute.ExpectedDeliveryDate > t.ShippingRoute.ExpectedPickupDate)
-                                        ? t.ShippingRoute.ExpectedDeliveryDate - t.ShippingRoute.ExpectedPickupDate : TimeSpan.Zero,
-                    PackageCodes = t.Packages.Select(p => p.PackageCode).ToList(),
-                    DriverNames = t.DriverAssignments.Select(a => a.Driver?.FullName ?? "N/A").ToList(),
-                    TripRouteSummary = t.TripRoute != null
-                                       ? $"Distance: {t.TripRoute.DistanceKm} km, Duration: {t.TripRoute.Duration.TotalMinutes:F0} minutes" : string.Empty,
-                }).ToList();
-
-                // 7. Trả về
-                var paginatedResult = new PaginatedDTO<TripDetailDTO>(mappedData, totalCount, pageNumber, pageSize);
-                return new ResponseDTO("Get all trips successfully (Admin)", 200, true, paginatedResult);
-            }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error getting all trips: {ex.Message}", 500, false);
-            }
-        }
+        
 
         private IQueryable<Trip> IncludeTripDetails(IQueryable<Trip> query)
         {

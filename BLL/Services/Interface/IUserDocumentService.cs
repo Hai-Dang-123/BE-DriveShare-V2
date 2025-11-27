@@ -7,10 +7,9 @@ namespace BLL.Services.Interface
 {
     public interface IUserDocumentService
     {
-        Task<ResponseDTO> CreateAsync(UserDocumentDTO dto);
-        Task<ResponseDTO> UpdateAsync(Guid id, UserDocumentDTO dto);
-        Task<ResponseDTO> DeleteAsync(Guid id);
-        Task<ResponseDTO> GetAllAsync();
-        Task<ResponseDTO> GetByIdAsync(Guid id);
+        /// <summary>
+        /// Kiểm tra xem User hiện tại đã có CCCD trạng thái ACTIVE hay chưa
+        /// </summary>
+        Task<ResponseDTO> CheckCCCDVerifiedAsync();
     }
 }

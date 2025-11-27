@@ -8,9 +8,9 @@ namespace BLL.Services.Interface
     public interface ITripDriverContractService
     {
         Task<ResponseDTO> CreateAsync(CreateTripDriverContractDTO dto);
-        Task<ResponseDTO> SignAsync(Guid contractId);
+        Task<ResponseDTO> SignAsync(SignContractDTO dto);
         Task<ResponseDTO> GetByIdAsync(Guid contractId);
-        Task<TripDriverContract> CreateContractInternalAsync(CreateTripDriverContractDTO dto, Guid ownerId);
+        Task<TripDriverContract> CreateContractInternalAsync(Guid tripId, Guid ownerId, Guid driverId, decimal? fare);
 
         Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
     }

@@ -49,6 +49,9 @@ namespace DAL.UnitOfWork
 
         IPostContactRepository PostContactRepo { get; }
 
+        IDriverWorkSessionRepository DriverWorkSessionRepo { get; }
+        IContactTokenRepository ContactTokenRepo { get; }
+
 
         // Save changes
 

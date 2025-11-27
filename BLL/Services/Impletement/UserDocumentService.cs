@@ -1,5 +1,10 @@
 ﻿using BLL.Services.Interface;
+using BLL.Utilities;
 using Common.DTOs;
+using Common.Enums.Status;
+using Common.Enums.Type;
+using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,29 +15,48 @@ namespace BLL.Services.Impletement
 {
     public class UserDocumentService : IUserDocumentService
     {
-        public Task<ResponseDTO> CreateAsync(UserDocumentDTO dto)
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly UserUtility _userUtility;
+
+        public UserDocumentService(IUnitOfWork unitOfWork, UserUtility userUtility)
         {
-            throw new NotImplementedException();
+            _unitOfWork = unitOfWork;
+            _userUtility = userUtility;
         }
 
-        public Task<ResponseDTO> DeleteAsync(Guid id)
+        public async Task<ResponseDTO> CheckCCCDVerifiedAsync()
         {
-            throw new NotImplementedException();
+            try
+            {
+                // 1. Lấy UserId từ Token
+                var userId = _userUtility.GetUserIdFromToken();
+
+                // 2. Query database kiểm tra tồn tại
+                // Điều kiện:
+                // - Của User này
+                // - Loại giấy tờ là CCCD
+                // - Trạng thái là ACTIVE (Đã xác thực)
+                bool isVerified = await _unitOfWork.UserDocumentRepo.GetAll()
+                    .AnyAsync(x => x.UserId == userId
+                                && x.DocumentType == DocumentType.CCCD
+                                && x.Status == VerifileStatus.ACTIVE);
+
+                if (isVerified)
+                {
+                    // Trả về true trong phần Data của ResponseDTO
+                    return new ResponseDTO("Người dùng đã xác thực CCCD.", 200, true, true);
+                }
+                else
+                {
+                    // Trả về false (nhưng vẫn là status 200 vì request thành công, chỉ là kết quả check là chưa verify)
+                    return new ResponseDTO("Người dùng chưa xác thực CCCD hoặc hồ sơ đang chờ duyệt.", 200, true, false);
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO("Lỗi hệ thống khi kiểm tra CCCD: " + ex.Message, 500, false);
+            }
         }
 
-        public Task<ResponseDTO> GetAllAsync()
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<ResponseDTO> GetByIdAsync(Guid id)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<ResponseDTO> UpdateAsync(Guid id, UserDocumentDTO dto)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

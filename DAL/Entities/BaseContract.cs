@@ -39,6 +39,7 @@ namespace DAL.Entities
         // --- Quy trình ký ---
         public bool OwnerSigned { get; set; }
         public DateTime? OwnerSignAt { get; set; }
+
         public bool CounterpartySigned { get; set; }
         public DateTime? CounterpartySignAt { get; set; }
         public string? FileURL { get; set; } // Link file PDF/ảnh đã ký

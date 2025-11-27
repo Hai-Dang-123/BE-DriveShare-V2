@@ -29,5 +29,6 @@ namespace DAL.Entities
 
         // --- Thuộc tính điều hướng (Navigation Property) ---
         public virtual Trip Trip { get; set; } = null!;
+        public virtual ICollection<ContactToken> ContactTokens { get; set; } = new List<ContactToken>();
     }
 }

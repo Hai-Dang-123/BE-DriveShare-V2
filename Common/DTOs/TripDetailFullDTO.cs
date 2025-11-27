@@ -124,6 +124,7 @@ namespace Common.DTOs
         public DateTime? OwnerSignAt { get; set; }
         public bool CounterpartySigned { get; set; }
         public DateTime? CounterpartySignAt { get; set; }
+        public Guid? CounterpartyId { get; set; }
     }
 
 
@@ -134,6 +135,18 @@ namespace Common.DTOs
         public string? Note { get; set; }
         public DateTime CreateAt { get; set; }
         public List<DeliveryRecordTermInTripDTO> Terms { get; set; } = new();
+
+        public Guid DriverId { get; set; } // FK to Driver
+
+        public Guid TripContactId { get; set; } // FK to TripContact
+
+        //public string? DriverSignatureUrl { get; set; } // Ảnh chữ ký của Driver
+        public DateTime? DriverSignedAt { get; set; }
+        public bool? DriverSigned { get; set; }
+        //public string? ContactSignatureUrl { get; set; } // Ảnh chữ ký của Người gửi/nhận
+        public bool? ContactSigned { get; set; }
+        public DateTime? ContactSignedAt { get; set; }
+        public string Status { get; set; }
     }
     public class ContractTermInTripDTO
     {

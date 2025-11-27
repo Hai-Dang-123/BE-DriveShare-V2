@@ -418,7 +418,7 @@ namespace BLL.Services.Impletement
                     OfferedPrice = dto.OfferedPrice,
                     Created = DateTime.UtcNow,
                     Updated = DateTime.UtcNow,
-                    Status = PostStatus.OPEN, // Mở bài đăng
+                    Status = dto.Status, // Mở bài đăng
                     ShippingRouteId = newShippingRoute.ShippingRouteId
                 };
                 await _unitOfWork.PostPackageRepo.AddAsync(postPackage);

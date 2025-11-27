@@ -13,10 +13,17 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateTripDeliveryRecordAsync(TripDeliveryRecordCreateDTO tripDeliveryRecordDTO);
         Task<ResponseDTO?> GetByIdAsync(Guid tripDeliveryRecordId);
         Task<ResponseDTO> GetByTripIdAsync(Guid tripId);
-        Task<ResponseDTO> SignDeliveryRecordAsync(Guid tripDeliveryRecordId);
+        Task<ResponseDTO> SignDeliveryRecordAsync(SignDeliveryRecordDTO dto);
+        Task<ResponseDTO> SendOTPToSignDeliveryRecordAsync(Guid recordId);
         Task CreateTripDeliveryRecordAsync(TripDeliveryRecordCreateDTO dto, Guid driverId);
 
         Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetByIdForDriverAsync(Guid tripDeliveryRecordId);
+
+        Task<ResponseDTO> GetDeliveryRecordForContactAsync(Guid recordId, string accessToken);
+        Task<ResponseDTO> SendOTPToContactAsync(Guid recordId, string accessToken);
+        Task<ResponseDTO> SignDeliveryRecordForContactAsync(Guid recordId, string otp, string accessToken);
+        Task<ResponseDTO> SendAccessLinkToContactAsync(Guid recordId);
     }
         
         

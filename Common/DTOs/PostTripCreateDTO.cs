@@ -1,4 +1,5 @@
-﻿using Common.Enums.Type;
+﻿using Common.Enums.Status;
+using Common.Enums.Type;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -25,5 +26,8 @@ namespace Common.DTOs
         [Required]
         [MinLength(1)]
         public List<PostTripDetailCreateDTO> PostTripDetails { get; set; } = new List<PostTripDetailCreateDTO>();
+
+        [Required]
+        public PostStatus Status { get; set; }
     }
 }

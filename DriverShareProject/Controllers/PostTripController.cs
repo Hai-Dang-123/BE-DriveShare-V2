@@ -1,7 +1,9 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
+using Common.Enums.Status;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace DriverShareProject.Controllers
 {
@@ -66,6 +68,29 @@ namespace DriverShareProject.Controllers
             return StatusCode(response.StatusCode, response);
         }
 
+        /// <summary>
+        /// Thay đổi trạng thái bài đăng (Dành cho Owner)
+        /// </summary>
+        [HttpPut("change-post-trip-status")]
+        // [Authorize(Roles = "Owner")] // Nếu muốn chặt chẽ hơn
+        public async Task<IActionResult> ChangeStatus([FromBody] ChangePostStatusDTO dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var response = await _postTripService.ChangePostTripStatusAsync(dto.PostTripId, dto.NewStatus);
+            return StatusCode(response.StatusCode, response);
+        }
+
+
+        public class ChangePostStatusDTO
+        {
+            [Required]
+            public Guid PostTripId { get; set; }
+
+            [Required]
+            // [JsonConverter(typeof(JsonStringEnumConverter))] // Uncomment nếu muốn chắc chắn nhận String
+            public PostStatus NewStatus { get; set; }
+        }
     }
 
 

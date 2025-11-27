@@ -11,7 +11,6 @@ namespace DAL.Entities
         public Guid TripId { get; set; }
         public virtual Trip Trip { get; set; } = null!;
         public Guid CounterpartyId { get; set; }
-        public virtual Driver Counterparty { get; set; } = null!; // Trỏ đến BaseUser
-
+        public virtual Driver Counterparty { get; set; } = null!; 
     }
 }

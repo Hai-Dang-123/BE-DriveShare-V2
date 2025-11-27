@@ -104,63 +104,115 @@ namespace BLL.Services.Implement
         //  - Nếu 1 bên ký → vẫn PENDING
         //  - Nếu cả 2 bên ký → COMPLETED + EffectiveDate
         // =========================================================
-        public async Task<ResponseDTO> SignAsync(Guid contractId)
+        // ... (Các using cần thiết: BCrypt.Net, Common.Enums.Type, v.v...)
+
+        public async Task<ResponseDTO> SignAsync(SignContractDTO dto)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
                 if (userId == Guid.Empty)
-                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
+                    return new ResponseDTO("Unauthorized", 401, false);
 
-                var contracts = await _unitOfWork.TripDriverContractRepo.GetAllAsync(
-                    filter: c => c.ContractId == contractId,
-                    includeProperties: "Owner,Counterparty,Trip,ContractTemplate"
-                );
-                var contract = contracts.FirstOrDefault();
+                // ========================================================================
+                // 🛡️ BƯỚC 0: XÁC THỰC OTP (QUAN TRỌNG NHẤT)
+                // ========================================================================
+
+                // 1. Tìm Token OTP hợp lệ
+                var validToken = await _unitOfWork.UserTokenRepo.GetAll()
+                    .Where(t => t.UserId == userId
+                                && t.TokenType == TokenType.CONTRACT_SIGNING_OTP
+                                && !t.IsRevoked
+                                && t.ExpiredAt > DateTime.UtcNow)
+                    .OrderByDescending(t => t.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                if (validToken == null)
+                {
+                    return new ResponseDTO("Mã OTP không tồn tại hoặc đã hết hạn. Vui lòng lấy mã mới.", 400, false);
+                }
+
+                // 2. Verify mã OTP
+                bool isOtpCorrect = BCrypt.Net.BCrypt.Verify(dto.Otp, validToken.TokenValue);
+
+                if (!isOtpCorrect)
+                {
+                    return new ResponseDTO("Mã OTP không chính xác.", 400, false);
+                }
+
+                // 3. Hủy hiệu lực Token ngay lập tức
+                validToken.IsRevoked = true;
+                await _unitOfWork.UserTokenRepo.UpdateAsync(validToken);
+
+                // ========================================================================
+                // 📝 BƯỚC TIẾP THEO: LOGIC KÝ HỢP ĐỒNG DRIVER
+                // ========================================================================
+
+                // 1. Lấy Hợp đồng (TripDriverContract)
+                var contract = await _unitOfWork.TripDriverContractRepo.GetByIdAsync(dto.ContractId);
                 if (contract == null)
                     return new ResponseDTO("Contract not found", 404, false);
 
-                var now = DateTime.UtcNow;
-                var acted = false;
+                // 2. Lấy Chuyến đi (Trip) liên quan
+                var trip = await _unitOfWork.TripRepo.GetByIdAsync(contract.TripId);
+                if (trip == null)
+                    return new ResponseDTO("Associated Trip not found for this contract", 404, false);
 
-                // Ai ký?
-                if (userId == contract.OwnerId)
+                // 3. Xác thực quyền
+                bool isOwner = contract.OwnerId == userId;
+                bool isDriver = contract.CounterpartyId == userId; // Counterparty ở đây là Driver
+
+                if (!isOwner && !isDriver)
+                    return new ResponseDTO("You are not authorized to sign this contract", 403, false);
+
+                // 4. Áp dụng chữ ký
+                if (isOwner)
                 {
-                    if (!contract.OwnerSigned)
-                    {
-                        contract.OwnerSigned = true;
-                        contract.OwnerSignAt = now;
-                        acted = true;
-                    }
+                    if (contract.OwnerSigned)
+                        return new ResponseDTO("Owner already signed", 400, false);
+                    contract.OwnerSigned = true;
+                    contract.OwnerSignAt = DateTime.UtcNow;
                 }
-                else if (userId == contract.CounterpartyId) // Driver
+                else if (isDriver)
                 {
-                    if (!contract.CounterpartySigned)
-                    {
-                        contract.CounterpartySigned = true;
-                        contract.CounterpartySignAt = now;
-                        acted = true;
-                    }
+                    if (contract.CounterpartySigned)
+                        return new ResponseDTO("Driver already signed", 400, false);
+                    contract.CounterpartySigned = true;
+                    contract.CounterpartySignAt = DateTime.UtcNow;
+                }
+
+                // 5. Cập nhật trạng thái Hợp đồng & Trip
+                if (contract.OwnerSigned && contract.CounterpartySigned)
+                {
+                    // --- Cả hai đã ký ---
+                    contract.Status = ContractStatus.COMPLETED; // Hoặc ACTIVE tùy Enum của bạn
+                    contract.EffectiveDate = DateTime.UtcNow;
+
+
                 }
                 else
                 {
-                    return new ResponseDTO("You are not a party of this contract", 403, false);
+                    // --- Mới chỉ có 1 bên ký ---
+                    contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE; // Chờ bên kia ký
+
+                    // Trip vẫn ở trạng thái chờ ký
+                    // trip.Status = TripStatus.AWAITING_DRIVER_CONTRACT; // Giữ nguyên hoặc set lại cho chắc
                 }
 
-                if (!acted)
-                    return new ResponseDTO("Already signed", 200, true);
-
-                // Nếu cả 2 bên đều ký → COMPLETED
-                if (contract.OwnerSigned && contract.CounterpartySigned)
-                {
-                    contract.Status = ContractStatus.COMPLETED;
-                    contract.EffectiveDate = now;
-                }
-
+                // 6. Lưu thay đổi (Transaction: Token + Contract + Trip)
                 await _unitOfWork.TripDriverContractRepo.UpdateAsync(contract);
+                await _unitOfWork.TripRepo.UpdateAsync(trip);
+
                 await _unitOfWork.SaveChangeAsync();
 
-                return new ResponseDTO("Signed successfully", 200, true);
+                return new ResponseDTO("Driver Contract signed successfully", 200, true, new
+                {
+                    contract.ContractId,
+                    ContractStatus = contract.Status.ToString(),
+                    contract.OwnerSigned,
+                    contract.CounterpartySigned, // Driver Signed
+                    TripStatus = trip.Status.ToString()
+                });
             }
             catch (Exception ex)
             {
@@ -261,48 +313,71 @@ namespace BLL.Services.Implement
         /// <summary>
         /// (Nội bộ) Chỉ tạo Entity, KHÔNG SaveChanges, ném Exception nếu lỗi
         /// </summary>
-        public async Task<TripDriverContract> CreateContractInternalAsync(CreateTripDriverContractDTO dto, Guid ownerId)
+        public async Task<TripDriverContract> CreateContractInternalAsync(Guid tripId, Guid ownerId, Guid driverId, decimal? fare)
         {
-            // (Logic này được lấy từ hàm CreateAsync gốc của bạn)
             try
             {
-                // Trip phải thuộc Owner
-                var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
+                // 1. Validate Trip
+                var trip = await _unitOfWork.TripRepo.GetByIdAsync(tripId);
                 if (trip == null || trip.OwnerId != ownerId)
-                    throw new Exception("Trip not found or not owned by current user"); // Ném lỗi
+                    throw new Exception("Trip not found or not owned by current user");
 
-                // Driver tồn tại?
-                var driver = await _unitOfWork.DriverRepo.GetByIdAsync(dto.DriverId);
+                // 2. Validate Driver
+                var driver = await _unitOfWork.DriverRepo.GetByIdAsync(driverId);
                 if (driver == null)
-                    throw new Exception("Driver not found"); // Ném lỗi
+                    throw new Exception("Driver not found");
 
-                // Template mới nhất loại DRIVER_CONTRACT
+                // 3. Lấy Template (Loại DRIVER_CONTRACT)
                 var template = (await _unitOfWork.ContractTemplateRepo.GetAllAsync(
                     filter: t => t.Type == ContractType.DRIVER_CONTRACT,
                     orderBy: q => q.OrderByDescending(x => x.Version)
                 )).FirstOrDefault();
 
                 if (template == null)
-                    throw new Exception("No Driver Contract Template found"); // Ném lỗi
+                    throw new Exception("No Driver Contract Template found");
 
-                // Tạo hợp đồng
+                // 4. Kiểm tra xem hợp đồng đã tồn tại chưa (Tránh tạo trùng)
+                var existingContract = (await _unitOfWork.TripDriverContractRepo.GetAllAsync(
+                    filter: c => c.TripId == tripId && c.CounterpartyId == driver.UserId
+                )).FirstOrDefault();
+
+                if (existingContract != null)
+                {
+                    return existingContract; // Nếu có rồi thì trả về cái cũ
+                }
+
+                // 5. Tạo hợp đồng (AUTO-SIGN)
                 var contract = new TripDriverContract
                 {
                     ContractId = Guid.NewGuid(),
                     ContractCode = $"CON-DRV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
                     TripId = trip.TripId,
                     OwnerId = ownerId,
-                    CounterpartyId = driver.UserId, // Driver kế thừa BaseUser → UserId
+                    CounterpartyId = driver.UserId, // Driver kế thừa BaseUser -> UserId
                     ContractTemplateId = template.ContractTemplateId,
                     Version = template.Version,
                     Type = ContractType.DRIVER_CONTRACT,
-                    Status = ContractStatus.PENDING, // Luôn PENDING khi mới tạo
-                    CreateAt = DateTime.UtcNow
+
+                    // --- TRẠNG THÁI: ĐÃ KÝ (ACTIVE) ---
+                    Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE,
+                    CreateAt = DateTime.UtcNow,
+                    EffectiveDate = DateTime.UtcNow,
+
+                    // Owner ký
+                    OwnerSigned = true,
+                    OwnerSignAt = DateTime.UtcNow,
+
+                    // Driver (Counterparty) ký
+                    CounterpartySigned = true,
+                    CounterpartySignAt = DateTime.UtcNow,
+
+                    // Giá trị hợp đồng (Lấy từ Assignment nếu có)
+                    ContractValue = fare ?? 0,
+                    Currency = "VND"
                 };
 
+                // 6. Add vào UoW (KHÔNG SAVE - Để Transaction bên ngoài lo)
                 await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
-
-                // KHÔNG GỌI SaveChangeAsync() (Vì đây là hàm nội bộ)
 
                 return contract;
             }

@@ -5,6 +5,7 @@ using Common.Enums.Status;
 using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
+using MailKit.Net.Imap;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
@@ -16,11 +17,13 @@ namespace BLL.Services.Implement
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
+        private readonly IEmailService _emailService;
 
-        public TripProviderContractService(IUnitOfWork unitOfWork, UserUtility userUtility)
+        public TripProviderContractService(IUnitOfWork unitOfWork, UserUtility userUtility, IEmailService emailService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
+            _emailService = emailService;
         }
 
         // ============================================================
@@ -105,7 +108,7 @@ namespace BLL.Services.Implement
         // ============================================================
         // 🧩 2️⃣ SIGN CONTRACT (Owner hoặc Provider ký)
         // ============================================================
-        public async Task<ResponseDTO> SignAsync(Guid contractId)
+        public async Task<ResponseDTO> SignAsync(SignContractDTO dto)
         {
             try
             {
@@ -113,8 +116,43 @@ namespace BLL.Services.Implement
                 if (userId == Guid.Empty)
                     return new ResponseDTO("Unauthorized", 401, false);
 
+                // ========================================================================
+                // 🛡️ BƯỚC 0: XÁC THỰC OTP (QUAN TRỌNG NHẤT)
+                // ========================================================================
+
+                // 1. Tìm Token OTP hợp lệ trong DB của User này
+                var validToken = await _unitOfWork.UserTokenRepo.GetAll()
+                    .Where(t => t.UserId == userId
+                             && t.TokenType == TokenType.CONTRACT_SIGNING_OTP // Enum bạn đã thêm
+                             && !t.IsRevoked
+                             && t.ExpiredAt > DateTime.UtcNow) // Chưa hết hạn
+                    .OrderByDescending(t => t.CreatedAt) // Lấy cái mới nhất
+                    .FirstOrDefaultAsync();
+
+                if (validToken == null)
+                {
+                    return new ResponseDTO("Mã OTP không tồn tại hoặc đã hết hạn. Vui lòng lấy mã mới.", 400, false);
+                }
+
+                // 2. Verify mã OTP (So sánh mã nhập vào với mã Hash trong DB)
+                bool isOtpCorrect = BCrypt.Net.BCrypt.Verify(dto.Otp, validToken.TokenValue);
+
+                if (!isOtpCorrect)
+                {
+                    // Tùy chọn: Có thể đếm số lần sai để khóa tạm thời (Advanced feature)
+                    return new ResponseDTO("Mã OTP không chính xác.", 400, false);
+                }
+
+                // 3. Hủy hiệu lực Token ngay lập tức (Để không dùng lại được lần 2)
+                validToken.IsRevoked = true;
+                await _unitOfWork.UserTokenRepo.UpdateAsync(validToken);
+
+                // ========================================================================
+                // 📝 BƯỚC TIẾP THEO: LOGIC KÝ HỢP ĐỒNG (CODE CŨ CỦA BẠN)
+                // ========================================================================
+
                 // 1. Lấy Hợp đồng
-                var contract = await _unitOfWork.TripProviderContractRepo.GetByIdAsync(contractId);
+                var contract = await _unitOfWork.TripProviderContractRepo.GetByIdAsync(dto.ContractId);
                 if (contract == null)
                     return new ResponseDTO("Contract not found", 404, false);
 
@@ -153,30 +191,33 @@ namespace BLL.Services.Implement
                     contract.Status = ContractStatus.COMPLETED;
                     contract.EffectiveDate = DateTime.UtcNow;
 
-                    // Cập nhật Trip sang trạng thái "Đợi Provider Thanh Toán"
-                    trip.Status = TripStatus.AWAITING_PROVIDER_PAYMENT;
+                    //// Cập nhật Trip sang trạng thái "Đợi Provider Thanh Toán"
+                    //trip.Status = TripStatus.AWAITING_PROVIDER_PAYMENT;
                 }
                 else
                 {
                     // --- Mới chỉ có 1 bên ký ---
                     contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE;
 
-                    // Cập nhật Trip (hoặc giữ nguyên) trạng thái "Đợi Ký HĐ Provider"
-                    trip.Status = TripStatus.AWAITING_PROVIDER_CONTRACT;
+                    //// Có thể giữ nguyên hoặc cập nhật lại cho chắc
+                    //trip.Status = TripStatus.AWAITING_PROVIDER_CONTRACT;
                 }
 
-                // 6. Lưu thay đổi cho cả hai
+                // 6. Lưu thay đổi (Transaction: Token + Contract + Trip cùng lúc)
                 await _unitOfWork.TripProviderContractRepo.UpdateAsync(contract);
-                await _unitOfWork.TripRepo.UpdateAsync(trip); // ⚠️ CẬP NHẬT TRIP
+                await _unitOfWork.TripRepo.UpdateAsync(trip);
+
+                // UnitOfWork sẽ commit cả việc Revoke Token và Update Contract cùng lúc
+                // Nếu update contract lỗi -> Token cũng không bị revoke (an toàn tuyệt đối)
                 await _unitOfWork.SaveChangeAsync();
 
                 return new ResponseDTO("Contract signed successfully", 200, true, new
                 {
                     contract.ContractId,
-                    ContractStatus = contract.Status.ToString(), // Trả về status dạng string
+                    ContractStatus = contract.Status.ToString(),
                     contract.OwnerSigned,
                     contract.CounterpartySigned,
-                    TripStatus = trip.Status.ToString() // Trả về thêm trạng thái Trip
+                    TripStatus = trip.Status.ToString()
                 });
             }
             catch (Exception ex)
@@ -308,7 +349,10 @@ namespace BLL.Services.Implement
                 Type = ContractType.PROVIDER_CONTRACT,
                 Status = ContractStatus.PENDING, // Chờ ký
                 CreateAt = DateTime.UtcNow,
-
+                OwnerSigned = false,
+                OwnerSignAt = null,
+                CounterpartySigned = true,
+                CounterpartySignAt = DateTime.UtcNow,
                 // --- Gán giá trị từ tham số ---
                 ContractValue = fare,
                 Currency = "VND" // Giả định
@@ -395,6 +439,114 @@ namespace BLL.Services.Implement
             {
                 return new ResponseDTO($"Error getting provider contracts: {ex.Message}", 500, false);
             }
+        }
+
+        public async Task<ResponseDTO> SendOTPToSignContract(Guid contractId)
+        {
+            try
+            {
+                // 1. Lấy UserId từ Token
+                var userId = _userUtility.GetUserIdFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO("Lỗi xác thực: Không tìm thấy User ID.", 401, false);
+
+                // 2. Lấy thông tin User (để gửi Email)
+                var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+                if (user == null)
+                    return new ResponseDTO("Không tìm thấy thông tin người dùng.", 404, false);
+
+                // 3. Lấy thông tin Hợp đồng
+                // Cần lấy Contract ra để check quyền sở hữu
+                var contract = await _unitOfWork.BaseContractRepo.GetByIdAsync(contractId);
+                if (contract == null)
+                    return new ResponseDTO("Hợp đồng không tồn tại.", 404, false);
+
+                // 4. Kiểm tra Quyền và Trạng thái đã ký
+                bool isOwner = contract.OwnerId == userId;
+                bool isCounterparty = false;
+
+                // Kiểm tra nếu là TripDriverContract để check Counterparty (Tài xế)
+                if (contract is TripDriverContract tripContract)
+                {
+                    if (tripContract.CounterpartyId == userId) isCounterparty = true;
+                }
+
+                // Nếu không phải Owner cũng không phải Driver -> Chặn
+                if (!isOwner && !isCounterparty)
+                {
+                    return new ResponseDTO("Bạn không có quyền thực hiện ký kết trên hợp đồng này.", 403, false);
+                }
+
+                // Kiểm tra xem đã ký chưa (Tránh spam OTP khi đã ký rồi)
+                if (isOwner && contract.OwnerSigned)
+                    return new ResponseDTO("Bạn đã ký hợp đồng này rồi, không cần lấy OTP nữa.", 400, false);
+
+                if (isCounterparty && contract.CounterpartySigned)
+                    return new ResponseDTO("Bạn đã ký hợp đồng này rồi, không cần lấy OTP nữa.", 400, false);
+
+                // 5. Tạo mã OTP (6 số ngẫu nhiên)
+                string rawOtp = new Random().Next(100000, 999999).ToString();
+
+                // 6. Hash OTP để lưu vào DB (Bảo mật: Admin vào DB cũng không biết OTP là gì)
+                string hashedOtp = BCrypt.Net.BCrypt.HashPassword(rawOtp);
+
+                // 7. Xử lý Token cũ (Revoke các OTP cũ chưa dùng của user này cho loại ký hợp đồng)
+                // Để tránh việc user request 10 lần có 10 mã hiệu lực cùng lúc
+                var oldTokens = await _unitOfWork.UserTokenRepo.GetAll()
+                    .Where(t => t.UserId == userId
+                             && t.TokenType == TokenType.CONTRACT_SIGNING_OTP
+                             && !t.IsRevoked)
+                    .ToListAsync();
+
+                foreach (var t in oldTokens)
+                {
+                    t.IsRevoked = true; // Hủy hiệu lực token cũ
+                }
+                // Không SaveChange ngay để gộp transaction bên dưới
+
+                // 8. Tạo UserToken mới
+                var newToken = new UserToken
+                {
+                    UserTokenId = Guid.NewGuid(),
+                    UserId = userId,
+                    TokenType = TokenType.CONTRACT_SIGNING_OTP,
+                    TokenValue = hashedOtp, // Lưu bản mã hóa
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiredAt = DateTime.UtcNow.AddMinutes(5), // Hết hạn sau 5 phút
+                    IsRevoked = false,
+                };
+
+                await _unitOfWork.UserTokenRepo.AddAsync(newToken);
+
+                // Cập nhật Token cũ (nếu có) và Thêm Token mới cùng lúc
+                if (oldTokens.Any()) _unitOfWork.UserTokenRepo.UpdateRange(oldTokens);
+
+                await _unitOfWork.SaveChangeAsync();
+
+                // 9. Gửi Email (Gọi hàm Design Hoành tráng)
+                // rawOtp: Gửi mã thô cho user (để họ đọc)
+                // contract.ContractCode: Mã hợp đồng để hiển thị trong email
+                await _emailService.SendContractSigningOtpAsync(user.Email, user.FullName, rawOtp, contract.ContractCode);
+
+                // 10. Trả về kết quả (Giấu số điện thoại/Email đi cho gọn)
+                return new ResponseDTO($"Mã OTP xác thực đã được gửi đến email {HideEmail(user.Email)}", 200, true);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO("Lỗi hệ thống khi tạo OTP: " + ex.Message, 500, false);
+            }
+        }
+
+        // Hàm phụ để che bớt email (vui vẻ tí cho UI đẹp)
+        // user@gmail.com -> u***@gmail.com
+        private string HideEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email)) return "";
+            var parts = email.Split('@');
+            if (parts.Length != 2) return email;
+            if (parts[0].Length <= 2) return email;
+
+            return $"{parts[0].Substring(0, 1)}***@{parts[1]}";
         }
     }
 }

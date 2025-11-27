@@ -22,10 +22,13 @@ namespace DriverShareProject.Controllers
             var result = await _tripProviderContractService.CreateAsync(dto);
             return StatusCode(result.StatusCode, result);
         }
-        [HttpPut("sign/{contractId}")]
-        public async Task<IActionResult> SignContract(Guid contractId)
+        [HttpPut("sign")]
+        //[Authorize] // Bắt buộc có Token
+        public async Task<IActionResult> SignContract([FromBody] SignContractDTO dto)
         {
-            var response = await _tripProviderContractService.SignAsync(contractId);
+            // Gọi service với mã OTP user gửi lên
+            var response = await _tripProviderContractService.SignAsync(dto);
+
             return StatusCode(response.StatusCode, response);
         }
         [HttpGet("{contractId}")]
@@ -53,6 +56,18 @@ namespace DriverShareProject.Controllers
         {
             var response = await _tripProviderContractService.GetByIdAsync(id);
             return StatusCode(response.StatusCode, response);
+        }
+
+        [HttpPost("send-sign-otp")]
+        public async Task<IActionResult> SendSignOtp([FromBody] SendSignOtpDTO dto) // Hoặc tạo DTO { ContractId: Guid }
+        {
+            var response = await _tripProviderContractService.SendOTPToSignContract(dto.ContractId);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        public class SendSignOtpDTO
+        {
+            public Guid ContractId { get; set; }
         }
     }
 }

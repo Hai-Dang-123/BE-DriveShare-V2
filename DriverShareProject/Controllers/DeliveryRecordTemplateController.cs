@@ -1,5 +1,6 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
+using Common.Enums.Type;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DriverShareProject.Controllers
@@ -67,6 +68,13 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> GetTemplateById(Guid id)
         {
             var response = await _deliveryRecordTemplateService.GetByIdAsync(id);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        [HttpGet("latest/{type}")]
+        public async Task<IActionResult> GetLatestTemplateByType(DeliveryRecordType type)
+        {
+            var response = await _deliveryRecordTemplateService.GetLatestDeliveryRecordTemplateByTypeAsync(type);
             return StatusCode(response.StatusCode, response);
         }
     }

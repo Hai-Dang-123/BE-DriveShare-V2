@@ -1,8 +1,10 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
+using Common.Enums.Type;
 using DAL.Entities;
 using DAL.Repositories.Interface;
 using DAL.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -123,6 +125,68 @@ namespace BLL.Services.Impletement
                 Message = "Get ContractTemplate successfully",
                 Result = dto
             };
+        }
+
+        public async Task<ResponseDTO> GetLatestByTypeAsync(ContractType type)
+        {
+            try
+            {
+                // 1. Lấy IQueryable (Giả định .GetAll() trả về IQueryable)
+                //    VÀ Include các Terms (theo yêu cầu của bạn)
+                var query = _unitOfWork.ContractTemplateRepo.GetAll()
+                    .AsNoTracking()
+                    .Include(t => t.ContractTerms); // 👈 Include Terms
+
+                // 2. Lọc theo Type và Sắp xếp để tìm cái MỚI NHẤT
+                // (Dùng CreateAt là an toàn nhất để xác định "mới nhất")
+                var template = await query
+                    .Where(t => t.Type == type)
+                    .OrderByDescending(t => t.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                // 3. Kiểm tra Not Found
+                if (template == null)
+                {
+                    return new ResponseDTO($"No active template found for type: {type}", 404, false);
+                }
+
+                // 4. Map (Dùng logic y hệt GetByIdAsync của bạn)
+
+                // 🔹 Lấy danh sách ContractTerm (đã được Include)
+                var termDtos = template.ContractTerms
+                    .OrderBy(t => t.Order) // Sắp xếp theo thứ tự
+                    .Select(t => new ContractTermDTO
+                    {
+                        ContractTermId = t.ContractTermId,
+                        Content = t.Content,
+                        Order = t.Order,
+                        ContractTemplateId = t.ContractTemplateId
+                    })
+                    .ToList();
+
+                // 🔹 Gộp tất cả lại thành DTO tổng
+                var dto = new ContractTemplateDetailDTO
+                {
+                    ContractTemplateId = template.ContractTemplateId,
+                    ContractTemplateName = template.ContractTemplateName,
+                    Version = template.Version,
+                    CreatedAt = template.CreatedAt,
+                    Type = template.Type,
+                    ContractTerms = termDtos // 👈 Đã thêm Terms
+                };
+
+                return new ResponseDTO
+                {
+                    IsSuccess = true,
+                    StatusCode = 200, // Thêm StatusCode
+                    Message = "Get latest ContractTemplate by type successfully",
+                    Result = dto
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting latest template: {ex.Message}", 500, false);
+            }
         }
 
     }

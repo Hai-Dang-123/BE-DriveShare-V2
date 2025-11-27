@@ -217,7 +217,7 @@ namespace DAL.Context
                     // --- BaseUser Fields ---
                     UserId = OwnerID,
                     FullName = "Owner_Name",
-                    Email = "owner@example.com",
+                    Email = "danglaikp@gmail.com",
                     PhoneNumber = "0112233445",
                     PasswordHash = fixedHashedPassword,
                     CreatedAt = DateTime.UtcNow,
@@ -249,7 +249,7 @@ namespace DAL.Context
                     // --- BaseUser Fields ---
                     UserId = ProviderID,
                     FullName = "Provider_Name",
-                    Email = "provider@example.com",
+                    Email = "danglvhse151369@fpt.edu.vn",
                     PhoneNumber = "0556677889",
                     PasswordHash = fixedHashedPassword,
                     CreatedAt = DateTime.UtcNow,

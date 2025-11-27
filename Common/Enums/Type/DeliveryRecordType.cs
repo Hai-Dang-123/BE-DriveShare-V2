@@ -8,7 +8,9 @@ namespace Common.Enums.Type
 {
     public enum DeliveryRecordType
     {
-        PICKUP,
-        DROPOFF
+        PICKUP,     // Nhận xe
+        DROPOFF,    // Giao xe
+        HANDOVER,   // Bàn giao xe
+        RETURN      // Trả xe
     }
 }

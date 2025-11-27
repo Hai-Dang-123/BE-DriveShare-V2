@@ -11,6 +11,6 @@ namespace DAL.Repositories.Interface
     {
         Task<IEnumerable<TripDeliveryRecord>> GetByTripIdAsync(Guid tripId);
         Task<TripDeliveryRecord?> GetByIdWithDetailsAsync(Guid tripDeliveryRecordId);
-
+        Task<TripDeliveryRecord?> GetByIdWithDetailsForDriverAsync(Guid id);
     }
 }

@@ -13,5 +13,9 @@ namespace Common.Enums.Type
         EMAIL_VERIFICATION,
         ACCESS_TOKEN_EKYC,
         SIGN_DECORED,
+
+        CONTRACT_SIGNING_OTP,
+        DELIVERY_RECORD_SIGNING_OTP,
+        VIEW_ACCESS_TOKEN
     }
 }

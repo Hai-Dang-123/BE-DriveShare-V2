@@ -16,7 +16,7 @@ namespace Common.DTOs
 
         // --- GỢI Ý BẮT BUỘC (Nghiệp vụ eKYC) ---
         // Enum: REGISTRATION (Cà vẹt), INSURANCE (Bảo hiểm), INSPECTION (Đăng kiểm)
-        public DocumentType DocumentType { get; set; }
+        public string DocumentType { get; set; }
 
         // --- Chi tiết giấy tờ ---
         public string FrontDocumentUrl { get; set; } = null!;
@@ -25,7 +25,7 @@ namespace Common.DTOs
 
         // --- Trạng thái xác minh ---
         // Gợi ý: Đổi tên Enum 'VerifileStatus' thành 'KycStatus' cho nhất quán
-        public VerifileStatus Status { get; set; } // PENDING, APPROVED, REJECTED, EXPIRED
+        public string Status { get; set; } // PENDING, APPROVED, REJECTED, EXPIRED
         public string? AdminNotes { get; set; } // Ghi chú của Admin (ví dụ: lý do từ chối)
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ProcessedAt { get; set; } // Thời điểm xác minh (Approved/Rejected)

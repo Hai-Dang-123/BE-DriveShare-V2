@@ -2,6 +2,7 @@
 using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
+using Common.Enums.Type;
 using Common.ValueObjects;
 using DAL.Entities;
 using DAL.UnitOfWork;
@@ -293,11 +294,11 @@ namespace BLL.Services.Impletement
                     Documents = vehicle.VehicleDocuments.Select(doc => new VehicleDocumentDetailDTO
                     {
                         VehicleDocumentId = doc.VehicleDocumentId,
-                        DocumentType = doc.DocumentType,
+                        DocumentType = doc.DocumentType.ToString(),
                         FrontDocumentUrl = doc.FrontDocumentUrl,
                         BackDocumentUrl = doc.BackDocumentUrl,
                         ExpirationDate = doc.ExpirationDate,
-                        Status = doc.Status,
+                        Status = doc.Status.ToString(),
                         AdminNotes = doc.AdminNotes,
                         CreatedAt = doc.CreatedAt,
                         ProcessedAt = doc.ProcessedAt
@@ -326,7 +327,12 @@ namespace BLL.Services.Impletement
 
                 // 1. Lấy IQueryable từ Repo
                 var query = _unitOfWork.VehicleRepo.GetVehiclesByOwnerIdQueryable(ownerId)
-                                 .Where(v => v.Status != VehicleStatus.DELETED); // Lọc bỏ xe đã xóa
+                                // QUAN TRỌNG: Phải Include Documents để check trạng thái
+                                .Include(v => v.VehicleDocuments)
+                                .Include(v => v.VehicleType)     // Include sẵn để map
+                                .Include(v => v.VehicleImages)   // Include sẵn để map
+                                .Include(v => v.Owner)           // Include sẵn để map
+                                .Where(v => v.Status != VehicleStatus.DELETED);
 
                 // 2. Đếm tổng số
                 var totalCount = await query.CountAsync();
@@ -337,38 +343,61 @@ namespace BLL.Services.Impletement
                     .Take(pageSize)
                     .ToListAsync();
 
-                // 4. Map sang DTO (Dùng lại DTO từ hàm GetAll/GetById của bạn)
-                var result = vehicles.Select(v => new VehicleDetailDTO
+                // 4. Map sang DTO & Xử lý logic xác minh
+                var result = vehicles.Select(v =>
                 {
-                    VehicleId = v.VehicleId,
-                    PlateNumber = v.PlateNumber,
-                    Model = v.Model,
-                    Brand = v.Brand,
-                    Color = v.Color,
-                    YearOfManufacture = v.YearOfManufacture,
-                    PayloadInKg = v.PayloadInKg,
-                    VolumeInM3 = v.VolumeInM3,
-                    Status = v.Status,
-                    VehicleType = new VehicleTypeDTO
+                    // LOGIC XÁC MINH:
+                    // Xe được coi là "Đã xác minh" nếu có Cà vẹt (VEHICLE_LINCENSE) và trạng thái là ACTIVE
+                    bool isVerified = v.VehicleDocuments.Any(d =>
+                                        d.DocumentType == DocumentType.VEHICLE_LINCENSE);
+                                  //&&  d.Status == VerifileStatus.ACTIVE);              // Thêm sau nhé.
+
+                    return new VehicleDetailDTO
                     {
-                        VehicleTypeId = v.VehicleType.VehicleTypeId,
-                        VehicleTypeName = v.VehicleType.VehicleTypeName,
-                        Description = v.VehicleType.Description
-                    },
-                    Owner = new GetDetailOwnerDTO
-                    {
-                        UserId = v.Owner.UserId,
-                        FullName = v.Owner.FullName,
-                        CompanyName = v.Owner.CompanyName
-                    },
-                    ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
-                    {
-                        VehicleImageId = i.VehicleImageId,
-                        ImageURL = i.ImageURL,
-                        Caption = i.Caption,
-                        CreatedAt = i.CreatedAt
-                    }).ToList()
-                    // (Không có Documents, giống hàm GetAll)
+                        VehicleId = v.VehicleId,
+                        PlateNumber = v.PlateNumber,
+                        Model = v.Model,
+                        Brand = v.Brand,
+                        Color = v.Color,
+                        YearOfManufacture = v.YearOfManufacture,
+                        PayloadInKg = v.PayloadInKg,
+                        VolumeInM3 = v.VolumeInM3,
+                        Status = v.Status,
+
+                        // Map thông tin xác thực mới thêm
+                        IsVerified = isVerified,
+
+                        VehicleType = new VehicleTypeDTO
+                        {
+                            VehicleTypeId = v.VehicleType.VehicleTypeId,
+                            VehicleTypeName = v.VehicleType.VehicleTypeName,
+                            Description = v.VehicleType.Description
+                        },
+                        Owner = new GetDetailOwnerDTO
+                        {
+                            UserId = v.Owner.UserId,
+                            FullName = v.Owner.FullName,
+                            CompanyName = v.Owner.CompanyName
+                        },
+                        ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
+                        {
+                            VehicleImageId = i.VehicleImageId,
+                            ImageURL = i.ImageURL,
+                            Caption = i.Caption,
+                            CreatedAt = i.CreatedAt
+                        }).ToList(),
+
+                        // Map danh sách giấy tờ để hiển thị lên App (Ví dụ: Cà vẹt: Đã duyệt, Bảo hiểm: Hết hạn)
+                        Documents = v.VehicleDocuments.Select(d => new VehicleDocumentDetailDTO
+                        {
+                            VehicleDocumentId = d.VehicleDocumentId,
+                            DocumentType = d.DocumentType.ToString(), // Convert Enum sang String
+                            Status = d.Status.ToString(),             // Convert Enum sang String
+                            FrontDocumentUrl = d.FrontDocumentUrl,
+                            BackDocumentUrl = d.BackDocumentUrl,
+                            ExpirationDate = d.ExpirationDate
+                        }).ToList()
+                    };
                 }).ToList();
 
                 // 5. Tạo đối tượng PaginatedDTO
@@ -378,7 +407,7 @@ namespace BLL.Services.Impletement
             }
             catch (Exception ex)
             {
-                return new ResponseDTO("Error while getting vehicles", 500, false, ex.Message);
+                return new ResponseDTO("Error while getting vehicles: " + ex.Message, 500, false);
             }
         }
 

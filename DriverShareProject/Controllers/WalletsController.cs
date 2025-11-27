@@ -27,7 +27,6 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> GetMyWallet()
         {
             var response = await _walletService.GetMyWalletAsync();
-
             return StatusCode(response.StatusCode, response);
         }
 

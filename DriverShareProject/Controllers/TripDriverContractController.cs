@@ -1,4 +1,6 @@
-﻿using BLL.Services.Interface;
+﻿using BLL.Services.Implement;
+using BLL.Services.Interface;
+using Common.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DriverShareProject.Controllers
@@ -30,6 +32,16 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> GetDriverContractById(Guid id)
         {
             var response = await _tripDriverContractService.GetByIdAsync(id);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        [HttpPut("sign")]
+        //[Authorize] // Bắt buộc có Token
+        public async Task<IActionResult> SignContract([FromBody] SignContractDTO dto)
+        {
+            // Gọi service với mã OTP user gửi lên
+            var response = await _tripDriverContractService.SignAsync(dto);
+
             return StatusCode(response.StatusCode, response);
         }
     }

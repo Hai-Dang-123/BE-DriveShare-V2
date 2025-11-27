@@ -44,7 +44,7 @@ namespace BLL.Services.Impletement
                     Description = dto.Description,
                     // [XÓA BỎ] - Type không còn ở đây
                     RequiredPayloadInKg = dto.RequiredPayloadInKg,
-                    Status = PostStatus.OPEN,
+                    Status = dto.Status,
                     CreateAt = DateTime.Now,
                     UpdateAt = DateTime.Now,
                 };
@@ -266,6 +266,54 @@ namespace BLL.Services.Impletement
                     MustDropAtGarage = d.MustDropAtGarage
                 }).ToList()
             };
+        }
+
+        // Trong BLL/Services/Impletement/PostTripService.cs
+
+        public async Task<ResponseDTO> ChangePostTripStatusAsync(Guid postTripId, PostStatus newStatus)
+        {
+            try
+            {
+                // 1. Validate User (Chỉ Owner mới được đổi trạng thái bài đăng của mình)
+                var userId = _userUtility.GetUserIdFromToken();
+                if (userId == Guid.Empty)
+                    return new ResponseDTO("Unauthorized", 401, false);
+
+                // 2. Lấy PostTrip
+                var postTrip = await _unitOfWork.PostTripRepo.GetByIdAsync(postTripId);
+                if (postTrip == null)
+                    return new ResponseDTO("Post Trip not found", 404, false);
+
+                // 3. Validate Quyền sở hữu
+                if (postTrip.OwnerId != userId)
+                    return new ResponseDTO("Forbidden: You do not own this post", 403, false);
+
+                // 4. Validate Logic chuyển trạng thái (Optional but Recommended)
+                // Ví dụ: Không thể chuyển từ DONE về OPEN
+                if (postTrip.Status == PostStatus.DONE && newStatus == PostStatus.OPEN)
+                {
+                    return new ResponseDTO("Cannot reopen a completed post.", 400, false);
+                }
+
+                // Ví dụ: Không thể chuyển từ DELETED về bất kỳ trạng thái nào
+                if (postTrip.Status == PostStatus.DELETED)
+                {
+                    return new ResponseDTO("Cannot modify a deleted post.", 400, false);
+                }
+
+                // 5. Cập nhật
+                postTrip.Status = newStatus;
+                postTrip.UpdateAt = DateTime.UtcNow;
+
+                await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
+                await _unitOfWork.SaveChangeAsync();
+
+                return new ResponseDTO($"Status updated to {newStatus} successfully", 200, true);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error changing status: {ex.Message}", 500, false);
+            }
         }
     }
 }

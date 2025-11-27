@@ -1,5 +1,7 @@
-﻿using BLL.Services.Interface;
+﻿using BLL.Services.Impletement;
+using BLL.Services.Interface;
 using Common.DTOs;
+using Common.Enums.Type;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -51,6 +53,13 @@ namespace DriverShareProject.Controllers
         {
             var result = await _contractTemplateService.GetByIdAsync(id);
             return Ok(result);
+        }
+
+        [HttpGet("latest/{type}")]
+        public async Task<IActionResult> GetLatestTemplateByType(ContractType type)
+        {
+            var response = await _contractTemplateService.GetLatestByTypeAsync(type);
+            return StatusCode(response.StatusCode, response);
         }
     }
 }

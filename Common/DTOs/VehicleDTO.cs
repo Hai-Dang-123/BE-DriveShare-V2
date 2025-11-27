@@ -51,6 +51,11 @@ namespace Common.DTOs
         public List<VehicleDocumentDetailDTO> Documents { get; set; } = new();
         public VehicleTypeDTO VehicleType { get; set; }
         public GetDetailOwnerDTO Owner { get; set; }
+        // 1. Cờ xác nhận xe đã hợp lệ để chạy chưa (Dựa trên Cà vẹt)
+        public bool IsVerified { get; set; }
+
+
+
     }
     public class VehicleDTO
     {

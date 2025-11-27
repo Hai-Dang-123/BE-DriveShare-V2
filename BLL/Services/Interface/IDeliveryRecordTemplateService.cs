@@ -18,5 +18,6 @@ namespace BLL.Services.Interface
 
         Task<ResponseDTO> GetByIdAsync(Guid id);
         Task<DeliveryRecordTemplate> GetLatestTemplateByTypeAsync(DeliveryRecordType type);
+        Task<ResponseDTO> GetLatestDeliveryRecordTemplateByTypeAsync(DeliveryRecordType type);
     }
 }

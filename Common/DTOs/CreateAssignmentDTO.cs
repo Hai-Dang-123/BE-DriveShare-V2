@@ -27,10 +27,10 @@ namespace Common.DTOs
         public decimal? BonusAmount { get; set; } // Thưởng/Phụ phí
 
         [Required]
-        public Location StartLocation { get; set; } = null!; // Lấy từ đâu? (VD: Bãi xe của Owner)
+        public string StartLocation { get; set; } = null!; // Lấy từ đâu? (VD: Bãi xe của Owner)
 
         [Required]
-        public Location EndLocation { get; set; } = null!; // Trả xe ở đâu?
+        public string EndLocation { get; set; } = null!; // Trả xe ở đâu?
     }
 
     public class CreateAssignmentByPostTripDTO
@@ -45,9 +45,9 @@ namespace Common.DTOs
 
         // (Tài xế cũng cần cung cấp địa điểm lấy/trả xe của họ)
         [Required]
-        public Location StartLocation { get; set; } = null!; // Tài xế sẽ lấy xe ở đâu?
+        public string StartLocation { get; set; } = null!; // Tài xế sẽ lấy xe ở đâu?
 
         [Required]
-        public Location EndLocation { get; set; } = null!; // Tài xế sẽ trả xe ở đâu?
+        public string EndLocation { get; set; } = null!; // Tài xế sẽ trả xe ở đâu?
     }
 }

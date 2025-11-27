@@ -62,6 +62,8 @@ namespace DAL.UnitOfWork
             WalletRepo = new WalletRepository(context);
             PostContactRepo = new PostContactRepository(context);
 
+            DriverWorkSessionRepo = new DriverWorkSessionRepository(context);
+            ContactTokenRepo = new ContactTokenRepository(context);
 
         }
 
@@ -107,6 +109,8 @@ namespace DAL.UnitOfWork
         public IWalletRepository WalletRepo { get; private set; }
 
         public IPostContactRepository PostContactRepo { get; private set; }
+        public IDriverWorkSessionRepository DriverWorkSessionRepo { get; private set; } 
+        public IContactTokenRepository ContactTokenRepo { get; private set; }
 
 
 

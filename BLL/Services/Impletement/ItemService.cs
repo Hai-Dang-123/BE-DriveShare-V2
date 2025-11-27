@@ -90,6 +90,8 @@ namespace BLL.Services.Impletement
                     OwnerId = item.OwnerId,
                     ProviderId = item.ProviderId,
                     Status = item.Status.ToString(),
+                    Quantity = item.Quantity,
+                    Unit = item.Unit,
                     ImageUrls = item.ItemImages?.Select(pi => new ItemImageReadDTO
                     {
                         ItemImageId = pi.ItemImageId,
@@ -279,6 +281,8 @@ namespace BLL.Services.Impletement
                     DeclaredValue = itemCreateDTO.DeclaredValue,
                     Description = itemCreateDTO.Description,
                     Status = ItemStatus.PENDING,
+                    Quantity = itemCreateDTO.Quantity,
+                    Unit = itemCreateDTO.Unit,
                     // Lưu ý: DTO có 'Price' nhưng entity Item (cũ) của bạn không có
                     // Tôi sẽ bỏ qua 'Price' giống như code cũ của bạn
                 };
@@ -356,6 +360,8 @@ namespace BLL.Services.Impletement
                         OwnerId = item.OwnerId,
                         ProviderId = item.ProviderId,
                         Status = item.Status.ToString(),
+                        Quantity = item.Quantity,
+                        Unit = item.Unit,
                         ImageUrls = item.ItemImages.Select(pi => new ItemImageReadDTO
                         {
                             ItemImageId = pi.ItemImageId,

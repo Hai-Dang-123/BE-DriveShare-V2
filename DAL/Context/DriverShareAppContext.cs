@@ -77,6 +77,7 @@ namespace DAL.Context
         public DbSet<PostContact> PostContacts { get; set; } = null!;
 
         public DbSet<PostTripDetail> PostTripDetails { get; set; } = null!;
+        public DbSet<ContactToken> ContactTokens { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -106,6 +107,7 @@ namespace DAL.Context
             modelBuilder.Entity<Role>().HasKey(e => e.RoleId);
             modelBuilder.Entity<UserDocument>().HasKey(e => e.UserDocumentId);
             modelBuilder.Entity<UserToken>().HasKey(e => e.UserTokenId);
+            modelBuilder.Entity<ContactToken>().HasKey(e => e.ContactTokenId);
             modelBuilder.Entity<UserViolation>().HasKey(e => e.UserViolationId);
             modelBuilder.Entity<DriverActivityLog>().HasKey(e => e.DriverActivityLogId);
             modelBuilder.Entity<OwnerDriverLink>().HasKey(e => e.OwnerDriverLinkId);
@@ -345,6 +347,12 @@ namespace DAL.Context
                 .WithMany(u => u.UserTokens)
                 .HasForeignKey(ut => ut.UserId)
                 .OnDelete(DeleteBehavior.Restrict); // Xóa user thì xóa token
+
+            modelBuilder.Entity<ContactToken>()
+                .HasOne(ct => ct.TripContact)
+                .WithMany(tc => tc.ContactTokens)
+                .HasForeignKey(ct => ct.TripContactId)
+                .OnDelete(DeleteBehavior.Cascade); // Xóa TripContact thì xóa ContactToken
 
             modelBuilder.Entity<UserDocument>()
                 .HasOne(ud => ud.User)

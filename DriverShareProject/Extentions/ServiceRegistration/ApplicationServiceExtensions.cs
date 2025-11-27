@@ -26,7 +26,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
             services.AddScoped<IDeliveryRecordTemplateService, DeliveryRecordTemplateService>();
             //services.AddScoped<IDeliveryRecordTermService, DeliveryRecordTermService>();
-            //services.AddScoped<IUserDocumentService, UserDocumentService>();
+            services.AddScoped<IUserDocumentService, UserDocumentService>();
             //services.AddScoped<IVehicleDocumentService, VehicleDocumentService>();
 
 
@@ -67,9 +67,12 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<ITripDriverAssignmentService, TripDriverAssignmentService>();
             services.AddScoped<IPostTripService, PostTripService>();
+            services.AddScoped<IDriverWorkSessionService, DriverWorkSessionService>();
+            
 
             services.AddScoped<IVietMapService, VietMapService>();
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
+            services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<UserUtility>();
             

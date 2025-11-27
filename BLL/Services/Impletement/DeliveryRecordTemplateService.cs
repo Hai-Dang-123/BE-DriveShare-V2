@@ -161,5 +161,56 @@ namespace BLL.Services.Impletement
 
             return template;
         }
+
+        public async Task<ResponseDTO> GetLatestDeliveryRecordTemplateByTypeAsync(DeliveryRecordType type)
+        {
+            try
+            {
+                // 1. Lấy IQueryable và Include Terms
+                var query = _unitOfWork.DeliveryRecordTemplateRepo.GetAll()
+                    .AsNoTracking()
+                    .Include(t => t.DeliveryRecordTerms); // 👈 Include Terms
+
+                // 2. Lọc và Sắp xếp
+                var template = await query
+                    .Where(t => t.Type == type && t.Status == DeliveryRecordTemplateStatus.ACTIVE) // Chỉ lấy Active
+                    .OrderByDescending(t => t.CreatedAt) // Lấy cái mới nhất
+                    .FirstOrDefaultAsync();
+
+                // 3. Kiểm tra Not Found
+                if (template == null)
+                {
+                    return new ResponseDTO($"Không tìm thấy DeliveryRecordTemplate (ACTIVE) nào cho loại: {type}", 404, false);
+                }
+
+                // 4. Map Terms (giống hàm GetAllAsync)
+                var termDtos = template.DeliveryRecordTerms
+                    .OrderBy(term => term.DisplayOrder)
+                    .Select(term => new DeliveryRecordTermDTO
+                    {
+                        DeliveryRecordTermId = term.DeliveryRecordTermId,
+                        DeliveryRecordTemplateId = term.DeliveryRecordTemplateId,
+                        Content = term.Content,
+                        DisplayOrder = term.DisplayOrder
+                    }).ToList();
+
+                // 5. Map DTO chính
+                var dto = new DeliveryRecordTemplateDTO
+                {
+                    DeliveryRecordTemplateId = template.DeliveryRecordTemplateId,
+                    TemplateName = template.TemplateName,
+                    Version = template.Version,
+                    Type = template.Type.ToString(),
+                    CreatedAt = template.CreatedAt,
+                    DeliveryRecordTerms = termDtos // 👈 Gán Terms
+                };
+
+                return new ResponseDTO("Retrieved latest template by type successfully", 200, true, dto);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting latest template: {ex.Message}", 500, false);
+            }
+        }
     }
 }

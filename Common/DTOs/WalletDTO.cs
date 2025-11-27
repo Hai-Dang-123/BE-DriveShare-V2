@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Common.DTOs
@@ -40,9 +41,11 @@ namespace Common.DTOs
         public decimal Amount { get; set; } // Luôn là số dương (hàm service sẽ xử lý cộng/trừ)
 
         [Required]
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         public TransactionType Type { get; set; }
 
         public Guid? TripId { get; set; } // Bắt buộc cho Payment/Payout
+        public Guid? PostId { get; set; } // Tùy chọn, để ghi nhận liên quan đến bài đăng nếu cần
 
         [Required]
         public string Description { get; set; } = string.Empty;

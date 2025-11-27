@@ -32,6 +32,8 @@ namespace Common.Enums.Status
 
         // ─────────────── GIAI ĐOẠN 2: TÌM & GÁN TÀI XẾ (OWNER <-> DRIVER) ───────────────
 
+        AWAITING_OWNER_CONTRACT,
+
         /// <summary>
         /// (Chờ gán tài xế) - Owner đã sẵn sàng. Trạng thái này bao gồm cả việc
         /// Owner "Đăng bài tìm tài xế" (Posting for driver) hoặc "Gán tài xế" (Assigning internal driver).
@@ -65,6 +67,11 @@ namespace Common.Enums.Status
         VEHICLE_HANDOVER,
 
         /// <summary>
+        /// (Đang ĐI lấy hàng) - Tài xế đang trên đường đi lấy hàng
+        /// </summary>
+        MOVING_TO_PICKUP,
+
+        /// <summary>
         /// (Đang lấy hàng) - Tài xế đã lấy xe, đang trên đường đến điểm lấy hàng (của Provider).
         /// </summary>
         LOADING,
@@ -74,7 +81,7 @@ namespace Common.Enums.Status
         /// <summary>
         /// (Đang vận chuyển) - Tài xế đã lấy hàng, đang trên đường giao hàng.
         /// </summary>
-        IN_TRANSIT,
+        MOVING_TO_DROPOFF,
 
         /// <summary>
         /// (Đang giao hàng) - Đã đến điểm dỡ hàng, đang trong quá trình giao hàng

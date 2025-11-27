@@ -66,6 +66,9 @@ namespace Common.DTOs
         [Required]
         [MinLength(1)] // Phải có ít nhất 1 Package ID
         public List<Guid> PackageIds { get; set; }
+
+        [Required]
+        public PostStatus Status { get; set; } 
     }
     public class  ChangePostPackageStatusDTO
     {

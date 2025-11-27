@@ -1,0 +1,19 @@
+﻿using Common.DTOs;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BLL.Services.Interface
+{
+    public interface IDriverWorkSessionService
+    {
+        Task<ResponseDTO> StartSessionAsync(StartSessionDTO dto);
+        Task<ResponseDTO> EndSessionAsync(EndSessionDTO dto);
+
+        // Không cần truyền ID, tự lấy từ token
+        Task<ResponseDTO> CheckDriverEligibilityAsync();
+        Task<ResponseDTO> GetDriverHistoryAsync(DriverHistoryFilterDTO filter);
+    }
+}

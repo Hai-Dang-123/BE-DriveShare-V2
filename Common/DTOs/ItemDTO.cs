@@ -16,6 +16,8 @@ namespace Common.DTOs
         public string Description { get; set; }
         public decimal? DeclaredValue { get; set; }
         public string Currency { get; set; } = "VND";
+        public int Quantity { get; set; }
+        public string Unit { get; set; }
         //public decimal Price { get; set; }
         public List<IFormFile> ItemImages { get; set; } 
     }
@@ -26,6 +28,8 @@ namespace Common.DTOs
         public string Description { get; set; }
         public decimal? DeclaredValue { get; set; }
         public string Currency { get; set; } = "VND";
+        public int Quantity { get; set; }
+        public string Unit { get; set; }
 
     }
     public class ItemReadDTO
@@ -36,6 +40,8 @@ namespace Common.DTOs
         public decimal? DeclaredValue { get; set; }
         public string Currency { get; set; } = "VND";
         public decimal Price { get; set; }
+        public int Quantity { get; set;}
+        public string Unit { get; set; }
         public Guid? OwnerId { get; set; }
         public Guid? ProviderId { get; set; }
         public string Status { get; set; }

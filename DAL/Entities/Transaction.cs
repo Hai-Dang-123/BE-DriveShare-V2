@@ -19,6 +19,7 @@ namespace DAL.Entities
         // Ví dụ: Nạp tiền (TOPUP) thì không cần TripId
         // Thanh toán (TRIP_PAYMENT) thì cần TripId
         public Guid? TripId { get; set; } // FK to Trip
+       
 
         public decimal Amount { get; set; } // Số tiền giao dịch
         public string Currency { get; set; } = "VND";
@@ -39,5 +40,6 @@ namespace DAL.Entities
         // --- Thuộc tính điều hướng (Navigation Properties) ---
         public virtual Wallet Wallet { get; set; } = null!;
         public virtual Trip? Trip { get; set; }
-    }
+
+        }
 }

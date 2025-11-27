@@ -33,7 +33,7 @@ namespace BLL.Services.Implement
 
                 // Trừ tiền (số âm)
                 // Hàm này trả về DTO vì Controller cần nó
-                return await ExecuteBalanceChangeAsync(userId, -dto.Amount, TransactionType.WITHDRAWAL, null, dto.Description, null);
+                return await ExecuteBalanceChangeAsync(userId, -dto.Amount, TransactionType.WITHDRAWAL, null, null, dto.Description, null);
             }
             catch (Exception ex)
             {
@@ -51,7 +51,7 @@ namespace BLL.Services.Implement
                 return new ResponseDTO("Invalid transaction type for Topup", 400, false);
 
             // Cộng tiền (số dương)
-            return await ExecuteBalanceChangeAsync(userId, dto.Amount, dto.Type, dto.TripId, dto.Description, dto.ExternalCode);
+            return await ExecuteBalanceChangeAsync(userId, dto.Amount, dto.Type, dto.TripId, dto.PostId, dto.Description, dto.ExternalCode);
         }
 
         // 3. Dành cho Hệ thống/Service (Service gọi) -> ⚠️ SỬA ĐỔI: Trả về ResponseDTO
@@ -61,7 +61,7 @@ namespace BLL.Services.Implement
             if (userId == Guid.Empty)
                 return new ResponseDTO("Unauthorized", 401, false);
             // Trừ tiền (số âm)
-            return await ExecuteBalanceChangeAsync(userId, -dto.Amount, dto.Type, dto.TripId, dto.Description, dto.ExternalCode);
+            return await ExecuteBalanceChangeAsync(userId, -dto.Amount, dto.Type, dto.TripId, dto.PostId, dto.Description, dto.ExternalCode);
         }
 
         // 4. Dành cho Hệ thống/Service (Service gọi) -> ⚠️ SỬA ĐỔI: Trả về ResponseDTO
@@ -71,14 +71,14 @@ namespace BLL.Services.Implement
             if (userId == Guid.Empty)
                 return new ResponseDTO("Unauthorized", 401, false);
             // Cộng tiền (số dương)
-            return await ExecuteBalanceChangeAsync(userId, dto.Amount, dto.Type, dto.TripId, dto.Description, dto.ExternalCode);
+            return await ExecuteBalanceChangeAsync(userId, dto.Amount, dto.Type, dto.TripId, dto.PostId ,dto.Description, dto.ExternalCode);
         }
 
 
         // ─────── HÀM LÕI (CORE) XỬ LÝ GIAO DỊCH ───────
 
         // Hàm lõi này VẪN trả về ResponseDTO vì nó cần cho cả hai loại hàm (public và internal)
-        private async Task<ResponseDTO> ExecuteBalanceChangeAsync(Guid userId, decimal amount, TransactionType type, Guid? tripId, string description, string? externalCode = null)
+        private async Task<ResponseDTO> ExecuteBalanceChangeAsync(Guid userId, decimal amount, TransactionType type, Guid? tripId, Guid? postId, string description, string? externalCode = null)
         {
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -104,6 +104,7 @@ namespace BLL.Services.Implement
                     TransactionId = Guid.NewGuid(),
                     WalletId = wallet.WalletId,
                     TripId = tripId,
+                     //PostId = postId, // Uncomment nếu Entity Transaction có trường này
                     Amount = amount,
                     Currency = "VND",
                     BalanceBefore = balanceBefore,
@@ -119,7 +120,35 @@ namespace BLL.Services.Implement
                 await _unitOfWork.TransactionRepo.AddAsync(newTransaction);
                 await _unitOfWork.WalletRepo.UpdateAsync(wallet);
 
-                // ⚠️ 5. TỰ ĐỘNG CẬP NHẬT TRẠNG THÁI TRIP (THEO FLOW MỚI)
+                // ⚠️ 5. [UPDATE] CẬP NHẬT TRẠNG THÁI POST (CHECK CẢ PACKAGE VÀ TRIP)
+                if (postId.HasValue)
+                {
+                    bool isPostUpdated = false;
+
+                    // A. Thử tìm trong PostPackage (Bài đăng hàng hóa)
+                    var postPackage = await _unitOfWork.PostPackageRepo.GetByIdAsync(postId.Value);
+                    if (postPackage != null)
+                    {
+                        // Khi thanh toán xong -> Chuyển sang OPEN (Đang tìm xe) hoặc trạng thái phù hợp
+                        postPackage.Status = PostStatus.OPEN;
+                        await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
+                        isPostUpdated = true;
+                    }
+
+                    // B. Nếu không phải Package, thử tìm trong PostTrip (Bài đăng tìm tài xế)
+                    if (!isPostUpdated)
+                    {
+                        var postTrip = await _unitOfWork.PostTripRepo.GetByIdAsync(postId.Value);
+                        if (postTrip != null)
+                        {
+                            // Khi thanh toán xong -> Chuyển sang OPEN (Đang tuyển tài xế)
+                            postTrip.Status = PostStatus.OPEN;
+                            await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
+                        }
+                    }
+                }
+
+                // ⚠️ 6. CẬP NHẬT TRẠNG THÁI TRIP & ASSIGNMENT
                 if (tripId.HasValue)
                 {
                     var trip = await _unitOfWork.TripRepo.GetByIdAsync(tripId.Value);
@@ -128,29 +157,33 @@ namespace BLL.Services.Implement
                         bool tripUpdated = false;
                         switch (type)
                         {
-                            // --- GIAI ĐOẠN 1: PROVIDER THANH TOÁN ---
-                            case TransactionType.TRIP_PAYMENT:
-                                // Khi Provider thanh toán -> Chuyển sang tìm tài xế
-                                if (trip.Status == TripStatus.AWAITING_PROVIDER_PAYMENT)
-                                {
-                                    trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
-                                    tripUpdated = true;
-                                }
-                                break;
-
                             // --- GIAI ĐOẠN 2: OWNER THANH TOÁN TIỀN THUÊ TÀI XẾ ---
                             case TransactionType.DRIVER_SERVICE_PAYMENT:
-                                // Khi Owner thanh toán tiền thuê -> Chuyển sang sẵn sàng giao xe
+                                // A. Cập nhật trạng thái Trip
                                 if (trip.Status == TripStatus.AWAITING_OWNER_PAYMENT)
                                 {
                                     trip.Status = TripStatus.READY_FOR_VEHICLE_HANDOVER;
                                     tripUpdated = true;
                                 }
+
+                                // B. Cập nhật PaymentStatus của Assignment thành PAID
+                                var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                                    .Where(a => a.TripId == tripId.Value && a.PaymentStatus == DriverPaymentStatus.UN_PAID)
+                                    .ToListAsync();
+
+                                if (assignments.Any())
+                                {
+                                    foreach (var assign in assignments)
+                                    {
+                                        assign.PaymentStatus = DriverPaymentStatus.PAID;
+                                        assign.UpdateAt = DateTime.UtcNow;
+                                        await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
+                                    }
+                                }
                                 break;
 
                             // --- GIAI ĐOẠN 6: QUYẾT TOÁN CHO OWNER ---
                             case TransactionType.OWNER_PAYOUT:
-                                // Khi Hệ thống trả tiền Owner -> Chuyển sang trả tiền Driver
                                 if (trip.Status == TripStatus.AWAITING_FINAL_PROVIDER_PAYOUT)
                                 {
                                     trip.Status = TripStatus.AWAITING_FINAL_DRIVER_PAYOUT;
@@ -160,7 +193,6 @@ namespace BLL.Services.Implement
 
                             // --- GIAI ĐOẠN 6: QUYẾT TOÁN CHO DRIVER ---
                             case TransactionType.DRIVER_PAYOUT:
-                                // Khi Hệ thống trả tiền Driver -> Hoàn tất
                                 if (trip.Status == TripStatus.AWAITING_FINAL_DRIVER_PAYOUT)
                                 {
                                     trip.Status = TripStatus.COMPLETED;
@@ -177,9 +209,10 @@ namespace BLL.Services.Implement
                     }
                 }
 
-                // 6. Commit
+                // 7. Commit
                 await _unitOfWork.CommitTransactionAsync();
 
+                // Map DTO (Giả sử bạn có hàm này hoặc dùng AutoMapper)
                 var transactionDto = MapTransactionToDTO(newTransaction);
                 return new ResponseDTO($"Transaction {type} successful.", 200, true, transactionDto);
             }
