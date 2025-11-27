@@ -21,12 +21,18 @@ namespace DriverShareProject.Controllers
         }
 
         [HttpGet]
-        //[Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAllUsers([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetAllUsers(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortDirection = "ASC"
+        )
         {
-            var response = await _userService.GetAllAsync(pageNumber, pageSize);
+            var response = await _userService.GetAllAsync(pageNumber, pageSize, search, sortField, sortDirection);
             return StatusCode(response.StatusCode, response);
         }
+
 
         [HttpGet("{id}")]
         //[Authorize(Roles = "Admin")]

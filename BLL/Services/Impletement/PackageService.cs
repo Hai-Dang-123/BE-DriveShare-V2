@@ -62,19 +62,61 @@ namespace BLL.Services.Impletement
         }
         // get all packages
         // Nhớ import: using Common.DTOs;
-        public async Task<ResponseDTO> GetAllPackagesAsync(int pageNumber, int pageSize)
+        public async Task<ResponseDTO> GetAllPackagesAsync(
+     int pageNumber,
+     int pageSize,
+     string search = null,
+     string sortField = null,
+     string sortDirection = "ASC")
         {
             try
             {
-                // BƯỚC 1: LẤY IQUERYABLE TỪ REPO
-                // (Giả định bạn tạo hàm này trong Repo)
-                var packagesQuery = _unitOfWork.PackageRepo.GetAllPackagesQueryable();
+                // ========= 1) BASE QUERY =========
+                var query = _unitOfWork.PackageRepo.GetAllPackagesQueryable()
+                           .AsNoTracking();
 
-                // BƯỚC 2: ĐẾM TỔNG SỐ MỤC
-                int totalCount = await packagesQuery.CountAsync();
+                // ========= 2) SEARCH =========
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var keyword = search.Trim().ToLower();
 
-                // BƯỚC 3: LẤY DỮ LIỆU CỦA TRANG HIỆN TẠI
-                var packageDto = await packagesQuery
+                    query = query.Where(p =>
+                        (p.Title != null && p.Title.ToLower().Contains(keyword)) ||
+                        (p.Description != null && p.Description.ToLower().Contains(keyword)) ||
+                        (p.PackageCode != null && p.PackageCode.ToLower().Contains(keyword)) ||
+                        (p.Provider != null && p.Provider.FullName.ToLower().Contains(keyword)) ||
+                        (p.Owner != null && p.Owner.FullName.ToLower().Contains(keyword))
+                    );
+                }
+
+                // ========= 3) SORT =========
+                bool desc = sortDirection?.ToUpper() == "DESC";
+
+                query = sortField?.ToLower() switch
+                {
+                    "title" => desc ? query.OrderByDescending(p => p.Title)
+                                           : query.OrderBy(p => p.Title),
+
+                    "weight" => desc ? query.OrderByDescending(p => p.WeightKg)
+                                           : query.OrderBy(p => p.WeightKg),
+
+                    "volume" => desc ? query.OrderByDescending(p => p.VolumeM3)
+                                           : query.OrderBy(p => p.VolumeM3),
+
+                    "code" => desc ? query.OrderByDescending(p => p.PackageCode)
+                                           : query.OrderBy(p => p.PackageCode),
+
+                    "status" => desc ? query.OrderByDescending(p => p.Status)
+                                           : query.OrderBy(p => p.Status),
+
+
+                    _ => query.OrderBy(p => p.Title) // default sort
+                };
+
+                // ========= 4) PAGINATION =========
+                int totalCount = await query.CountAsync();
+
+                var data = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .Select(p => new PackageGetAllDTO
@@ -90,43 +132,47 @@ namespace BLL.Services.Impletement
                         Status = p.Status,
                         HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
                         OtherRequirements = p.OtherRequirements,
+
                         OwnerId = p.OwnerId,
                         ProviderId = p.ProviderId,
                         PostPackageId = p.PostPackageId,
                         TripId = p.TripId,
-                        
-                        PackageImages = p.PackageImages.Select(pi => new PackageImageReadDTO
+
+                        PackageImages = p.PackageImages.Select(img => new PackageImageReadDTO
                         {
-                            PackageImageId = pi.PackageImageId,
-                            PackageId = pi.PackageId,
-                            ImageUrl = pi.PackageImageURL,
-                            CreatedAt = pi.CreatedAt,
-                        }).ToList() ?? new List<PackageImageReadDTO>()
+                            PackageImageId = img.PackageImageId,
+                            PackageId = img.PackageId,
+                            ImageUrl = img.PackageImageURL,
+                            CreatedAt = img.CreatedAt
+                        }).ToList()
                     })
                     .ToListAsync();
 
-                // BƯỚC 4: TẠO KẾT QUẢ PHÂN TRANG
-                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(packageDto, totalCount, pageNumber, pageSize);
+                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(
+                    data,
+                    totalCount,
+                    pageNumber,
+                    pageSize
+                );
 
-                // BƯỚC 5: TRẢ VỀ RESPONSE
-                return new ResponseDTO
-                {
-                    IsSuccess = true,
-                    StatusCode = StatusCodes.Status200OK,
-                    Message = "Packages retrieved successfully",
-                    Result = paginatedResult
-                };
+                // ========= 5) RETURN =========
+                return new ResponseDTO(
+                    "Packages retrieved successfully",
+                    StatusCodes.Status200OK,
+                    true,
+                    paginatedResult
+                );
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    Result = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = $"An error occurred: {ex.Message}"
-                };
+                return new ResponseDTO(
+                    $"Error while getting packages: {ex.Message}",
+                    StatusCodes.Status500InternalServerError,
+                    false
+                );
             }
         }
+
         // Get package by id
         public async Task<ResponseDTO> GetPackageByIdAsync(Guid packageId)
         {

@@ -11,7 +11,14 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> GetAllTripsByProviderAsync(int pageNumber = 1, int pageSize = 10);
         Task<ResponseDTO> GetTripByIdAsync(Guid tripId);
 
-        Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetAllAsync(
+     int pageNumber,
+     int pageSize,
+     string search = null,
+     string sortField = null,
+     string sortDirection = "DESC"
+ );
+
 
     }
 }

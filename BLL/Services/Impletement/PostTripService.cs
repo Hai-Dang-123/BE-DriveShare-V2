@@ -22,6 +22,112 @@ namespace BLL.Services.Impletement
             _userUtility = userUtility;
         }
 
+
+
+
+        // =========================================================
+        // 🔹 0. GET ALL POST TRIP (Admin / Public) — Có Search + Sort + Paging
+        // =========================================================
+        public async Task<ResponseDTO> GetAllPostTripsAsync(
+            int pageNumber,
+            int pageSize,
+            string? search = null,
+            string? sortField = null,
+            string? sortDirection = "ASC"
+        )
+        {
+            try
+            {
+                var query = _unitOfWork.PostTripRepo.GetAll()
+                                   .AsNoTracking()
+                                   .Where(p => p.Status != PostStatus.DELETED);
+
+                // Include tất cả quan hệ
+                query = IncludeFullPostTripData(query);
+
+                // =========================================================
+                // 1️⃣ SEARCH
+                // =========================================================
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var keyword = search.Trim().ToLower();
+
+                    query = query.Where(p =>
+                        (p.Title != null && p.Title.ToLower().Contains(keyword)) ||
+                        (p.Description != null && p.Description.ToLower().Contains(keyword)) ||
+
+                        // Search Owner name
+                        (p.Owner != null && p.Owner.FullName != null &&
+                         p.Owner.FullName.ToLower().Contains(keyword)) ||
+
+                        // Search Route
+                        (p.Trip != null &&
+                            (
+                                (p.Trip.ShippingRoute.StartLocation.Address != null &&
+                                 p.Trip.ShippingRoute.StartLocation.Address.ToLower().Contains(keyword)) ||
+                                (p.Trip.ShippingRoute.EndLocation.Address != null &&
+                                 p.Trip.ShippingRoute.EndLocation.Address.ToLower().Contains(keyword))
+                            )
+                        ) ||
+
+                        // Search Vehicle
+                        (p.Trip.Vehicle != null &&
+                            (
+                                (p.Trip.Vehicle.Model != null &&
+                                 p.Trip.Vehicle.Model.ToLower().Contains(keyword)) ||
+                                (p.Trip.Vehicle.PlateNumber != null &&
+                                 p.Trip.Vehicle.PlateNumber.ToLower().Contains(keyword))
+                            )
+                        )
+                    );
+                }
+
+                // =========================================================
+                // 2️⃣ SORT
+                // =========================================================
+                bool desc = sortDirection?.ToUpper() == "DESC";
+
+                query = sortField?.ToLower() switch
+                {
+                    "title" => desc ? query.OrderByDescending(p => p.Title)
+                                    : query.OrderBy(p => p.Title),
+
+                    "status" => desc ? query.OrderByDescending(p => p.Status)
+                                     : query.OrderBy(p => p.Status),
+
+                    "createdat" => desc ? query.OrderByDescending(p => p.CreateAt)
+                                        : query.OrderBy(p => p.CreateAt),
+
+                    "ownername" => desc ? query.OrderByDescending(p => p.Owner.FullName)
+                                        : query.OrderBy(p => p.Owner.FullName),
+
+                    _ => query.OrderBy(p => p.CreateAt)   // default: newest first
+                };
+
+                // =========================================================
+                // 3️⃣ PAGING
+                // =========================================================
+                var totalCount = await query.CountAsync();
+
+                var postTrips = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var dtoList = postTrips.Select(p => MapToPostTripViewDTO(p)).ToList();
+
+                var paginatedResult = new PaginatedDTO<PostTripViewDTO>(
+                    dtoList, totalCount, pageNumber, pageSize
+                );
+
+                return new ResponseDTO("Retrieved all post trips successfully", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting post trips: {ex.Message}", 500, false);
+            }
+        }
+
         // 1. CREATE POST TRIP
         public async Task<ResponseDTO> CreatePostTripAsync(PostTripCreateDTO dto)
         {

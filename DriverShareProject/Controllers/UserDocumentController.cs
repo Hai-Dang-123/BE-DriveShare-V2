@@ -1,20 +1,26 @@
+
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
 using Microsoft.AspNetCore.Authorization;
+
+﻿using BLL.Services.Impletement;
+using BLL.Services.Interface;
+
 using Microsoft.AspNetCore.Mvc;
 
 namespace DriverShareProject.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class UserDocumentController : ControllerBase
     {
-        private readonly IUserDocumentService _userDocumentService;
+        private readonly IUserDocumentService _service;
 
-        public UserDocumentController(IUserDocumentService userDocumentService)
+        public UserDocumentController(IUserDocumentService service)
         {
-            _userDocumentService = userDocumentService;
+            _service = service;
         }
+
 
         [HttpGet("check-cccd-status")]
         //[Authorize] // Bắt buộc có token
@@ -23,5 +29,31 @@ namespace DriverShareProject.Controllers
             var response = await _userDocumentService.CheckCCCDVerifiedAsync();
             return StatusCode(response.StatusCode, response);
         }
+
+        // GET ALL
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            var res = await _service.GetAllAsync();
+            return StatusCode(res.StatusCode, res);
+        }
+
+        // GET BY ID
+        [HttpGet("{id:guid}")]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var res = await _service.GetByIdAsync(id);
+            return StatusCode(res.StatusCode, res);
+        }
+
+        // GET BY USER ID (FE dùng)
+        [HttpGet("user/{userId:guid}")]
+        public async Task<IActionResult> GetByUserId(Guid userId)
+        {
+            var response = await _service.GetByUserIdAsync(userId);
+            return StatusCode(response.StatusCode, response);
+        }
+
+
     }
 }

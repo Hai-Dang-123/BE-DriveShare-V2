@@ -12,7 +12,13 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> ProviderCreatePackageAsync(PackageCreateDTO packageDTO);
         Task<ResponseDTO> OwnerCreatePackageAsync(PackageCreateDTO packageDTO);
         Task<ResponseDTO> GetPackageByIdAsync(Guid packageId);
-        Task<ResponseDTO> GetAllPackagesAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetAllPackagesAsync(
+              int pageNumber,
+              int pageSize,
+              string search = null,
+              string sortField = null,
+              string sortDirection = "ASC"
+          );
         Task<ResponseDTO> UpdatePackageAsync(PackageUpdateDTO updatePackageDTO);
         Task<ResponseDTO> DeletePackageAsync(Guid packageId);
         Task<ResponseDTO> GetPackagesByUserIdAsync(int pageNumber, int pageSize);

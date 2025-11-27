@@ -46,13 +46,24 @@ namespace DriverShareProject.Controllers
 
         [HttpGet("get-all-items")]
         public async Task<IActionResult> GetAllItems(
-            [FromQuery] int pageNumber = 1, // Thêm query param
-            [FromQuery] int pageSize = 10)  // Thêm query param
+     [FromQuery] int pageNumber = 1,
+     [FromQuery] int pageSize = 10,
+     [FromQuery] string? search = null,
+     [FromQuery] string? sortBy = null,
+     [FromQuery] string? sortOrder = "ASC"
+ )
         {
-            // Truyền tham số xuống service
-            var result = await _itemService.GetAllItemsAsync(pageNumber, pageSize);
+            var result = await _itemService.GetAllItemsAsync(
+                pageNumber,
+                pageSize,
+                search,
+                sortBy,
+                sortOrder
+            );
+
             return StatusCode(result.StatusCode, result);
         }
+
         [HttpPut("update-item")]
         public async Task<IActionResult> UpdateItem([FromBody] ItemUpdateDTO itemUpdateDTO)
         {

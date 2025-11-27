@@ -40,11 +40,23 @@ namespace DriverShareProject.Controllers
             var result = await _vehicleService.SoftDeleteAsync(id);
             return StatusCode(result.StatusCode, result);
         }
-
         [HttpGet]
-        public async Task<IActionResult> GetAllVehicles([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetAllVehicles(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortOrder = "ASC"
+        )
         {
-            var response = await _vehicleService.GetAllAsync(pageNumber, pageSize);
+            var response = await _vehicleService.GetAllAsync(
+                pageNumber,
+                pageSize,
+                search,
+                sortBy,
+                sortOrder
+            );
+
             return StatusCode(response.StatusCode, response);
         }
 

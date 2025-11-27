@@ -18,9 +18,23 @@ namespace DriverShareProject.Controllers
             _postTripService = postTripService;
         }
 
-        /// <summary>
-        /// [Owner] Tạo một bài đăng tuyển tài xế mới cho chuyến đi.
-        /// </summary>
+
+        [HttpGet("all")]
+        public async Task<IActionResult> GetAllPostTrips(
+    [FromQuery] int pageNumber = 1,
+    [FromQuery] int pageSize = 10,
+    [FromQuery] string? search = null,
+    [FromQuery] string? sortField = null,
+    [FromQuery] string? sortDirection = "ASC"
+)
+        {
+            var response = await _postTripService.GetAllPostTripsAsync(
+                pageNumber, pageSize, search, sortField, sortDirection
+            );
+
+            return StatusCode(response.StatusCode, response);
+        }
+
         [HttpPost]
         //[Authorize(Roles = "Owner")] // Chỉ Owner mới được tạo
         public async Task<IActionResult> CreatePostTrip([FromBody] PostTripCreateDTO dto)

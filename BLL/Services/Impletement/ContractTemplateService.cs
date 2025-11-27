@@ -68,11 +68,21 @@ namespace BLL.Services.Impletement
             if (template == null)
                 return new ResponseDTO { IsSuccess = false, Message = "Template not found" };
 
+            // XÓA TERM TRƯỚC
+            var terms = await _unitOfWork.ContractTermRepo.GetAllAsync(x => x.ContractTemplateId == id);
+            foreach (var t in terms)
+            {
+                await _unitOfWork.ContractTermRepo.DeleteAsync(t.ContractTermId);
+            }
+
+            // XÓA TEMPLATE
             await _unitOfWork.ContractTemplateRepo.DeleteAsync(id);
+
             await _unitOfWork.SaveChangeAsync();
 
-            return new ResponseDTO { IsSuccess = true, Message = "Template soft-deleted successfully" };
+            return new ResponseDTO { IsSuccess = true, Message = "Template deleted successfully" };
         }
+
 
         public async Task<ResponseDTO> GetAllAsync()
         {

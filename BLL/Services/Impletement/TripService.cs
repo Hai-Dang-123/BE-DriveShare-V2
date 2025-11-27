@@ -1373,7 +1373,107 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
             }
         }
 
-        
+
+        public async Task<ResponseDTO> GetAllAsync(
+     int pageNumber,
+     int pageSize,
+     string search = null,
+     string sortField = null,
+     string sortDirection = "DESC"
+ )
+        {
+            try
+            {
+              
+                // 2. Base query
+                var query = _unitOfWork.TripRepo.GetAll()
+                    .AsNoTracking()
+                    .Where(t => t.Status != TripStatus.DELETED);
+
+                // 3. Include
+                query = IncludeTripDetails(query);
+
+                // ==========================
+                // 🔎 SEARCH
+                // ==========================
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    string keyword = search.Trim().ToLower();
+
+                    query = query.Where(t =>
+                        (t.TripCode != null && t.TripCode.ToLower().Contains(keyword)) ||
+                        (t.Owner != null && t.Owner.FullName.ToLower().Contains(keyword)) ||
+                        (t.Vehicle != null && t.Vehicle.PlateNumber.ToLower().Contains(keyword)) ||
+                        (t.ShippingRoute.StartLocation.Address.ToLower().Contains(keyword)) ||
+                        (t.ShippingRoute.EndLocation.Address.ToLower().Contains(keyword))
+                    );
+                }
+
+                // ==========================
+                // 🔽 SORT
+                // ==========================
+                bool desc = sortDirection?.ToUpper() == "DESC";
+
+                query = sortField?.ToLower() switch
+                {
+                    "tripcode" => desc ? query.OrderByDescending(t => t.TripCode)
+                                       : query.OrderBy(t => t.TripCode),
+
+                    "owner" => desc ? query.OrderByDescending(t => t.Owner.FullName)
+                                    : query.OrderBy(t => t.Owner.FullName),
+
+                    "vehicle" => desc ? query.OrderByDescending(t => t.Vehicle.PlateNumber)
+                                      : query.OrderBy(t => t.Vehicle.PlateNumber),
+
+                    "status" => desc ? query.OrderByDescending(t => t.Status)
+                                     : query.OrderBy(t => t.Status),
+
+                    "createdat" => desc ? query.OrderByDescending(t => t.CreateAt)
+                                        : query.OrderBy(t => t.CreateAt),
+
+                    _ => query.OrderByDescending(t => t.CreateAt) // default
+                };
+
+                // ==========================
+                // 📌 PAGING
+                // ==========================
+                var totalCount = await query.CountAsync();
+
+                var trips = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                // ==========================
+                // 📌 MAP DTO
+                // ==========================
+                var dtoList = trips.Select(t => new TripDetailDTO
+                {
+                    TripId = t.TripId,
+                    TripCode = t.TripCode,
+                    Status = t.Status.ToString(),
+                    CreateAt = t.CreateAt,
+                    UpdateAt = t.UpdateAt,
+                    VehiclePlate = t.Vehicle?.PlateNumber ?? "N/A",
+                    VehicleModel = t.Vehicle?.Model ?? "N/A",
+                    OwnerName = t.Owner?.FullName ?? "N/A",
+                    StartAddress = t.ShippingRoute?.StartLocation?.Address ?? string.Empty,
+                    EndAddress = t.ShippingRoute?.EndLocation?.Address ?? string.Empty,
+                    DriverNames = t.DriverAssignments.Select(a => a.Driver.FullName).ToList(),
+                    PackageCodes = t.Packages.Select(p => p.PackageCode).ToList()
+                }).ToList();
+
+                var paginated = new PaginatedDTO<TripDetailDTO>(dtoList, totalCount, pageNumber, pageSize);
+
+                return new ResponseDTO("Get all trips successfully", 200, true, paginated);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting all trips: {ex.Message}", 500, false);
+            }
+        }
+
+
 
         private IQueryable<Trip> IncludeTripDetails(IQueryable<Trip> query)
         {
