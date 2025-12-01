@@ -307,7 +307,7 @@ namespace BLL.Services.Impletement
             var vehiclePickupDto = new TripVehicleHandoverRecordCreateDTO
             {
                 TripId = tripId,
-                Type = DeliveryRecordType.PICKUP,
+                Type = DeliveryRecordType.HANDOVER,
                 HandoverUserId = trip.OwnerId,   // Chủ xe giao
                 ReceiverUserId = mainDriverId,   // Tài xế nhận
                 Notes = "Biên bản giao xe cho tài xế (Khởi tạo tự động)"
@@ -319,7 +319,7 @@ namespace BLL.Services.Impletement
             var vehicleDropoffDto = new TripVehicleHandoverRecordCreateDTO
             {
                 TripId = tripId,
-                Type = DeliveryRecordType.DROPOFF,
+                Type = DeliveryRecordType.RETURN,
                 HandoverUserId = mainDriverId,   // Tài xế trả
                 ReceiverUserId = trip.OwnerId,   // Chủ xe nhận
                 Notes = "Biên bản trả xe về bãi (Khởi tạo tự động)"
