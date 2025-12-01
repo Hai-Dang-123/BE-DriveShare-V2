@@ -28,6 +28,8 @@ namespace DAL.Context
         private static readonly Guid OwnerID = Guid.Parse("32345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid StaffID = Guid.Parse("42345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid ProviderID = Guid.Parse("62345678-90AB-CDEF-1234-567890ABCDEF");
+        private static readonly Guid ProviderID_02 = Guid.Parse("13f2b6c3-6bc0-48ef-877f-1c2e0c244c9c");
+
         private static readonly Guid DriverID_2 = Guid.Parse("22345678-90AB-CDEF-0002-567890ABCDEF");
 
         // ───────────────────────────────────────────────
@@ -264,7 +266,28 @@ namespace DAL.Context
                     CompanyName = "Nhà cung cấp XYZ",
                     TaxCode = "0401234567",
                     AverageRating = 4.8m
-                }
+                },
+                 new Provider
+                 {
+                     // --- BaseUser Fields ---
+                     UserId = ProviderID_02,
+                     FullName = "Provider_Name_2",
+                     Email = "tienvlnse172689@fpt.edu.vn",
+                     PhoneNumber = "094792002",
+                     PasswordHash = fixedHashedPassword,
+                     CreatedAt = DateTime.UtcNow,
+                     LastUpdatedAt = DateTime.UtcNow,
+                     Status = UserStatus.ACTIVE,
+                     DateOfBirth = new DateTime(1988, 3, 1),
+                     IsEmailVerified = true,
+                     IsPhoneVerified = true,
+                     RoleId = ProviderRole,
+
+                     // --- Provider Specific Fields ---
+                     CompanyName = "Nhà cung cấp XYZ",
+                     TaxCode = "0401234567",
+                     AverageRating = 4.8m
+                 }
             );
         }
 
