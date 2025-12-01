@@ -24,5 +24,6 @@ namespace DAL.Entities
         public virtual ICollection<DriverActivityLog> ActivityLogs { get; set; } = new List<DriverActivityLog>();
         public virtual ICollection<TripDeliveryRecord> TripDeliveryRecords { get; set; } = new List<TripDeliveryRecord>();
         public virtual ICollection<TripDriverContract> TripDriverContracts { get; set;} = new List<TripDriverContract>();
+        public virtual ICollection<TripVehicleHandoverRecord> TripVehicleHandoverRecords { get; set; } = new List<TripVehicleHandoverRecord>();
     }
 }

@@ -23,5 +23,6 @@ namespace DAL.Entities
         public virtual ICollection<TripProviderContract> TripProviderContracts { get; set; } = new List<TripProviderContract>();
         public virtual ICollection<BaseContract> Contracts { get; set; } = new List<BaseContract>();
         public virtual ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
+        public virtual ICollection<TripVehicleHandoverRecord> TripVehicleHandoverRecords { get; set; } = new List<TripVehicleHandoverRecord>();
     }
 }

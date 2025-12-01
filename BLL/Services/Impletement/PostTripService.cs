@@ -141,6 +141,29 @@ namespace BLL.Services.Impletement
                 if (trip == null || trip.OwnerId != ownerId)
                     return new ResponseDTO("Trip not found or does not belong to this owner", 404, false);
 
+                // =================================================================================
+                // 🛑 VALIDATE: KIỂM TRA TÀI XẾ CHÍNH (PRIMARY DRIVER)
+                // =================================================================================
+
+                // 1. Kiểm tra xem bài đăng này có ý định tuyển Tài xế chính không?
+                bool isRecruitingMainDriver = dto.PostTripDetails.Any(d => d.Type == Common.Enums.Type.DriverType.PRIMARY);
+
+                if (isRecruitingMainDriver)
+                {
+                    // 2. Nếu có tuyển Main Driver -> Check DB xem Trip đã có Main Driver nào được chấp nhận chưa
+                    bool mainDriverExists = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
+                        a => a.TripId == dto.TripId &&
+                             a.Type == Common.Enums.Type.DriverType.PRIMARY &&
+                             a.AssignmentStatus == Common.Enums.Status.AssignmentStatus.ACCEPTED
+                    );
+
+                    if (mainDriverExists)
+                    {
+                        return new ResponseDTO("Chuyến đi này đã có Tài xế chính (Primary Driver). Không thể tạo bài tuyển thêm.", 400, false);
+                    }
+                }
+                // =================================================================================
+
                 var postTrip = new PostTrip
                 {
                     PostTripId = Guid.NewGuid(),
@@ -148,7 +171,6 @@ namespace BLL.Services.Impletement
                     TripId = dto.TripId,
                     Title = dto.Title,
                     Description = dto.Description,
-                    // [XÓA BỎ] - Type không còn ở đây
                     RequiredPayloadInKg = dto.RequiredPayloadInKg,
                     Status = dto.Status,
                     CreateAt = DateTime.Now,

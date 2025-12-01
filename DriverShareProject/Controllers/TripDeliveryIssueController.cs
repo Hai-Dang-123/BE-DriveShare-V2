@@ -15,11 +15,11 @@ namespace DriverShareProject.Controllers
         {
             _tripDeliveryIssueService = tripDeliveryIssueService;
         }
-        [HttpPost("create")]
-        public async Task<IActionResult> CreateTripDeliveryIssue([FromForm] Common.DTOs.TripDeliveryIssueCreateDTO dto)
-        {
-            var result = await _tripDeliveryIssueService.CreateTripDeliveryIssue(dto);
-            return StatusCode(result.StatusCode, result);
-        }
+        //[HttpPost("create")]
+        //public async Task<IActionResult> CreateTripDeliveryIssue([FromForm] Common.DTOs.TripDeliveryIssueCreateDTO dto)
+        //{
+        //    var result = await _tripDeliveryIssueService.CreateTripDeliveryIssue(dto);
+        //    return StatusCode(result.StatusCode, result);
+        //}
     }
     }

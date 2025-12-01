@@ -16,6 +16,7 @@ namespace Common.Enums.Type
 
         CONTRACT_SIGNING_OTP,
         DELIVERY_RECORD_SIGNING_OTP,
-        VIEW_ACCESS_TOKEN
+        VIEW_ACCESS_TOKEN,
+        VEHICLE_HANDOVER_SIGNING_OTP
     }
 }

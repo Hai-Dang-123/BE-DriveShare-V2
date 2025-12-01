@@ -51,6 +51,11 @@ namespace DAL.UnitOfWork
 
         IDriverWorkSessionRepository DriverWorkSessionRepo { get; }
         IContactTokenRepository ContactTokenRepo { get; }
+        ITripSurchargeRepository TripSurchargeRepo { get; }
+        ITripVehicleHandoverRecordRepository TripVehicleHandoverRecordRepo { get; }
+        ITripVehicleHandoverIssueRepository TripVehicleHandoverIssueRepo { get; }
+        ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo { get; }
+        ITripVehicleHandoverTermResultRepository TripVehicleHandoverTermResultRepo { get; }
 
 
         // Save changes

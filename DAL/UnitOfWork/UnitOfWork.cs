@@ -64,6 +64,12 @@ namespace DAL.UnitOfWork
 
             DriverWorkSessionRepo = new DriverWorkSessionRepository(context);
             ContactTokenRepo = new ContactTokenRepository(context);
+            TripVehicleHandoverTermResultRepo = new TripVehicleHandoverTermResultRepository(context);
+            TripVehicleHandoverIssueRepo = new TripVehicleHandoverIssueRepository(context);
+            TripVehicleHandoverRecordRepo = new TripVehicleHandoverRecordRepository(context);
+            TripSurchargeRepo = new TripSurchargeRepository(context);
+            TripVehicleHandoverIssueImageRepo = new TripVehicleHandoverIssueImageRepository(context);
+
 
         }
 
@@ -111,6 +117,11 @@ namespace DAL.UnitOfWork
         public IPostContactRepository PostContactRepo { get; private set; }
         public IDriverWorkSessionRepository DriverWorkSessionRepo { get; private set; } 
         public IContactTokenRepository ContactTokenRepo { get; private set; }
+        public ITripVehicleHandoverTermResultRepository TripVehicleHandoverTermResultRepo { get; private set; }
+        public ITripVehicleHandoverIssueRepository TripVehicleHandoverIssueRepo { get; private set; }
+        public ITripVehicleHandoverRecordRepository TripVehicleHandoverRecordRepo { get; private set; }
+        public ITripSurchargeRepository TripSurchargeRepo { get; private set; }
+        public ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo { get; private set; }
 
 
 

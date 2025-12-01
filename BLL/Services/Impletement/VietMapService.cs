@@ -163,26 +163,99 @@ namespace BLL.Services.Impletement
         }
 
         // --- GeocodeAsync (Hàm này không cần sửa) ---
+        //public async Task<Location?> GeocodeAsync(string address, string? focusLatLon = null)
+        //{
+        //    if (string.IsNullOrWhiteSpace(address))
+        //    {
+        //        return new Location(address, 0.0, 0.0);
+        //    }
+
+        //    var searchResults = await SearchAsync(address, focusLatLon);
+        //    var bestMatch = searchResults.FirstOrDefault();
+
+        //    if (bestMatch == null || bestMatch.Coordinates == null || bestMatch.Coordinates.Count < 2)
+        //    {
+        //        return new Location(address, 0.0, 0.0);
+        //    }
+
+        //    return new Location(
+        //        bestMatch.Address,
+        //        bestMatch.Latitude,
+        //        bestMatch.Longitude
+        //    );
+        //}
+        // --- 2. GEOCODE ASYNC (THÔNG MINH - TỰ ĐỘNG TÌM KHUVỰC LÂN CẬN NẾU ĐỊA CHỈ KHÓ TÌM) ---
         public async Task<Location?> GeocodeAsync(string address, string? focusLatLon = null)
         {
-            if (string.IsNullOrWhiteSpace(address))
+            // 1. Giữ lại địa chỉ gốc để nếu thất bại hoàn toàn thì vẫn trả về text gốc (với tọa độ 0,0)
+            var originalAddress = address;
+            var fallbackLocation = new Location(originalAddress ?? "", 0.0, 0.0);
+
+            if (string.IsNullOrWhiteSpace(address)) return fallbackLocation;
+
+            // 2. Cấu hình logic nới lỏng
+            int maxAttempts = 3; // Chỉ thử tối đa 3 lần (Tránh loop vô tận hoặc spam API)
+            int currentAttempt = 0;
+            string currentSearchText = address;
+
+            try
             {
-                return new Location(address, 0.0, 0.0);
+                while (currentAttempt < maxAttempts && !string.IsNullOrWhiteSpace(currentSearchText))
+                {
+                    // Gọi API tìm kiếm
+                    // Lưu ý: focusLatLon rất quan trọng ở đây. 
+                    // Ví dụ: Tìm "Đường Lê Lợi". Nếu có focus ở HCM, nó ra Lê Lợi Q1. Nếu focus ở HN, nó ra Lê Lợi Hà Đông.
+                    var searchResults = await SearchAsync(currentSearchText, focusLatLon);
+
+                    // Lấy kết quả tốt nhất
+                    var bestMatch = searchResults.FirstOrDefault();
+
+                    // CHECK: Nếu tìm thấy VÀ có tọa độ hợp lệ
+                    if (bestMatch != null &&
+                        bestMatch.Coordinates != null &&
+                        bestMatch.Coordinates.Count >= 2 &&
+                        (bestMatch.Latitude != 0 || bestMatch.Longitude != 0))
+                    {
+                        _logger.LogInformation("Geocode Success at attempt {Attempt}. Input: {Input} -> Found: {Found}",
+                            currentAttempt + 1, currentSearchText, bestMatch.Address);
+
+                        return new Location(
+                            bestMatch.Address ?? currentSearchText,
+                            bestMatch.Latitude,
+                            bestMatch.Longitude
+                        );
+                    }
+
+                    // NẾU KHÔNG TÌM THẤY -> THỰC HIỆN NỚI LỎNG ĐỊA CHỈ (RELAXING)
+                    _logger.LogWarning("Geocode failed at attempt {Attempt} for: {Text}. Trying broader area...", currentAttempt + 1, currentSearchText);
+
+                    currentAttempt++;
+
+                    // Logic cắt chuỗi: Tìm dấu phẩy đầu tiên
+                    // Ví dụ: "Số 10, Đường ABC, Quận 1" -> Cắt bỏ "Số 10" -> Còn "Đường ABC, Quận 1"
+                    int firstCommaIndex = currentSearchText.IndexOf(',');
+
+                    if (firstCommaIndex > -1 && firstCommaIndex < currentSearchText.Length - 1)
+                    {
+                        // Lấy phần sau dấu phẩy và xóa khoảng trắng thừa
+                        currentSearchText = currentSearchText.Substring(firstCommaIndex + 1).Trim();
+                    }
+                    else
+                    {
+                        // Nếu không còn dấu phẩy nào để cắt -> Hết cách -> Break vòng lặp
+                        break;
+                    }
+                }
+
+                // Nếu chạy hết vòng lặp mà vẫn không ra tọa độ -> Trả về 0,0
+                _logger.LogError("GeocodeAsync: Failed after {Attempt} attempts for address: {Address}", currentAttempt, originalAddress);
+                return fallbackLocation;
             }
-
-            var searchResults = await SearchAsync(address, focusLatLon);
-            var bestMatch = searchResults.FirstOrDefault();
-
-            if (bestMatch == null || bestMatch.Coordinates == null || bestMatch.Coordinates.Count < 2)
+            catch (Exception ex)
             {
-                return new Location(address, 0.0, 0.0);
+                _logger.LogError(ex, "Exception in GeocodeAsync. Address: {Address}", originalAddress);
+                return fallbackLocation;
             }
-
-            return new Location(
-                bestMatch.Address,
-                bestMatch.Latitude,
-                bestMatch.Longitude
-            );
         }
 
         // --- GetRouteAsync (Sửa URL và lỗi .Value) ---

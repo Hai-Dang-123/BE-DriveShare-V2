@@ -31,6 +31,9 @@ namespace DAL.Entities
 
         // Liên kết 1-n
         public virtual ICollection<TripDeliveryIssueImage> DeliveryIssueImages { get; set; } = new List<TripDeliveryIssueImage>();
-        public virtual ICollection<TripCompensation> Compensations { get; set; } = new List<TripCompensation>();
+        //public virtual ICollection<TripCompensation> Compensations { get; set; } = new List<TripCompensation>();
+        // --- BỔ SUNG: LIÊN KẾT NGƯỢC TỚI SURCHARGE ---
+        // Một sự cố có thể sinh ra 1 hoặc nhiều khoản phạt
+        public virtual ICollection<TripSurcharge> Surcharges { get; set; } = new List<TripSurcharge>();
     }
 }

@@ -79,6 +79,11 @@ namespace DAL.Context
         public DbSet<PostTripDetail> PostTripDetails { get; set; } = null!;
         public DbSet<ContactToken> ContactTokens { get; set; } = null!;
 
+        public DbSet<TripVehicleHandoverRecord> TripVehicleHandoverRecords { get; set; }
+        public DbSet<TripVehicleHandoverTermResult> TripVehicleHandoverTermResults { get; set; }
+        public DbSet<TripVehicleHandoverIssue> TripVehicleHandoverIssues { get; set; }
+        public DbSet<TripVehicleHandoverIssueImage> TripVehicleHandoverIssueImages { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -153,6 +158,12 @@ namespace DAL.Context
 
             modelBuilder.Entity<PostContact>().HasKey(p => p.PostContactId);
             modelBuilder.Entity<PostTripDetail>().HasKey(ptd => ptd.PostTripDetailId);
+
+            //modelBuilder.Entity<TripVehicleHandoverRecord>().HasKey(tvr => tvr.DeliveryRecordId);
+            modelBuilder.Entity<TripVehicleHandoverTermResult>().HasKey(tvtr => tvtr.TripVehicleHandoverTermResultId);
+            modelBuilder.Entity<TripVehicleHandoverIssue>().HasKey(tvi => tvi.TripVehicleHandoverIssueId);
+            modelBuilder.Entity<TripVehicleHandoverIssueImage>().HasKey(tvii => tvii.TripVehicleHandoverIssueImageId);
+
         }
 
         // =================================================================
@@ -665,11 +676,11 @@ namespace DAL.Context
                 .OnDelete(DeleteBehavior.Restrict);
 
 
-            modelBuilder.Entity<TripCompensation>()
-                .HasOne(tc => tc.Issue)
-                .WithMany(tdi => tdi.Compensations)
-                .HasForeignKey(tc => tc.IssueId)
-                .OnDelete(DeleteBehavior.Restrict);
+            //modelBuilder.Entity<TripCompensation>()
+            //    .HasOne(tc => tc.Issue)
+            //    .WithMany(tdi => tdi.Compensations)
+            //    .HasForeignKey(tc => tc.IssueId)
+            //    .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<TripCompensation>()
                 .HasOne(tc => tc.Requester)
                 .WithMany()
@@ -687,7 +698,124 @@ namespace DAL.Context
                 .WithMany(pt => pt.PostTripDetails)
                 .HasForeignKey(ptd => ptd.PostTripId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+
+            // ============================================================
+            // 1. CẤU HÌNH BIÊN BẢN GIAO NHẬN XE (TripVehicleHandoverRecord)
+            // ============================================================
+            modelBuilder.Entity<TripVehicleHandoverRecord>(entity =>
+            {
+                // Kế thừa từ DeliveryRecord (TPH - Table Per Hierarchy)
+                // Nếu bạn muốn tách bảng riêng thì dùng .ToTable("TripVehicleHandoverRecords");
+
+                // --- QUAN HỆ VỚI TRIP ---
+                // Xóa Trip -> Xóa luôn biên bản (Cascade)
+                entity.HasOne(e => e.Trip)
+                      .WithMany() // Nếu bên Trip có collection thì điền vào: t => t.VehicleHandoverRecords
+                      .HasForeignKey(e => e.TripId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // --- QUAN HỆ VỚI XE (VEHICLE) ---
+                // Không cho phép xóa Xe nếu đang có biên bản gắn với nó (Restrict)
+                entity.HasOne<Vehicle>() // Giả sử bạn có entity Vehicle
+                      .WithMany()
+                      .HasForeignKey(e => e.VehicleId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // --- QUAN HỆ VỚI USER (QUAN TRỌNG) ---
+                // Một biên bản có 2 người: Người Giao (HandoverUser) và Người Nhận (ReceiverUser)
+                // BẮT BUỘC dùng .OnDelete(DeleteBehavior.Restrict) để tránh lỗi vòng lặp SQL (Cycles)
+
+                // Cấu hình Owner - CHẶN XÓA (Restrict)
+                entity.HasOne(e => e.Owner)
+                      .WithMany()
+                      .HasForeignKey(e => e.OwnerId) // Phải khớp với tên property ở Bước 1
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Cấu hình Driver - CHẶN XÓA (Restrict)
+                entity.HasOne(e => e.Driver)
+                      .WithMany()
+                      .HasForeignKey(e => e.DriverId) // Phải khớp với tên property ở Bước 1
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Cấu hình ValueObject cho Location (nếu dùng Owned Type)
+                // entity.OwnsOne(e => e.ActualLocation);
+            });
+
+            // ============================================================
+            // 2. CẤU HÌNH KẾT QUẢ CHECKLIST (TermResults)
+            // ============================================================
+            modelBuilder.Entity<TripVehicleHandoverTermResult>(entity =>
+            {
+                // Quan hệ với Biên bản: Biên bản xóa -> Kết quả check xóa theo (Cascade)
+                entity.HasOne(e => e.TripVehicleHandoverRecord)
+                      .WithMany(r => r.TermResults)
+                      .HasForeignKey(e => e.TripVehicleHandoverRecordId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Quan hệ với Câu hỏi mẫu (Term): Không cho xóa câu hỏi nếu đã có record dùng nó (Restrict)
+                entity.HasOne(e => e.DeliveryRecordTerm)
+                      .WithMany()
+                      .HasForeignKey(e => e.DeliveryRecordTermId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ============================================================
+            // 3. CẤU HÌNH SỰ CỐ/HƯ HỎNG (Issues)
+            // ============================================================
+            modelBuilder.Entity<TripVehicleHandoverIssue>(entity =>
+            {
+                // Quan hệ với Biên bản: Biên bản xóa -> Sự cố xóa theo (Cascade)
+                entity.HasOne(e => e.TripVehicleHandoverRecord)
+                      .WithMany(r => r.Issues)
+                      .HasForeignKey(e => e.TripVehicleHandoverRecordId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // (Tùy chọn) Lưu Enum dưới dạng String trong DB cho dễ đọc
+                // entity.Property(e => e.IssueType).HasConversion<string>();
+                // entity.Property(e => e.Status).HasConversion<string>();
+            });
+
+            // ============================================================
+            // 4. CẤU HÌNH ẢNH SỰ CỐ (IssueImages)
+            // ============================================================
+            modelBuilder.Entity<TripVehicleHandoverIssueImage>(entity =>
+            {
+                // Sự cố xóa -> Ảnh xóa theo (Cascade)
+                entity.HasOne(e => e.TripVehicleHandoverIssue)
+                      .WithMany(i => i.Images)
+                      .HasForeignKey(e => e.TripVehicleHandoverIssueId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<TripSurcharge>(entity =>
+            {
+                // 1. Quan hệ với Trip (SỬA LẠI)
+                entity.HasOne(s => s.Trip)
+                      .WithMany(t => t.Surcharges) // <--- QUAN TRỌNG: Phải trỏ đúng vào Collection trong Trip để mất cột TripId1
+                      .HasForeignKey(s => s.TripId)
+                      .OnDelete(DeleteBehavior.Restrict); // <--- QUAN TRỌNG: Đổi từ Cascade sang Restrict
+
+                // 2. Quan hệ với Sự cố Xe (Giữ nguyên)
+                entity.HasOne(s => s.TripVehicleHandoverIssue)
+                      .WithMany(i => i.Surcharges)
+                      .HasForeignKey(s => s.TripVehicleHandoverIssueId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // 3. Quan hệ với Sự cố Giao hàng (Giữ nguyên)
+                entity.HasOne(s => s.TripDeliveryIssue)
+                      .WithMany(i => i.Surcharges)
+                      .HasForeignKey(s => s.TripDeliveryIssueId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Cấu hình tiền tệ
+                entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            });
+
         }
+
+
+
+
         // =================================================================
         // HÀM 5: CẤU HÌNH ĐỘ CHÍNH XÁC CHO DECIMAL
         // =================================================================

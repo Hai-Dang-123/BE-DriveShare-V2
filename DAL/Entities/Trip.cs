@@ -69,5 +69,6 @@ namespace DAL.Entities
         // (Liên kết giao dịch - đã có trong Transaction qua TripId)
         public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
         public virtual ICollection<TripDeliveryIssue> DeliveryIssues { get; set;} = new List<TripDeliveryIssue>();
+        public virtual ICollection<TripSurcharge> Surcharges { get; set; } = new List<TripSurcharge>();
     }
 }
