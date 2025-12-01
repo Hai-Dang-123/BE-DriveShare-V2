@@ -52,6 +52,7 @@ namespace DAL.Entities
         public virtual ICollection<VehicleDocument> VehicleDocuments { get; set; } = new List<VehicleDocument>();
         public virtual ICollection<VehicleImage> VehicleImages { get; set; } = new List<VehicleImage>();
         public virtual ICollection<Trip> Trips { get; set; } = new List<Trip>();
+        public virtual ICollection<TripVehicleHandoverRecord> TripVehicleHandoverRecords { get; set; } = new List<TripVehicleHandoverRecord>();
 
     }
 }

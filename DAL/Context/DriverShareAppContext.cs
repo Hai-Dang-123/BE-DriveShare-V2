@@ -187,6 +187,7 @@ namespace DAL.Context
             // 3. DeliveryRecord (TPT)
             modelBuilder.Entity<DeliveryRecord>().ToTable("DeliveryRecords");
             modelBuilder.Entity<TripDeliveryRecord>().ToTable("TripDeliveryRecords");
+            modelBuilder.Entity<TripVehicleHandoverRecord>().ToTable("TripVehicleHandoverRecords");
         }
 
         // =================================================================
@@ -711,16 +712,16 @@ namespace DAL.Context
                 // --- QUAN HỆ VỚI TRIP ---
                 // Xóa Trip -> Xóa luôn biên bản (Cascade)
                 entity.HasOne(e => e.Trip)
-                      .WithMany() // Nếu bên Trip có collection thì điền vào: t => t.VehicleHandoverRecords
+                      .WithMany(t => t.TripVehicleHandoverRecords) // Nếu bên Trip có collection thì điền vào: t => t.VehicleHandoverRecords
                       .HasForeignKey(e => e.TripId)
-                      .OnDelete(DeleteBehavior.Cascade);
+                      .OnDelete(DeleteBehavior.Restrict);
 
                 // --- QUAN HỆ VỚI XE (VEHICLE) ---
                 // Không cho phép xóa Xe nếu đang có biên bản gắn với nó (Restrict)
-                entity.HasOne<Vehicle>() // Giả sử bạn có entity Vehicle
-                      .WithMany()
-                      .HasForeignKey(e => e.VehicleId)
-                      .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Vehicle) // 1. Khai báo thuộc tính điều hướng trên TripVehicleHandoverRecord
+                     .WithMany(v => v.TripVehicleHandoverRecords) // 2. Khai báo thuộc tính điều hướng trên Vehicle
+                     .HasForeignKey(e => e.VehicleId) // 3. Chỉ định Khóa ngoại rõ ràng
+                     .OnDelete(DeleteBehavior.Restrict);
 
                 // --- QUAN HỆ VỚI USER (QUAN TRỌNG) ---
                 // Một biên bản có 2 người: Người Giao (HandoverUser) và Người Nhận (ReceiverUser)
@@ -728,13 +729,13 @@ namespace DAL.Context
 
                 // Cấu hình Owner - CHẶN XÓA (Restrict)
                 entity.HasOne(e => e.Owner)
-                      .WithMany()
+                      .WithMany(o => o.TripVehicleHandoverRecords)
                       .HasForeignKey(e => e.OwnerId) // Phải khớp với tên property ở Bước 1
                       .OnDelete(DeleteBehavior.Restrict);
 
                 // Cấu hình Driver - CHẶN XÓA (Restrict)
                 entity.HasOne(e => e.Driver)
-                      .WithMany()
+                      .WithMany(d => d.TripVehicleHandoverRecords)
                       .HasForeignKey(e => e.DriverId) // Phải khớp với tên property ở Bước 1
                       .OnDelete(DeleteBehavior.Restrict);
 

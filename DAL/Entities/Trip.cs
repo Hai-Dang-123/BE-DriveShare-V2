@@ -70,5 +70,6 @@ namespace DAL.Entities
         public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
         public virtual ICollection<TripDeliveryIssue> DeliveryIssues { get; set;} = new List<TripDeliveryIssue>();
         public virtual ICollection<TripSurcharge> Surcharges { get; set; } = new List<TripSurcharge>();
+        public virtual ICollection<TripVehicleHandoverRecord> TripVehicleHandoverRecords { get; private set; } = new List<TripVehicleHandoverRecord>();
     }
 }
