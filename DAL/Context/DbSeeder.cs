@@ -26,8 +26,11 @@ namespace DAL.Context
         private static readonly Guid AdminID = Guid.Parse("12345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid DriverID = Guid.Parse("22345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid OwnerID = Guid.Parse("32345678-90AB-CDEF-1234-567890ABCDEF");
+        private static readonly Guid OwnerID_2 = Guid.Parse("69cf944d-7eee-4b23-ab1a-7f8412081635");
         private static readonly Guid StaffID = Guid.Parse("42345678-90AB-CDEF-1234-567890ABCDEF");
         private static readonly Guid ProviderID = Guid.Parse("62345678-90AB-CDEF-1234-567890ABCDEF");
+        private static readonly Guid ProviderID_02 = Guid.Parse("13f2b6c3-6bc0-48ef-877f-1c2e0c244c9c");
+
         private static readonly Guid DriverID_2 = Guid.Parse("22345678-90AB-CDEF-0002-567890ABCDEF");
 
         // ───────────────────────────────────────────────
@@ -126,7 +129,7 @@ namespace DAL.Context
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
             modelBuilder.Entity<Driver>().HasData(
-                new Driver { UserId = DriverID, FullName = "Tài xế Văn A", Email = "driver@example.com", PhoneNumber = "0987654321", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1990, 5, 15), IsEmailVerified = true, IsPhoneVerified = true, RoleId = DriverRole, LicenseNumber = "GPLX12345", LicenseClass = "B2", LicenseExpiryDate = DateTime.UtcNow.AddYears(5), IsLicenseVerified = true, DriverStatus = DriverStatus.AVAILABLE },
+                new Driver { UserId = DriverID, FullName = "Tài xế Văn A", Email = "tienvo5668@gmail.com", PhoneNumber = "0987654321", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1990, 5, 15), IsEmailVerified = true, IsPhoneVerified = true, RoleId = DriverRole, LicenseNumber = "GPLX12345", LicenseClass = "B2", LicenseExpiryDate = DateTime.UtcNow.AddYears(5), IsLicenseVerified = true, DriverStatus = DriverStatus.AVAILABLE },
                 new Driver { UserId = DriverID_2, FullName = "Tài xế Văn B", Email = "driver2@example.com", PhoneNumber = "0987111222", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1995, 1, 1), IsEmailVerified = true, IsPhoneVerified = true, RoleId = DriverRole, LicenseNumber = "GPLX67890", LicenseClass = "C", LicenseExpiryDate = DateTime.UtcNow.AddYears(3), IsLicenseVerified = true, DriverStatus = DriverStatus.AVAILABLE }
             );
         }
@@ -135,7 +138,9 @@ namespace DAL.Context
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
             modelBuilder.Entity<Owner>().HasData(
-                new Owner { UserId = OwnerID, FullName = "Owner_Name", Email = "danglaikp@gmail.com", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m }
+                new Owner { UserId = OwnerID, FullName = "Owner_Name", Email = "danglaikp@gmail.com", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m },
+                new Owner { UserId = OwnerID_2, FullName = "Owner_Name_2", Email = "voluongnhuttien@gmail.com", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m }
+
             );
         }
 
@@ -143,7 +148,48 @@ namespace DAL.Context
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
             modelBuilder.Entity<Provider>().HasData(
-                new Provider { UserId = ProviderID, FullName = "Provider_Name", Email = "danglvhse151369@fpt.edu.vn", PhoneNumber = "0556677889", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1988, 3, 1), IsEmailVerified = true, IsPhoneVerified = true, RoleId = ProviderRole, CompanyName = "Nhà cung cấp XYZ", TaxCode = "0401234567", AverageRating = 4.8m }
+                new Provider
+                {
+                    // --- BaseUser Fields ---
+                    UserId = ProviderID,
+                    FullName = "Provider_Name",
+                    Email = "danglvhse151369@fpt.edu.vn",
+                    PhoneNumber = "0556677889",
+                    PasswordHash = fixedHashedPassword,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdatedAt = DateTime.UtcNow,
+                    Status = UserStatus.ACTIVE,
+                    DateOfBirth = new DateTime(1988, 3, 1),
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    RoleId = ProviderRole,
+
+                    // --- Provider Specific Fields ---
+                    CompanyName = "Nhà cung cấp XYZ",
+                    TaxCode = "0401234567",
+                    AverageRating = 4.8m
+                },
+                 new Provider
+                 {
+                     // --- BaseUser Fields ---
+                     UserId = ProviderID_02,
+                     FullName = "Provider_Name_2",
+                     Email = "tienvlnse172689@fpt.edu.vn",
+                     PhoneNumber = "094792002",
+                     PasswordHash = fixedHashedPassword,
+                     CreatedAt = DateTime.UtcNow,
+                     LastUpdatedAt = DateTime.UtcNow,
+                     Status = UserStatus.ACTIVE,
+                     DateOfBirth = new DateTime(1988, 3, 1),
+                     IsEmailVerified = true,
+                     IsPhoneVerified = true,
+                     RoleId = ProviderRole,
+
+                     // --- Provider Specific Fields ---
+                     CompanyName = "Nhà cung cấp XYZ",
+                     TaxCode = "0401234567",
+                     AverageRating = 4.8m
+                 }
             );
         }
 

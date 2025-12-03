@@ -315,8 +315,9 @@ namespace BLL.Services.Impletement
                 else if (isReceiverSide)
                 {
                     if (record.DriverSignedAt != null && record.OwnerSigned) return new ResponseDTO("Bạn đã ký rồi.", 400, false);
+                    record.DriverSigned = true;
                     record.DriverSignedAt = DateTime.UtcNow;
-                    record.OwnerSigned = true;
+                   
                 }
 
                 // --- BƯỚC 5: Kiểm tra hoàn tất & Cập nhật Trip/Vehicle ---

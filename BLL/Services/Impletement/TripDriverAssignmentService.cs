@@ -213,6 +213,13 @@ namespace BLL.Services.Impletement
                 // --- TẠO BIÊN BẢN (NẾU LÀ MAIN DRIVER) ---
                 if (isMainDriver)
                 {
+                    //await CreateRecordsForMainDriver(trip.TripId, driverId);
+                    // 1. Chuyển trạng thái Trip đúng giai đoạn
+                    trip.Status = TripStatus.READY_FOR_VEHICLE_HANDOVER;
+                    trip.UpdateAt = DateTime.UtcNow;
+                    await _unitOfWork.TripRepo.UpdateAsync(trip);
+
+                    // 2. Sau đó mới được phép tạo biên bản giao – nhận xe
                     await CreateRecordsForMainDriver(trip.TripId, driverId);
                 }
 
