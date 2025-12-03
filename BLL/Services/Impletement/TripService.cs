@@ -1086,7 +1086,6 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                 // 🔹 2. TRUY VẤN SƠ BỘ (CHỈ ĐỂ XÁC THỰC)
                 var tripForAuth = await _unitOfWork.TripRepo.FirstOrDefaultAsync(
                     filter: t => t.TripId == tripId,
-                    // ⚠️ SỬA ĐỔI: Include thêm Hợp đồng Provider để kiểm tra
                     includeProperties: "DriverAssignments,TripProviderContract"
                 );
 
@@ -1095,22 +1094,20 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
 
                 // 🔹 3. Kiểm tra quyền (Authorization)
                 bool isOwner = (userRole == "Owner" && tripForAuth.OwnerId == userId);
-
                 bool isAssignedDriver = (userRole == "Driver" &&
                                        tripForAuth.DriverAssignments.Any(a => a.DriverId == userId));
-
-                // ⚠️ THÊM MỚI: Kiểm tra Provider (người ký HĐ)
                 bool isProvider = (userRole == "Provider" &&
                                      tripForAuth.TripProviderContract != null &&
                                      tripForAuth.TripProviderContract.CounterpartyId == userId);
 
-                // ⚠️ SỬA ĐỔI: Thêm logic isProvider
+                // (Bạn có thể bật lại nếu muốn)
                 //if (!isOwner && !isAssignedDriver && !isProvider)
-                //    return new ResponseDTO("Forbidden: Bạn không có quyền xem chuyến đi này.", 403, false);   // NHỚ LÀ PHẢI SỬA CHỖ NÀY NHÉ
+                //    return new ResponseDTO("Forbidden: Bạn không có quyền xem chuyến đi này.", 403, false);
+
 
                 // 🔹 4. TÁCH TRUY VẤN (SPLIT QUERY)
 
-                // --- TRUY VẤN 4.1: Tải Dữ liệu Chính (Không có Collection) ---
+                // --- TRUY VẤN 4.1: Tải Dữ liệu Chính ---
                 var query = _unitOfWork.TripRepo.GetAll().Where(t => t.TripId == tripId);
 
                 var dto = await query.Select(trip => new TripDetailFullDTO
@@ -1121,7 +1118,6 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                     CreateAt = trip.CreateAt,
                     UpdateAt = trip.UpdateAt,
 
-                    // --- Vehicle (Safer) ---
                     Vehicle = trip.Vehicle == null ? new() : new VehicleSummaryDTO
                     {
                         VehicleId = trip.Vehicle.VehicleId,
@@ -1134,7 +1130,6 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                                         .ToList() : new List<string>()
                     },
 
-                    // --- Owner (Safer) ---
                     Owner = trip.Owner == null ? new() : new OwnerSummaryDTO
                     {
                         OwnerId = trip.OwnerId,
@@ -1143,7 +1138,6 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         PhoneNumber = trip.Owner.PhoneNumber
                     },
 
-                    // --- Shipping Route (Safer) ---
                     ShippingRoute = trip.ShippingRoute == null ? new() : new RouteDetailDTO
                     {
                         StartAddress = trip.ShippingRoute.StartLocation != null ? trip.ShippingRoute.StartLocation.Address : string.Empty,
@@ -1151,7 +1145,6 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         EstimatedDuration = trip.ShippingRoute.ExpectedDeliveryDate - trip.ShippingRoute.ExpectedPickupDate
                     },
 
-                    // --- Trip Route (Safer) ---
                     TripRoute = trip.TripRoute == null ? new() : new TripRouteSummaryDTO
                     {
                         DistanceKm = trip.TripRoute.DistanceKm,
@@ -1159,7 +1152,6 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         RouteData = trip.TripRoute.RouteData
                     },
 
-                    // --- Provider (Safer) ---
                     Provider = (trip.Type == Common.Enums.Type.TripType.FROM_PROVIDER && trip.PostTrip != null && trip.PostTrip.Owner != null)
                         ? new ProviderSummaryDTO
                         {
@@ -1169,15 +1161,15 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                             AverageRating = trip.PostTrip.Owner.AverageRating ?? 0
                         } : null,
 
-                    // QUAN TRỌNG: Khởi tạo rỗng các List, chúng ta sẽ tải chúng sau
                     Packages = new List<PackageSummaryDTO>(),
                     Drivers = new List<TripDriverAssignmentDTO>(),
                     Contacts = new List<TripContactDTO>(),
                     DriverContracts = new List<ContractSummaryDTO>(),
-                    ProviderContracts = new ContractSummaryDTO(), // Sẽ tải sau
+                    ProviderContracts = new ContractSummaryDTO(),
                     DeliveryRecords = new List<TripDeliveryRecordDTO>(),
                     Compensations = new List<TripCompensationDTO>(),
-                    Issues = new List<TripDeliveryIssueDTO>()
+                    Issues = new List<TripDeliveryIssueDTO>(),
+                    handoverReadDTOs = new List<TripVehicleHandoverReadDTO>()
 
                 }).FirstOrDefaultAsync();
 
@@ -1185,9 +1177,9 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                     return new ResponseDTO("Trip not found after main query.", 404, false);
 
 
-                // --- TRUY VẤN 4.2 -> 4.N: Tải riêng từng Collection (Siêu nhanh) ---
+                // --- TRUY VẤN 4.2 -> 4.N: Tải riêng từng Collection ---
 
-                // Tải Packages (bao gồm Items)
+                // Packages
                 dto.Packages = await _unitOfWork.PackageRepo.GetAll()
                     .Where(p => p.TripId == tripId)
                     .Select(p => new PackageSummaryDTO
@@ -1211,14 +1203,13 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                             Description = p.Item.Description,
                             DeclaredValue = p.Item.DeclaredValue ?? 0,
                             Images = p.Item.ItemImages != null ?
-                                        p.Item.ItemImages
-                                        .Select(img => img.ItemImageURL)
-                                        .ToList() : new List<string>()
+                                        p.Item.ItemImages.Select(img => img.ItemImageURL).ToList()
+                                        : new List<string>()
                         }
                             }
                     }).ToListAsync();
 
-                // Tải Drivers
+                // Drivers
                 dto.Drivers = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
                     .Where(d => d.TripId == tripId)
                     .Select(d => new TripDriverAssignmentDTO
@@ -1227,10 +1218,9 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         FullName = d.Driver != null ? d.Driver.FullName : "N/A",
                         Type = d.Type.ToString(),
                         AssignmentStatus = d.AssignmentStatus.ToString(),
-                        //PaymentStatus = d.PaymentStatus.ToString()
                     }).ToListAsync();
 
-                // Tải Contacts
+                // Contacts
                 dto.Contacts = await _unitOfWork.TripContactRepo.GetAll()
                     .Where(c => c.TripId == tripId)
                     .Select(c => new TripContactDTO
@@ -1242,7 +1232,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         Note = c.Note
                     }).ToListAsync();
 
-                // Tải Driver Contracts (với Terms và Chữ ký)
+                // Driver Contracts
                 dto.DriverContracts = await _unitOfWork.TripDriverContractRepo.GetAll()
                     .Where(c => c.TripId == tripId)
                     .Select(c => new ContractSummaryDTO
@@ -1274,8 +1264,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                                     .ToList() : new List<ContractTermInTripDTO>()
                     }).ToListAsync();
 
-                // Tải Provider Contract (với Terms và Chữ ký)
-                // ⚠️ SỬA ĐỔI: Cho phép Owner HOẶC Provider tải hợp đồng này
+                // Provider Contract
                 if (isOwner || isProvider)
                 {
                     dto.ProviderContracts = await _unitOfWork.TripProviderContractRepo.GetAll()
@@ -1309,7 +1298,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                         }).FirstOrDefaultAsync() ?? new ContractSummaryDTO();
                 }
 
-                // Tải Delivery Records (với Terms)
+                // Delivery Records
                 dto.DeliveryRecords = await _unitOfWork.TripDeliveryRecordRepo.GetAll()
                     .Where(r => r.TripId == tripId)
                     .Select(r => new TripDeliveryRecordDTO
@@ -1337,7 +1326,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                                     .ToList() : new List<DeliveryRecordTermInTripDTO>()
                     }).ToListAsync();
 
-                // Tải Compensations
+                // Compensations
                 dto.Compensations = await _unitOfWork.TripCompensationRepo.GetAll()
                      .Where(cp => cp.TripId == tripId)
                      .Select(cp => new TripCompensationDTO
@@ -1347,7 +1336,7 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                          Amount = cp.Amount
                      }).ToListAsync();
 
-                // Tải Delivery Issues
+                // Delivery Issues
                 dto.Issues = await _unitOfWork.TripDeliveryIssueRepo.GetAll()
                     .Where(i => i.TripId == tripId)
                     .Select(i => new TripDeliveryIssueDTO
@@ -1359,7 +1348,39 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                     }).ToListAsync();
 
 
-                // 🔹 5. Trả về DTO đã được điền đầy đủ
+                // 🔹 Load Trip Vehicle Handover Records (MỚI)
+                dto.handoverReadDTOs = await _unitOfWork.TripVehicleHandoverRecordRepo.GetAll()
+                    .Where(h => h.TripId == tripId)
+                    .Select(h => new TripVehicleHandoverReadDTO
+                    {
+                        TripVehicleHandoverRecordId = h.DeliveryRecordId,
+                        TripId = h.TripId,
+                        VehicleId = h.VehicleId,
+                        Type = h.Type.ToString(),
+                        Status = h.Status.ToString(),
+
+                        HandoverUserId = h.OwnerId,
+                        HandoverUserName = h.Owner.FullName != null ? h.Owner.FullName : "N/A",
+                        ReceiverUserId = h.DriverId,
+                        ReceiverUserName = h.Driver.FullName != null ? h.Driver.FullName : "N/A",
+
+                        CurrentOdometer = h.CurrentOdometer,
+                        FuelLevel = h.FuelLevel,
+                        IsEngineLightOn = h.IsEngineLightOn,
+                        Notes = h.Notes,
+
+                        HandoverSigned = h.OwnerSigned,
+                        HandoverSignedAt = h.OwnerSignedAt,
+
+
+                        ReceiverSigned = h.DriverSigned,
+                        ReceiverSignedAt = h.DriverSignedAt,
+
+                    })
+                    .ToListAsync();
+
+
+                // 🔹 5. Trả về DTO
                 return new ResponseDTO("Get trip successfully", 200, true, dto);
             }
             catch (Exception ex)
@@ -1372,6 +1393,9 @@ cho hàm IsValidTransition CŨ trong file TripService.cs của bạn.
                 return new ResponseDTO($"Error fetching trip detail: {ex.Message}", 500, false);
             }
         }
+
+
+
 
 
         public async Task<ResponseDTO> GetAllAsync(

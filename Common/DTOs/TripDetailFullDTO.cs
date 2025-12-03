@@ -46,6 +46,8 @@ namespace Common.DTOs
         public List<TripDeliveryRecordDTO> DeliveryRecords { get; set; } = new();
         public List<TripCompensationDTO> Compensations { get; set; } = new();
         public List<TripDeliveryIssueDTO> Issues { get; set; } = new();
+
+        public List<TripVehicleHandoverReadDTO> handoverReadDTOs { get; set; } = new();
     }
 
     public class VehicleSummaryDTO

@@ -192,7 +192,7 @@ namespace BLL.Services.Implement
                     contract.EffectiveDate = DateTime.UtcNow;
 
                     //// Cập nhật Trip sang trạng thái "Đợi Provider Thanh Toán"
-                    //trip.Status = TripStatus.AWAITING_PROVIDER_PAYMENT;
+                    trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
                 }
                 else
                 {
