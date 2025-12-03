@@ -1,45 +1,54 @@
-﻿using Common.Enums.Status; // Giả sử có Enum 'KycStatus'
-using Common.Enums.Type;   // Giả sử có Enum 'DocumentType' (CCCD, DRIVER_LICENSE, PORTRAIT)
+﻿using Common.Enums.Status;
+using Common.Enums.Type;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DAL.Entities
 {
     public class UserDocument
     {
         public Guid UserDocumentId { get; set; }
+        public Guid UserId { get; set; }
 
-        // --- GỢI Ý BẮT BUỘC (Khóa ngoại) ---
-        public Guid UserId { get; set; } // FK to BaseUser
+        // --- Loại tài liệu ---
+        public DocumentType DocumentType { get; set; } // CCCD, DRIVING_LICENSE...
 
-        // --- GỢI Ý (Nghiệp vụ eKYC) ---
-
-        // Loại tài liệu: Enum (CCCD, DRIVER_LICENSE, PORTRAIT, ...)
-        public DocumentType DocumentType { get; set; }
-
-        // --- Mặt trước ---
+        // --- Hình ảnh & Hash ---
         public string FrontImageUrl { get; set; } = null!;
-        public string? FrontImageHash { get; set; } // Hash của mặt trước
+        public string? FrontImageHash { get; set; }
 
-        // --- Mặt sau (Nullable, vì ảnh chân dung/passport không có mặt sau) ---
         public string? BackImageUrl { get; set; }
-        public string? BackImageHash { get; set; } // Hash của mặt sau
+        public string? BackImageHash { get; set; }
+
+        public string? PortraitImageUrl { get; set; }
+        public string? PortraitImageHash { get; set; }
+
+        // --- Dữ liệu OCR chung ---
+        public string? IdentityNumber { get; set; } // Số CCCD hoặc Số GPLX
+        public string? FullName { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? PlaceOfOrigin { get; set; }
+        public string? PlaceOfResidence { get; set; } // Với GPLX có thể là địa chỉ cư trú
+        public DateTime? IssueDate { get; set; }
+        public string? IssuePlace { get; set; } // Nơi cấp (Cục CSGT...)
+        public DateTime? ExpiryDate { get; set; }
+
+        // --- Dữ liệu RIÊNG cho Bằng Lái Xe (GPLX) ---
+        // Có thể null nếu là CCCD
+        public string? LicenseClass { get; set; } // Ví dụ: A1, B2, C, FC...
+
+        // --- Kết quả EKYC ---
+        public double? FaceMatchScore { get; set; }
+        public bool IsDocumentReal { get; set; }
+        public string? EkycLog { get; set; }
 
         // --- Trạng thái ---
-        // Trạng thái chung của giấy tờ này (ví dụ: CCCD đã được duyệt chưa)
         public VerifileStatus Status { get; set; }
-
-        // Lý do từ chối (nếu Status là REJECTED)
         public string? RejectionReason { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime? VerifiedAt { get; set; } // Thời điểm Admin duyệt/từ chối
+        public DateTime? VerifiedAt { get; set; }
 
-        // --- GỢI Ý BẮT BUỘC (Thuộc tính điều hướng) ---
         public virtual BaseUser User { get; set; } = null!;
     }
 }

@@ -200,7 +200,7 @@ namespace BLL.Services.Implement
                     contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE;
 
                     //// Có thể giữ nguyên hoặc cập nhật lại cho chắc
-                    //trip.Status = TripStatus.AWAITING_PROVIDER_CONTRACT;
+                    trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
                 }
 
                 // 6. Lưu thay đổi (Transaction: Token + Contract + Trip cùng lúc)

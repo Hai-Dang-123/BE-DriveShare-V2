@@ -26,6 +26,7 @@ namespace DAL.Repositories.Interface
         void UpdateRange(List<T> entity);
         void RemoveRange(List<T> entity);
         void AddRange(List<T> entity);
+        Task AddRangeAsync(IEnumerable<T> entities);
         Task DeleteAsync(Guid id);
         Task<T> FirstOrDefaultAsync(Expression<Func<T, bool>> expression);
         Task<T> GetByConditionAsync(Expression<Func<T, bool>> expression);

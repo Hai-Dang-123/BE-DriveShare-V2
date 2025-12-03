@@ -23,7 +23,7 @@ namespace Common.DTOs
 
         // 1. Danh sách ảnh xe
         // FE sẽ append: formData.append('VehicleImages', file1)
-        public List<IFormFile> VehicleImages { get; set; } = new List<IFormFile>();
+        public List<VehicleImageInputDTO> VehicleImages { get; set; } = new List<VehicleImageInputDTO>();
 
         // 2. Danh sách giấy tờ
         // FE sẽ append: formData.append('Documents[0].DocumentType', 'REGISTRATION')

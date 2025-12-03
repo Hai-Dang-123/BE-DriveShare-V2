@@ -1,63 +1,35 @@
-﻿//using BLL.Services.Interface;
-//using Common.DTOs;
-//using Microsoft.AspNetCore.Mvc;
+﻿using BLL.Services.Interface;
+using BLL.Utilities;
+using Common.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Threading.Tasks;
 
-//namespace DriverShareProject.Controllers
-//{
-//    [ApiController]
-//    [Route("api/[controller]")]
-//    public class VehicleDocumentController : ControllerBase
-//    {
-//        private readonly IVehicleDocumentService _vehicleDocumentService;
+namespace DriverShareProject.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class VehicleDocumentController : ControllerBase
+    {
+        private readonly IVehicleDocumentService _service;
 
-//        public VehicleDocumentController(IVehicleDocumentService vehicleDocumentService)
-//        {
-//            _vehicleDocumentService = vehicleDocumentService;
-//        }
+        public VehicleDocumentController(IVehicleDocumentService service)
+        {
+            _service = service;
+        }
 
-//        [HttpGet]
-//        public async Task<IActionResult> GetAll()
-//        {
-//            var response = await _vehicleDocumentService.GetAllAsync();
-//            return StatusCode(response.StatusCode, response);
-//        }
-
-//        [HttpGet("{id:guid}")]
-//        public async Task<IActionResult> GetById(Guid id)
-//        {
-//            var response = await _vehicleDocumentService.GetByIdAsync(id);
-//            return StatusCode(response.StatusCode, response);
-//        }
-
-//        [HttpPost]
-//        public async Task<IActionResult> Create([FromBody] VehicleDocumentDTO dto)
-//        {
-//            if (!ModelState.IsValid)
-//            {
-//                return BadRequest(new ResponseDTO("Invalid data", 400, false));
-//            }
-
-//            var response = await _vehicleDocumentService.CreateAsync(dto);
-//            return StatusCode(response.StatusCode, response);
-//        }
-
-//        [HttpPut("{id:guid}")]
-//        public async Task<IActionResult> Update(Guid id, [FromBody] VehicleDocumentDTO dto)
-//        {
-//            if (!ModelState.IsValid)
-//            {
-//                return BadRequest(new ResponseDTO("Invalid data", 400, false));
-//            }
-
-//            var response = await _vehicleDocumentService.UpdateAsync(id, dto);
-//            return StatusCode(response.StatusCode, response);
-//        }
-
-//        [HttpDelete("{id:guid}")]
-//        public async Task<IActionResult> Delete(Guid id)
-//        {
-//            var response = await _vehicleDocumentService.DeleteAsync(id);
-//            return StatusCode(response.StatusCode, response);
-//        }
-//    }
-//}
+        /// <summary>
+        /// Thêm mới giấy tờ cho xe (Cà vẹt, Bảo hiểm...)
+        /// </summary>
+        /// <param name="vehicleId">ID của xe cần thêm giấy tờ</param>
+        /// <param name="request">Form chứa ảnh và thông tin</param>
+        [HttpPost("add/{vehicleId:guid}")]
+        [Authorize] // Bắt buộc đăng nhập
+        public async Task<IActionResult> AddDocument(Guid vehicleId, [FromForm] AddVehicleDocumentDTO request)
+        {
+            var response = await _service.AddDocumentAsync(vehicleId, request);
+            return StatusCode(response.StatusCode, response);
+        }
+    }
+}

@@ -19,6 +19,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> RegisterForAdmin (RegisterForAdminDTO dto);
         //
         Task<ResponseDTO> RefreshTokenAsync(RefreshTokenDTO dto);
+        Task<ResponseDTO> VerifyEmailAsync(Guid userId, string token);
 
     }
 }

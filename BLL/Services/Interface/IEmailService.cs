@@ -13,6 +13,7 @@ namespace BLL.Services.Interface
         Task SendDeliveryRecordLinkEmailAsync(string email, string fullName, string link, string recordCode, string typeName);
         // Trong IEmailService.cs
         Task SendTripCompletionEmailAsync(string toEmail, TripCompletionReportModel model);
+        Task SendEmailVerificationLinkAsync(string email, string fullName, string verificationLink);
 
     }
 }

@@ -422,5 +422,87 @@ namespace BLL.Services.Impletement
 
             await SendEmailAsync(toEmail, subject, body);
         }
+
+        // BLL/Services/Impletement/EmailService.cs
+
+        /// <summary>
+        /// Gửi Email chứa link xác thực tài khoản
+        /// </summary>
+        public async Task SendEmailVerificationLinkAsync(string email, string fullName, string verificationLink)
+        {
+            var subject = $"📧 [DriveShare] Xác thực tài khoản của bạn";
+            var requestTime = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <style>
+        /* CSS tương tự như các template khác (Header, Footer, Button) */
+        body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: {BackgroundColor}; margin: 0; padding: 0; }}
+        .wrapper {{ width: 100%; padding: 40px 0; }}
+        .container {{ max-width: 600px; margin: 0 auto; background-color: {CardColor}; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }}
+        .header {{ background: linear-gradient(135deg, {PrimaryColor} 0%, #0747A6 100%); padding: 24px; text-align: center; }}
+        .logo {{ width: 48px; height: auto; filter: brightness(0) invert(1); }}
+        .content {{ padding: 40px 32px; color: {TextColor}; }}
+        .h1 {{ font-size: 24px; font-weight: 700; margin: 0 0 16px; color: {PrimaryColor}; text-align: center; letter-spacing: -0.5px; }}
+        .p {{ font-size: 16px; line-height: 1.6; margin: 0 0 24px; color: #4B5563; }}
+        .btn-container {{ text-align: center; margin-top: 30px; margin-bottom: 20px; }}
+        .btn {{ background-color: #10B981; color: #ffffff; padding: 16px 40px; text-decoration: none; font-weight: 700; border-radius: 50px; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); transition: all 0.2s; }}
+        .info-box {{ background-color: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 8px; padding: 20px; margin-bottom: 32px; text-align: center; }}
+        .info-text {{ font-size: 14px; color: #0C4A6E; font-weight: 600; }}
+        .footer {{ background-color: #F9FAFB; padding: 24px; text-align: center; font-size: 12px; color: #9CA3AF; border-top: 1px solid #E5E7EB; }}
+        .footer a {{ color: {PrimaryColor}; text-decoration: none; }}
+    </style>
+</head>
+<body>
+    <div class='wrapper'>
+        <div class='container'>
+            
+            <div class='header'>
+                <img src='{LogoUrl}' alt='DriveShare' class='logo'/>
+            </div>
+
+            <div class='content'>
+                <h1 class='h1'>Kích Hoạt Tài Khoản</h1>
+                
+                <p class='p' style='text-align: center;'>
+                    Xin chào <strong>{fullName}</strong>,<br>
+                    Cảm ơn bạn đã đăng ký tài khoản tại DriveShare. Để hoàn tất việc đăng ký và bắt đầu sử dụng dịch vụ, vui lòng nhấp vào nút bên dưới để xác thực địa chỉ email của bạn.
+                </p>
+
+                <div class='btn-container'>
+                    <a href='{verificationLink}' class='btn'>🔗 Xác Thực Email Ngay</a>
+                </div>
+
+                <div class='info-box'>
+                    <p class='info-text'>
+                        Liên kết xác thực sẽ hết hạn sau **24 giờ** kể từ {requestTime}.
+                    </p>
+                </div>
+
+                <p class='p' style='font-size: 14px; text-align: center; color: #6B7280; margin-bottom: 0;'>
+                    Nếu bạn không yêu cầu đăng ký tài khoản này, vui lòng bỏ qua email này.
+                </p>
+                <p class='p' style='font-size: 14px; text-align: center; color: #6B7280; margin-bottom: 0;'>
+                    Hoặc sao chép đường link: <br><a href='{verificationLink}' style='font-size: 12px; word-break: break-all;'>{verificationLink}</a>
+                </p>
+            </div>
+
+            <div class='footer'>
+                <p>&copy; {DateTime.Now.Year} DriveShare Logistics Platform.<br>Tầng 12, Tòa nhà Innovation, TP.HCM</p>
+                <p>
+                    <a href='#'>Trung tâm hỗ trợ</a> • <a href='#'>Chính sách bảo mật</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>";
+
+            await SendEmailAsync(email, subject, body);
+        }
     }
 }

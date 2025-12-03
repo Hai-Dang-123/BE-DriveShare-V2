@@ -131,6 +131,11 @@ namespace DAL.Repositories.Implement
         public void AddRange(List<T> entity)
         { _dbSet.AddRange(entity); }
 
+        // Đổi từ void -> Task và dùng AddRangeAsync
+        public async Task AddRangeAsync(IEnumerable<T> entities)
+        {
+            await _dbSet.AddRangeAsync(entities);
+        }
         public async Task<T> FirstOrDefaultAsync(Expression<Func<T, bool>> expression)
         {
             return await _dbSet.FirstOrDefaultAsync(expression);

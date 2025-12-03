@@ -17,6 +17,6 @@ namespace BLL.Services.Interface
         /// Upload ảnh xe lên Firebase và AddAsync vào UnitOfWork.
         /// KHÔNG SaveChanges.
         /// </summary>
-        Task AddImagesToVehicleAsync(Guid vehicleId, Guid userId, List<IFormFile> files);
+        Task AddImagesToVehicleAsync(Guid vehicleId, Guid userId, List<VehicleImageInputDTO> imageDTOs);
     }
 }

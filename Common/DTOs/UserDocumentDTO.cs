@@ -29,4 +29,31 @@ namespace Common.DTOs
 
         public IEnumerable<UserDocumentDTO> Documents { get; set; } = new List<UserDocumentDTO>();
     }
+
+    public class MyDocumentsResponseDTO
+    {
+        public bool IsDriver { get; set; }
+        public DocumentDetailDTO? CCCD { get; set; }
+        public DriverDocumentsDTO? DriverDocuments { get; set; }
+    }
+
+    public class DriverDocumentsDTO
+    {
+        public DocumentDetailDTO? DrivingLicense { get; set; }
+    }
+
+    public class DocumentDetailDTO
+    {
+        public Guid UserDocumentId { get; set; }
+        public string DocumentType { get; set; }
+        public string Status { get; set; }
+        public string IdentityNumber { get; set; } // Số giấy tờ
+        public string FullName { get; set; }
+        public string? LicenseClass { get; set; } // Hạng bằng (nếu có)
+        public string FrontImageUrl { get; set; }
+        public string BackImageUrl { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public DateTime? VerifiedAt { get; set; }
+        public string? RejectionReason { get; set; }
+    }
 }

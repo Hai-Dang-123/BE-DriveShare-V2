@@ -44,5 +44,13 @@ namespace DAL.Repositories.Implement
             // Bạn có thể thêm điều kiện !rt.IsRevoked ở đây nếu muốn
             // hoặc xử lý kiểm tra IsRevoked ở Service
         }
+
+        public async Task<UserToken?> GetByUserIdAndTokenValueAsync(Guid userId, string tokenValue, TokenType tokenType)
+        {
+            return await _context.UserTokens
+                .FirstOrDefaultAsync(x => x.UserId == userId &&
+                                          x.TokenValue == tokenValue &&
+                                          x.TokenType == tokenType);
+        }
     }
 }

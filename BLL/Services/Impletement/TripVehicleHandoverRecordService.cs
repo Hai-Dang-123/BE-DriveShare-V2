@@ -51,7 +51,7 @@ namespace BLL.Services.Impletement
                     DeliveryRecordId = Guid.NewGuid(),
                     TripId = dto.TripId,
                     VehicleId = trip.VehicleId, // Lấy xe từ Trip
-
+                    DeliveryRecordTemplateId = template.DeliveryRecordTemplateId,
                     Type = dto.Type, // PICKUP / DROPOFF
                     Status = DeliveryRecordStatus.PENDING, // Mới tạo là nháp
 
@@ -69,6 +69,19 @@ namespace BLL.Services.Impletement
                     // Copy Checklist từ Template sang Result
                     TermResults = new List<TripVehicleHandoverTermResult>()
                 };
+
+                // --- SỬA LOGIC GÁN ID TẠI ĐÂY ---
+                if (dto.Type == DeliveryRecordType.HANDOVER) // Hoặc PICKUP (Giao xe: Chủ -> Tài)
+                {
+                    newRecord.OwnerId = dto.HandoverUserId; // Người giao là Chủ
+                    newRecord.DriverId = dto.ReceiverUserId; // Người nhận là Tài
+                }
+                else if (dto.Type == DeliveryRecordType.RETURN) // Hoặc DROPOFF (Trả xe: Tài -> Chủ)
+                {
+                    newRecord.OwnerId = dto.ReceiverUserId;  // Người nhận là Chủ
+                    newRecord.DriverId = dto.HandoverUserId; // Người giao là Tài
+                }
+                // --------------------------------
 
                 // 4. Loop qua các điều khoản trong Template để tạo dòng check trống
                 foreach (var term in template.DeliveryRecordTerms.OrderBy(t => t.DisplayOrder))

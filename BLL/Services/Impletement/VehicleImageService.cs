@@ -198,29 +198,43 @@ namespace BLL.Services.Impletement
             return new ResponseDTO("Get VehicleImage successfully", 200, true, dto);
         }
 
-        public async Task AddImagesToVehicleAsync(Guid vehicleId, Guid userId, List<IFormFile> files)
+        public async Task AddImagesToVehicleAsync(Guid vehicleId, Guid userId, List<VehicleImageInputDTO> imageDTOs)
         {
-            if (files == null || !files.Any()) return;
+            if (imageDTOs == null || !imageDTOs.Any()) return;
 
-            // Upload song song
-            var uploadTasks = files
-                .Where(f => f != null && f.Length > 0)
-                .Select(file => _firebaseService.UploadFileAsync(file, userId, FirebaseFileType.VEHICLE_IMAGES));
-
-            var urls = await Task.WhenAll(uploadTasks);
-
-            // Add vào Repo
-            foreach (var url in urls)
+            // 1. Tạo danh sách Task để upload song song và trả về Entity hoàn chỉnh
+            var tasks = imageDTOs.Select(async dto =>
             {
-                var image = new VehicleImage
+                // Upload ảnh lên Firebase
+                var url = await _firebaseService.UploadFileAsync(dto.ImageFile, userId, FirebaseFileType.VEHICLE_IMAGES);
+
+                // Tạo ngay Entity VehicleImage với thông tin từ DTO
+                return new VehicleImage
                 {
                     VehicleImageId = Guid.NewGuid(),
                     VehicleId = vehicleId,
                     ImageURL = url,
+                    Caption = dto.Caption,
+
+                    // QUAN TRỌNG: Lưu loại ảnh (Toàn cảnh / Biển số)
+                    ImageType = dto.ImageType,
+
                     CreatedAt = DateTime.UtcNow
-                    // Caption có thể thêm sau nếu cần
                 };
-                await _unitOfWork.VehicleImageRepo.AddAsync(image);
+            });
+
+            // 2. Chờ tất cả upload xong
+            var vehicleImages = await Task.WhenAll(tasks);
+
+            // 3. Add vào Repo
+            if (vehicleImages.Any())
+            {
+                // Sử dụng AddRange như yêu cầu của bạn
+                await _unitOfWork.VehicleImageRepo.AddRangeAsync(vehicleImages);
+
+                // Lưu ý: Hàm SaveChangeAsync thường được gọi ở Service cha (VehicleService) 
+                // để đảm bảo Transaction toàn vẹn. Nếu chạy độc lập thì uncomment dòng dưới:
+                // await _unitOfWork.SaveChangeAsync();
             }
         }
     }

@@ -14,5 +14,6 @@ namespace BLL.Services.Interface
         /// KHÔNG SaveChanges.
         /// </summary>
         Task AddDocumentsToVehicleAsync(Guid vehicleId, Guid userId, List<VehicleDocumentInputDTO> documentDTOs);
+        Task<ResponseDTO> AddDocumentAsync(Guid vehicleId, AddVehicleDocumentDTO dto);
     }
 }

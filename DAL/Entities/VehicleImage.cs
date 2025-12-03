@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Common.Enums.Type;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,6 +14,8 @@ namespace DAL.Entities
 
         // --- GỢI Ý BẮT BUỘC (Khóa ngoại - Dựa trên sơ đồ 1-n) ---
         public Guid VehicleId { get; set; } // FK to Vehicle
+        // --- MỚI THÊM: Loại ảnh ---
+        public VehicleImageType ImageType { get; set; } = VehicleImageType.OTHER;
 
         // GỢI Ý (Nghiệp vụ): Chú thích cho ảnh
         // Ví dụ: "Ảnh đầu xe", "Ảnh đuôi xe", "Ảnh thùng hàng"

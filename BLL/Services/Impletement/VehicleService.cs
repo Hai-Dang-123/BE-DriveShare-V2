@@ -37,10 +37,25 @@ namespace BLL.Services.Impletement
                 if (ownerId == Guid.Empty)
                     return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
-                // (Nếu CurrentAddress là string, bạn cần Geocode nó ở đây)
-                 //Location currentAddress = await _vietMapService.GeocodeAsync(dto.CurrentAddressString);
+                // ============================================================
+                // VALIDATE HÌNH ẢNH: Bắt buộc phải có TOÀN CẢNH và BIỂN SỐ
+                // ============================================================
+                if (dto.VehicleImages == null || !dto.VehicleImages.Any())
+                {
+                    return new ResponseDTO("Vui lòng tải lên hình ảnh xe.", 400, false);
+                }
 
-                // 1. Tạo Vehicle (Đối tượng chính)
+                bool hasOverview = dto.VehicleImages.Any(img => img.ImageType == VehicleImageType.OVERVIEW);
+                bool hasLicensePlate = dto.VehicleImages.Any(img => img.ImageType == VehicleImageType.LICENSE_PLATE);
+
+                if (!hasOverview || !hasLicensePlate)
+                {
+                    return new ResponseDTO("Xe bắt buộc phải có ít nhất 1 ảnh 'Toàn cảnh' và 1 ảnh 'Biển số'.", 400, false);
+                }
+
+                // ============================================================
+                // 1. Tạo Vehicle (Giữ nguyên logic cũ)
+                // ============================================================
                 var vehicle = new Vehicle
                 {
                     VehicleId = Guid.NewGuid(),
@@ -54,23 +69,32 @@ namespace BLL.Services.Impletement
                     PayloadInKg = dto.PayloadInKg,
                     VolumeInM3 = dto.VolumeInM3,
                     Features = dto.Features ?? new(),
-                    CurrentAddress = dto.CurrentAddress, // (Gán Location đã Geocode nếu cần)
+                    CurrentAddress = dto.CurrentAddress,
                     Status = VehicleStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _unitOfWork.VehicleRepo.AddAsync(vehicle);
 
-                // 2. Thêm hình ảnh (Gọi Service 1)
+                // ============================================================
+                // 2. Thêm hình ảnh (Cập nhật logic lưu ImageType)
+                // ============================================================
+                // Lưu ý: Bạn cần update hàm AddImagesToVehicleAsync trong VehicleImageService 
+                // để nó nhận và lưu trường ImageType vào DB.
+                // Hoặc viết trực tiếp logic upload tại đây nếu hàm kia chưa hỗ trợ.
+
+                // Giả sử bạn gọi Service ảnh (Hãy chắc chắn Service ảnh đã update để nhận ImageType)
                 await _vehicleImageService.AddImagesToVehicleAsync(vehicle.VehicleId, ownerId, dto.VehicleImages);
 
-                // 3. Thêm giấy tờ (Gọi Service 2)
+                // ============================================================
+                // 3. Thêm giấy tờ (Giữ nguyên)
+                // ============================================================
                 await _vehicleDocumentService.AddDocumentsToVehicleAsync(vehicle.VehicleId, ownerId, dto.Documents);
 
-                // 4. LƯU TẤT CẢ (1 Transaction duy nhất)
+                // 4. LƯU TẤT CẢ
                 await _unitOfWork.SaveChangeAsync();
 
-                // 5. Map kết quả trả về
-                var result = new VehicleDTO // (Map từ 'vehicle' entity)
+                // 5. Map kết quả trả về (Giữ nguyên)
+                var result = new VehicleDTO
                 {
                     VehicleId = vehicle.VehicleId,
                     PlateNumber = vehicle.PlateNumber,
@@ -83,15 +107,13 @@ namespace BLL.Services.Impletement
                     Status = vehicle.Status
                 };
 
-                // Dùng 201 Created
                 return new ResponseDTO("Create Vehicle Successfully !!!", 201, true, result);
             }
             catch (Exception ex)
             {
-                return new ResponseDTO("Error while creating Vehicle", 500, false, ex.Message);
+                return new ResponseDTO("Error while creating Vehicle: " + ex.Message, 500, false);
             }
         }
-
         // UPDATE
         public async Task<ResponseDTO> UpdateAsync(VehicleUpdateDTO dto)
         {

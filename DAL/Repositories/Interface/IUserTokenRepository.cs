@@ -1,4 +1,5 @@
-﻿using DAL.Entities;
+﻿using Common.Enums.Type;
+using DAL.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,5 +12,6 @@ namespace DAL.Repositories.Interface
     {
         Task<UserToken> GetRefreshTokenByUserID(Guid userId);
         Task<UserToken?> GetValidRefreshTokenWithUserAsync(string tokenValue);
+        Task<UserToken?> GetByUserIdAndTokenValueAsync(Guid userId, string tokenValue, TokenType tokenType);
     }
 }

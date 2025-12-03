@@ -8,6 +8,7 @@ using DAL.Repositories.Implement;
 using DAL.Repositories.Interface;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
 
 namespace DriverShareProject.Extentions.ServiceRegistration
 {
@@ -80,16 +81,26 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IVietMapService, VietMapService>();
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
             services.AddScoped<IEmailService, EmailService>();
+            //services.AddScoped<IEKYCService, EKYCService>();
+            //services.AddScoped<IVNPTTokenService, VNPTTokenService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<UserUtility>();
-            
 
-            //services.AddHttpClient<IVNPTTokenService, VNPTTokenService>();
-            //services.AddHttpClient<IEKYCService, EKYCService>(client =>
-            //{
-            //    client.BaseAddress = new Uri(configuration["VNPTAuth:BaseUrl"]);
-            //    client.Timeout = TimeSpan.FromMinutes(5);
-            //});
+
+            services.AddHttpClient<IVNPTTokenService, VNPTTokenService>();
+            // Trong Program.cs hoặc Startup.cs
+            services.AddHttpClient<IEKYCService, EKYCService>()
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    // 1. Cho phép mọi chứng chỉ SSL (Fix lỗi SSL Handshake nếu có)
+                    ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
+
+                    // 2. Tự động giải nén GZip (Postman tự làm cái này, C# mặc định thì không)
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+
+                    // 3. Tắt Cookie Container (Để tránh lưu cache session cũ)
+                    UseCookies = false
+                });
 
             return services;
         }

@@ -10,10 +10,7 @@ using DAL.Entities;
 using DAL.UnitOfWork;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Security.Claims;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace BLL.Services.Impletement
@@ -23,30 +20,34 @@ namespace BLL.Services.Impletement
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
         private readonly IFirebaseUploadService _firebaseUploadService;
-        public AuthService (IUnitOfWork unitOfWork, UserUtility userUtility, IFirebaseUploadService firebaseUploadService)
+        private readonly IEmailService _emailService;
+
+        public AuthService(IUnitOfWork unitOfWork, UserUtility userUtility, IFirebaseUploadService firebaseUploadService, IEmailService emailService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _firebaseUploadService = firebaseUploadService;
+            _emailService = emailService;
         }
+
+        // ... [Giữ nguyên LoginAsync, LogoutAsync, RefreshTokenAsync] ...
 
         public async Task<ResponseDTO> LoginAsync(LoginDTO dto)
         {
-            // kiểm tra email
+            // (Giữ nguyên code cũ của bạn)
             var user = await _unitOfWork.BaseUserRepo.FindByEmailAsync(dto.Email);
-            if (user == null)
-            {
-                return new ResponseDTO("User not found !!!", 404, false);
-            }
+            if (user == null) return new ResponseDTO("User not found !!!", 404, false);
 
-            // kiểm tra mật khẩu
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
-            if (!isPasswordValid)
+            if (!isPasswordValid) return new ResponseDTO("Wrong email or password !!!", 400, false);
+
+            if (user.IsEmailVerified == false)
             {
-                return new ResponseDTO("Wrong email or password !!!", 400, false);
+                return new ResponseDTO("Email is not verified. Please verify your email before logging in.", 403, false);
             }
 
-            //kiểm tra token
+            
+
             var exitsRefreshToken = await _unitOfWork.UserTokenRepo.GetRefreshTokenByUserID(user.UserId);
             if (exitsRefreshToken != null)
             {
@@ -54,7 +55,6 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.UserTokenRepo.UpdateAsync(exitsRefreshToken);
             }
 
-            //khởi tạo claim
             var claims = new List<Claim>
             {
                 new Claim(JwtConstant.KeyClaim.userId, user.UserId.ToString()),
@@ -62,7 +62,6 @@ namespace BLL.Services.Impletement
                 new Claim(JwtConstant.KeyClaim.Role, user.Role.RoleName)
             };
 
-            //tạo refesh token
             var refreshTokenKey = JwtProvider.GenerateRefreshToken(claims);
             var accessTokenKey = JwtProvider.GenerateAccessToken(claims);
 
@@ -76,17 +75,16 @@ namespace BLL.Services.Impletement
                 CreatedAt = DateTime.UtcNow,
                 ExpiredAt = DateTime.UtcNow.AddDays(JwtSettingModel.ExpireDayRefreshToken)
             };
+
             try
             {
                 await _unitOfWork.UserTokenRepo.AddAsync(refreshToken);
-
                 await _unitOfWork.SaveChangeAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return new ResponseDTO("An error occurred. Please try again later.", 500, false);
             }
-
 
             return new ResponseDTO("Login Successfully !!!", 200, true, new
             {
@@ -97,89 +95,63 @@ namespace BLL.Services.Impletement
 
         public async Task<ResponseDTO> LogoutAsync()
         {
+            // (Giữ nguyên code cũ)
             var userId = _userUtility.GetUserIdFromToken();
-            if (userId == Guid.Empty)
-            {
-                return new ResponseDTO("User is not found ", 400, false);
-            }
+            if (userId == Guid.Empty) return new ResponseDTO("User is not found ", 400, false);
+
             var existingToken = await _unitOfWork.UserTokenRepo.GetRefreshTokenByUserID(userId);
             if (existingToken == null || existingToken.IsRevoked || existingToken.TokenType != TokenType.REFRESH)
-            {
                 return new ResponseDTO("Token is not valid", 400, false);
-            }
+
             existingToken.IsRevoked = true;
             try
             {
                 await _unitOfWork.UserTokenRepo.UpdateAsync(existingToken);
                 await _unitOfWork.SaveChangeAsync();
             }
-            catch (Exception ex)
+            catch
             {
                 return new ResponseDTO("An error occurred during logout.", 500, false);
             }
             return new ResponseDTO("Logout success", 200, true);
         }
 
-        public async Task<ResponseDTO> RefreshTokenAsync(RefreshTokenDTO dto) // Changed signature
+        public async Task<ResponseDTO> RefreshTokenAsync(RefreshTokenDTO dto)
         {
-            // 1. Lấy RefreshToken string từ DTO
+            // (Giữ nguyên code cũ)
             string? refreshTokenValue = dto?.RefreshTokenValue;
-            if (string.IsNullOrWhiteSpace(refreshTokenValue))
-            {
-                // Use AuthMessages if available, otherwise string literal
-                return new ResponseDTO("Refresh token is required.", 400, false);
-            }
-            var existingToken = await _unitOfWork.UserTokenRepo.GetValidRefreshTokenWithUserAsync(refreshTokenValue);
+            if (string.IsNullOrWhiteSpace(refreshTokenValue)) return new ResponseDTO("Refresh token is required.", 400, false);
 
-            // Kiểm tra token không hợp lệ
-            if (existingToken == null)
-            {
-                return new ResponseDTO("Invalid refresh token.", 401, false); // Unauthorized
-            }
-            if (existingToken.IsRevoked)
-            {
-                return new ResponseDTO("Refresh token has been revoked.", 401, false);
-            }
+            var existingToken = await _unitOfWork.UserTokenRepo.GetValidRefreshTokenWithUserAsync(refreshTokenValue);
+            if (existingToken == null) return new ResponseDTO("Invalid refresh token.", 401, false);
+            if (existingToken.IsRevoked) return new ResponseDTO("Refresh token has been revoked.", 401, false);
             if (existingToken.ExpiredAt < DateTime.UtcNow)
             {
                 existingToken.IsRevoked = true;
                 await _unitOfWork.UserTokenRepo.UpdateAsync(existingToken);
-                await _unitOfWork.SaveChangeAsync(); 
+                await _unitOfWork.SaveChangeAsync();
                 return new ResponseDTO("Refresh token has expired.", 401, false);
             }
 
-
-            // Lấy user từ token đã include
             var user = existingToken.User;
-            // Kiểm tra user và role tồn tại
-            if (user == null || user.Role == null)
-            {
-                // Log lỗi này vì không nên xảy ra nếu DB nhất quán
-                Console.WriteLine($"Error: User or Role not found for valid refresh token ID: {existingToken.UserTokenId}");
-                return new ResponseDTO("User associated with token not found.", 500, false); // Internal Server Error
-            }
+            if (user == null || user.Role == null) return new ResponseDTO("User associated with token not found.", 500, false);
 
-
-            // --- Token hợp lệ, tiến hành tạo token mới ---
             await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 3. Thu hồi token cũ (IsRevoked = true)
                 existingToken.IsRevoked = true;
-                await _unitOfWork.UserTokenRepo.UpdateAsync(existingToken); // Update không async
+                await _unitOfWork.UserTokenRepo.UpdateAsync(existingToken);
 
-                // 4. Tạo AccessToken mới và RefreshToken mới
                 var claims = new List<Claim>
                 {
                     new Claim(JwtConstant.KeyClaim.userId, user.UserId.ToString()),
-                    new Claim(JwtConstant.KeyClaim.fullName, user.FullName), 
+                    new Claim(JwtConstant.KeyClaim.fullName, user.FullName),
                     new Claim(JwtConstant.KeyClaim.Role, user.Role.RoleName)
                 };
 
                 var newAccessTokenKey = JwtProvider.GenerateAccessToken(claims);
                 var newRefreshTokenKey = JwtProvider.GenerateRefreshToken(claims);
 
-                // 5. Lưu RefreshToken mới vào DB
                 var newRefreshToken = new UserToken
                 {
                     UserTokenId = Guid.NewGuid(),
@@ -191,62 +163,45 @@ namespace BLL.Services.Impletement
                     ExpiredAt = DateTime.UtcNow.AddDays(JwtSettingModel.ExpireDayRefreshToken)
                 };
                 await _unitOfWork.UserTokenRepo.AddAsync(newRefreshToken);
-
                 await _unitOfWork.CommitTransactionAsync();
 
-                // 6. Trả về cả hai token mới
                 return new ResponseDTO("Token refreshed successfully.", 200, true, new
                 {
                     AccessToken = newAccessTokenKey,
-                    RefreshToken = newRefreshTokenKey, 
+                    RefreshToken = newRefreshTokenKey,
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await _unitOfWork.RollbackTransactionAsync();
-
                 return new ResponseDTO("An error occurred while refreshing the token.", 500, false);
             }
         }
 
+
+        // ======================= REGISTER FOR ADMIN =======================
         public async Task<ResponseDTO> RegisterForAdmin(RegisterForAdminDTO dto)
         {
-            
-            if (dto.Password != dto.ConfirmPassword)
-            {
-                return new ResponseDTO("Password is not fit with confirm password", 400, false);
-            }
+            if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password is not fit with confirm password", 400, false);
 
             await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var checkByEmail = await _unitOfWork.BaseUserRepo.FindByEmailAndRoleAsync(dto.Email, dto.RoleName);
+                if (checkByEmail != null) return new ResponseDTO("User is already in use", 200, false);
 
-                if (checkByEmail != null)
-                {
-                    return new ResponseDTO("User is already in use", 200, false);
-                }
                 var checkByPhone = await _unitOfWork.BaseUserRepo.FindByPhoneNumberAsync(dto.PhoneNumber);
-                if (checkByPhone != null)
-                {
-                    return new ResponseDTO("PhoneNumber is already in use", 200, false);
+                if (checkByPhone != null) return new ResponseDTO("PhoneNumber is already in use", 200, false);
 
-                }
                 var role = await _unitOfWork.RoleRepo.GetByName(dto.RoleName);
                 if (role == null)
                 {
                     await _unitOfWork.RollbackTransactionAsync();
                     return new ResponseDTO("Critical error: Admin role not found.", 500, false);
                 }
+
                 string hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-
-                // Giả lập lấy tọa độ
-                double latitude = 0.0;
-                double longitude = 0.0;
-                // TODO: Call Geocoding service
-
-                var userAddress = new Location(dto.Address ?? string.Empty, latitude, longitude);
-
+                var userAddress = new Location(dto.Address ?? string.Empty, 0.0, 0.0);
 
                 var newUser = new BaseUser
                 {
@@ -259,78 +214,65 @@ namespace BLL.Services.Impletement
                     Status = UserStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
-                    IsEmailVerified = true,
-                    IsPhoneVerified = true, // Admin tự tạo, verify sẵn
+                    IsEmailVerified = true, // Admin tự tạo, mặc định true (hoặc false tùy bạn)
+                    IsPhoneVerified = true,
                     Address = userAddress,
                 };
 
-                // Xử lý Avatar (nếu có)
                 if (dto.AvatarFile != null)
                 {
-                    try
-                    {
-                        newUser.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newUser.UserId, FirebaseFileType.AVATAR_IMAGES);
-                    }
-                    catch (Exception uploadEx)
-                    {
-                        //Log uploadEx
-                    }
+                    try { newUser.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newUser.UserId, FirebaseFileType.AVATAR_IMAGES); }
+                    catch { }
                 }
 
                 await _unitOfWork.BaseUserRepo.AddAsync(newUser);
                 await _unitOfWork.CommitTransactionAsync();
 
+                // Admin thường verify sẵn, nhưng nếu muốn gửi mail thông báo thì gọi ở đây.
+                // await SendVerificationEmailPrivateAsync(newUser.UserId, newUser.Email, newUser.FullName);
+
                 return new ResponseDTO("Admin account created successfully.", 201, true, new { UserId = newUser.UserId });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await _unitOfWork.RollbackTransactionAsync();
                 return new ResponseDTO("An error occurred during registration.", 500, false);
             }
         }
 
+        // ======================= REGISTER FOR DRIVER =======================
         public async Task<ResponseDTO> RegisterForDriver(RegisterForDriverDTO dto)
         {
-            if (dto.Password != dto.ConfirmPassword)
-            {
-                return new ResponseDTO("Password does not match confirm password.", 400, false);
-            }
+            if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password does not match confirm password.", 400, false);
 
+            // 1. Khai báo biến tạm để lưu thông tin User sau khi tạo thành công
+            Guid createdUserId = Guid.Empty;
+            string createdEmail = string.Empty;
+            string createdFullName = string.Empty;
+
+            // --- BẮT ĐẦU TRANSACTION ---
             await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var checkByEmail = await _unitOfWork.BaseUserRepo.FindByEmailAndRoleAsync(dto.Email, "Driver");
+                if (checkByEmail != null) return new ResponseDTO("User is already in use", 200, false);
 
-                if (checkByEmail != null)
-                {
-                    return new ResponseDTO("User is already in use", 200, false);
-                }
                 var checkByPhone = await _unitOfWork.BaseUserRepo.FindByPhoneNumberAsync(dto.PhoneNumber);
-                if (checkByPhone != null)
-                {
-                    return new ResponseDTO("PhoneNumber is already in use", 200, false);
-
-                }
+                if (checkByPhone != null) return new ResponseDTO("PhoneNumber is already in use", 200, false);
 
                 var driverRole = await _unitOfWork.RoleRepo.GetByName("Driver");
                 if (driverRole == null)
                 {
+                    // Chưa Commit thì mới được Rollback
                     await _unitOfWork.RollbackTransactionAsync();
                     return new ResponseDTO("Critical error: Driver role not found.", 500, false);
                 }
 
                 string hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                var driverAddress = new Location(dto.Address ?? string.Empty, 0.0, 0.0);
 
-
-                // Lấy tọa độ cho địa chỉ
-                double latitude = 0.0;
-                double longitude = 0.0;
-                // TODO: Call Geocoding service
-                var driverAddress = new Location(dto.Address ?? string.Empty, latitude, longitude);
-
-                var newDriver = new Driver // Tạo đối tượng Driver
+                var newDriver = new Driver
                 {
-                    // --- BaseUser Fields ---
                     UserId = Guid.NewGuid(),
                     FullName = dto.FullName,
                     Email = dto.Email,
@@ -342,67 +284,75 @@ namespace BLL.Services.Impletement
                     LastUpdatedAt = DateTime.UtcNow,
                     DateOfBirth = dto.DateOfBirth,
                     IsEmailVerified = false,
-                    IsPhoneVerified = false, // Cần xác thực sau
+                    IsPhoneVerified = false,
                     Address = driverAddress,
-
-                    // --- Driver Specific Fields ---
-                    LicenseNumber = string.Empty, // Thiếu trong DTO, cần cập nhật sau
-                    LicenseClass = string.Empty,  // Thiếu trong DTO
-                    LicenseExpiryDate = null,
-                    IsLicenseVerified = false,
                     DriverStatus = DriverStatus.AVAILABLE,
+
+                    LicenseClass = null,
+                    LicenseExpiryDate = null,
+                    LicenseNumber = null,
+                    IsLicenseVerified = false,
+                    
                 };
 
-                // Xử lý Avatar (nếu có)
                 if (dto.AvatarFile != null)
                 {
-                    try
-                    {
-                        newDriver.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newDriver.UserId, FirebaseFileType.AVATAR_IMAGES);
-                    }
-                    catch (Exception uploadEx) { /* Log warning, proceed without avatar */ }
+                    try { newDriver.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newDriver.UserId, FirebaseFileType.AVATAR_IMAGES); }
+                    catch { }
                 }
 
-
-                // Sử dụng DriverRepo để Add
                 await _unitOfWork.DriverRepo.AddAsync(newDriver);
+
+                // 2. COMMIT TRANSACTION
                 await _unitOfWork.CommitTransactionAsync();
 
-                // TODO: Gửi email/SMS xác thực
-
-                return new ResponseDTO("Driver account created successfully. Please verify your email/phone.", 201, true);
+                // 3. Gán dữ liệu ra biến tạm (ĐỂ GỬI MAIL SAU)
+                createdUserId = newDriver.UserId;
+                createdEmail = newDriver.Email;
+                createdFullName = newDriver.FullName;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
+                // Chỉ Rollback khi lỗi xảy ra TRƯỚC khi Commit
                 await _unitOfWork.RollbackTransactionAsync();
                 return new ResponseDTO("An error occurred during driver registration.", 500, false);
             }
+
+            // 4. GỬI EMAIL (NẰM HOÀN TOÀN NGOÀI KHỐI TRY-CATCH CỦA DB)
+            if (createdUserId != Guid.Empty)
+            {
+                try
+                {
+                    await SendVerificationEmailPrivateAsync(createdUserId, createdEmail, createdFullName);
+                }
+                catch (Exception ex)
+                {
+                    // Nếu gửi mail lỗi, chỉ log lại. KHÔNG return lỗi 500 vì User đã tạo thành công.
+                    Console.WriteLine($"Error sending verification email: {ex.Message}");
+                }
+            }
+
+            return new ResponseDTO("Driver account created successfully. Please check your email to verify.", 201, true);
         }
 
+        // ======================= REGISTER FOR OWNER =======================
         public async Task<ResponseDTO> RegisterForOwner(RegisterForOwnerDTO dto)
         {
-            if (dto.Password != dto.ConfirmPassword)
-            {
-                return new ResponseDTO("Password does not match confirm password.", 400, false);
-            }
+            if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password does not match confirm password.", 400, false);
+
+            Guid createdUserId = Guid.Empty;
+            string createdEmail = string.Empty;
+            string createdFullName = string.Empty;
 
             await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var checkByEmail = await _unitOfWork.BaseUserRepo.FindByEmailAndRoleAsync(dto.Email, "Owner");
+                if (checkByEmail != null) return new ResponseDTO("User is already in use", 200, false);
 
-                if (checkByEmail != null)
-                {
-                    return new ResponseDTO("User is already in use", 200, false);
-                }
                 var checkByPhone = await _unitOfWork.BaseUserRepo.FindByPhoneNumberAsync(dto.PhoneNumber);
-                if (checkByPhone != null)
-                {
-                    return new ResponseDTO("PhoneNumber is already in use", 200, false);
+                if (checkByPhone != null) return new ResponseDTO("PhoneNumber is already in use", 200, false);
 
-                }
-
-                // Kiểm tra TaxCode nếu được cung cấp và là duy nhất (tùy nghiệp vụ)
                 if (!string.IsNullOrWhiteSpace(dto.TaxCode))
                 {
                     var existingOwnerByTaxCode = await _unitOfWork.OwnerRepo.GetOwnerByTaxCodeAsync(dto.TaxCode);
@@ -413,7 +363,6 @@ namespace BLL.Services.Impletement
                     }
                 }
 
-
                 var ownerRole = await _unitOfWork.RoleRepo.GetByName("Owner");
                 if (ownerRole == null)
                 {
@@ -422,97 +371,84 @@ namespace BLL.Services.Impletement
                 }
 
                 string hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                var ownerAddress = new Location(dto.Address ?? string.Empty, 0.0, 0.0);
+                Location? businessAddress = !string.IsNullOrWhiteSpace(dto.BussinessAddress)
+                    ? new Location(dto.BussinessAddress, 0.0, 0.0) : null;
 
-            
-
-                // Lấy tọa độ cho địa chỉ cá nhân
-                double latitude = 0.0, longitude = 0.0;
-                // TODO: Call Geocoding service for dto.Address
-                var ownerAddress = new Location(dto.Address ?? string.Empty, latitude, longitude);
-
-                // Lấy tọa độ cho địa chỉ kinh doanh (nếu có)
-                Location? businessAddress = null;
-                if (!string.IsNullOrWhiteSpace(dto.BussinessAddress)) // Sửa tên biến DTO nếu cần
+                var newOwner = new Owner
                 {
-                    double bizLat = 0.0, bizLon = 0.0;
-                    // TODO: Call Geocoding service for dto.BussinessAddress
-                    businessAddress = new Location(dto.BussinessAddress, bizLat, bizLon);
-                }
-
-                var newOwner = new Owner // Tạo đối tượng Owner
-                {
-                    // --- BaseUser Fields ---
                     UserId = Guid.NewGuid(),
                     FullName = dto.FullName,
                     Email = dto.Email,
                     PhoneNumber = dto.PhoneNumber,
                     PasswordHash = hashedPassword,
                     RoleId = ownerRole.RoleId,
-                    Status = UserStatus.INACTIVE, // Owner cần xác minh giấy tờ KD
+                    Status = UserStatus.INACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
                     DateOfBirth = dto.DateOfBirth,
                     IsEmailVerified = false,
                     IsPhoneVerified = false,
                     Address = ownerAddress,
-
-                    // --- Owner Specific Fields ---
                     CompanyName = dto.CompanyName,
                     TaxCode = dto.TaxCode,
-                    BusinessAddress = businessAddress, // Gán địa chỉ KD đã geocode
-                    AverageRating = null // Ban đầu chưa có rating
+                    BusinessAddress = businessAddress,
                 };
 
-                // Xử lý Avatar (nếu có)
                 if (dto.AvatarFile != null)
                 {
-                    try
-                    {
-                        newOwner.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newOwner.UserId, FirebaseFileType.AVATAR_IMAGES);
-                    }
-                    catch { } // Log warning
+                    try { newOwner.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newOwner.UserId, FirebaseFileType.AVATAR_IMAGES); }
+                    catch { }
                 }
 
-                // Sử dụng OwnerRepo để Add
                 await _unitOfWork.OwnerRepo.AddAsync(newOwner);
-                await _unitOfWork.CommitTransactionAsync();
 
-                // TODO: Gửi email/SMS xác thực
+                await _unitOfWork.CommitTransactionAsync(); // Commit thành công
 
-                return new ResponseDTO("Owner account created successfully. Please verify your email/phone and complete business verification.", 201, true, new { UserId = newOwner.UserId });
+                createdUserId = newOwner.UserId;
+                createdEmail = newOwner.Email;
+                createdFullName = newOwner.FullName;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await _unitOfWork.RollbackTransactionAsync();
-                // TODO: Log the exception ex
                 return new ResponseDTO("An error occurred during owner registration.", 500, false);
             }
+
+            // Gửi Email bên ngoài
+            if (createdUserId != Guid.Empty)
+            {
+                try
+                {
+                    await SendVerificationEmailPrivateAsync(createdUserId, createdEmail, createdFullName);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending verification email: {ex.Message}");
+                }
+            }
+
+            return new ResponseDTO("Owner account created successfully. Please check your email to verify.", 201, true, new { UserId = createdUserId });
         }
 
+        // ======================= REGISTER FOR PROVIDER =======================
         public async Task<ResponseDTO> RegisterForProvider(RegisterForProviderDTO dto)
         {
-            if (dto.Password != dto.ConfirmPassword)
-            {
-                return new ResponseDTO("Password does not match confirm password.", 400, false);
-            }
+            if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password does not match confirm password.", 400, false);
+
+            Guid createdUserId = Guid.Empty;
+            string createdEmail = string.Empty;
+            string createdFullName = string.Empty;
 
             await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var checkByEmail = await _unitOfWork.BaseUserRepo.FindByEmailAndRoleAsync(dto.Email, "Provider");
+                if (checkByEmail != null) return new ResponseDTO("User is already in use", 200, false);
 
-                if (checkByEmail != null)
-                {
-                    return new ResponseDTO("User is already in use", 200, false);
-                }
                 var checkByPhone = await _unitOfWork.BaseUserRepo.FindByPhoneNumberAsync(dto.PhoneNumber);
-                if (checkByPhone != null)
-                {
-                    return new ResponseDTO("PhoneNumber is already in use", 200, false);
+                if (checkByPhone != null) return new ResponseDTO("PhoneNumber is already in use", 200, false);
 
-                }
-
-                // Kiểm tra TaxCode nếu được cung cấp và là duy nhất (tùy nghiệp vụ)
                 if (!string.IsNullOrWhiteSpace(dto.TaxCode))
                 {
                     var existingProviderByTaxCode = await _unitOfWork.ProviderRepo.GetProviderByTaxCodeAsync(dto.TaxCode);
@@ -523,7 +459,6 @@ namespace BLL.Services.Impletement
                     }
                 }
 
-
                 var providerRole = await _unitOfWork.RoleRepo.GetByName("Provider");
                 if (providerRole == null)
                 {
@@ -532,87 +467,167 @@ namespace BLL.Services.Impletement
                 }
 
                 string hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                var providerAddress = new Location(dto.Address ?? string.Empty, 0.0, 0.0);
+                Location? businessAddress = !string.IsNullOrWhiteSpace(dto.BusinessAddress)
+                    ? new Location(dto.BusinessAddress, 0.0, 0.0) : null;
 
-
-                // Lấy tọa độ cho địa chỉ cá nhân
-                double latitude = 0.0, longitude = 0.0;
-                // TODO: Call Geocoding service for dto.Address
-                var providerAddress = new Location(dto.Address ?? string.Empty, latitude, longitude);
-
-                // Lấy tọa độ cho địa chỉ kinh doanh (nếu có)
-                Location? businessAddress = null;
-                if (!string.IsNullOrWhiteSpace(dto.BusinessAddress))
+                var newProvider = new Provider
                 {
-                    double bizLat = 0.0, bizLon = 0.0;
-                    // TODO: Call Geocoding service for dto.BusinessAddress
-                    businessAddress = new Location(dto.BusinessAddress, bizLat, bizLon);
-                }
-
-
-                var newProvider = new Provider // Tạo đối tượng Provider
-                {
-                    // --- BaseUser Fields ---
                     UserId = Guid.NewGuid(),
                     FullName = dto.FullName,
                     Email = dto.Email,
                     PhoneNumber = dto.PhoneNumber,
                     PasswordHash = hashedPassword,
                     RoleId = providerRole.RoleId,
-                    Status = UserStatus.INACTIVE, // Provider cũng cần xác minh
+                    Status = UserStatus.INACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
                     DateOfBirth = dto.DateOfBirth,
                     IsEmailVerified = false,
                     IsPhoneVerified = false,
                     Address = providerAddress,
-
-                    // --- Provider Specific Fields ---
                     CompanyName = dto.CompanyName,
                     TaxCode = dto.TaxCode,
                     BusinessAddress = businessAddress,
-                    AverageRating = 5.0m // Rating mặc định hoặc null tùy bạn
+                    AverageRating = 5.0m
                 };
 
-                // Xử lý Avatar (nếu có)
                 if (dto.AvatarFile != null)
                 {
-                    try
-                    {
-                        newProvider.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newProvider.UserId, FirebaseFileType.AVATAR_IMAGES);
-                    }
-                    catch { } // Log warning
+                    try { newProvider.AvatarUrl = await _firebaseUploadService.UploadFileAsync(dto.AvatarFile, newProvider.UserId, FirebaseFileType.AVATAR_IMAGES); }
+                    catch { }
                 }
 
-
-                // Sử dụng ProviderRepo để Add
                 await _unitOfWork.ProviderRepo.AddAsync(newProvider);
-                await _unitOfWork.CommitTransactionAsync();
 
-                // TODO: Gửi email/SMS xác thực
+                await _unitOfWork.CommitTransactionAsync(); // Commit thành công
 
-                return new ResponseDTO("Provider account created successfully. Please verify your email/phone and complete business verification.", 201, true, new { UserId = newProvider.UserId });
+                createdUserId = newProvider.UserId;
+                createdEmail = newProvider.Email;
+                createdFullName = newProvider.FullName;
+            }
+            catch (Exception)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                return new ResponseDTO("An error occurred during provider registration.", 500, false);
+            }
+
+            // Gửi Email bên ngoài
+            if (createdUserId != Guid.Empty)
+            {
+                try
+                {
+                    await SendVerificationEmailPrivateAsync(createdUserId, createdEmail, createdFullName);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending verification email: {ex.Message}");
+                }
+            }
+
+            return new ResponseDTO("Provider account created successfully. Please check your email to verify.", 201, true, new { UserId = createdUserId });
+        }
+
+        // ======================= PRIVATE HELPER: SEND EMAIL =======================
+        // Hàm này được gọi sau khi Register xong (đã có User trong DB)
+        private async Task SendVerificationEmailPrivateAsync(Guid userId, string email, string fullName)
+        {
+            try
+            {
+                // 1. Tạo Token (UserToken)
+                string tokenValue = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+
+                // Revoke token cũ (nếu có - dù mới đăng ký thì chưa có, nhưng code cho chắc)
+                var oldTokens = await _unitOfWork.UserTokenRepo.GetAllAsync(
+                    filter: t => t.UserId == userId && t.TokenType == TokenType.EMAIL_VERIFICATION && !t.IsRevoked
+                );
+                foreach (var token in oldTokens)
+                {
+                    token.IsRevoked = true;
+                    await _unitOfWork.UserTokenRepo.UpdateAsync(token);
+                }
+
+                // Add token mới
+                var verificationToken = new UserToken
+                {
+                    UserTokenId = Guid.NewGuid(),
+                    TokenValue = tokenValue,
+                    UserId = userId,
+                    IsRevoked = false,
+                    TokenType = TokenType.EMAIL_VERIFICATION, // Đảm bảo Enum này tồn tại
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiredAt = DateTime.UtcNow.AddHours(24)
+                };
+
+                await _unitOfWork.UserTokenRepo.AddAsync(verificationToken);
+                await _unitOfWork.SaveChangeAsync(); // Lưu Token xuống DB
+
+                // 2. Tạo link & Gửi Email
+                // Thay thế domain localhost bằng domain thật của FE khi deploy
+                string verificationLink = $"http://localhost:8081/verify-email?userId={userId}&token={tokenValue}";
+
+                await _emailService.SendEmailVerificationLinkAsync(email, fullName, verificationLink);
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackTransactionAsync();
-                // TODO: Log the exception ex
-                return new ResponseDTO("An error occurred during provider registration.", 500, false);
+                // Log lỗi nhưng KHÔNG throw để tránh làm failed request Register (User đã tạo rồi)
+                Console.WriteLine($"Failed to send verification email to {email}: {ex.Message}");
             }
         }
 
-
-        // HELPER
-        private async Task RevokeAllUserRefreshTokens(Guid userId)
+        // ======================= VERIFY EMAIL =======================
+        public async Task<ResponseDTO> VerifyEmailAsync(Guid userId, string token)
         {
-            var userTokens = await _unitOfWork.UserTokenRepo.GetAllAsync(
-                filter: rt => rt.UserId == userId && rt.TokenType == TokenType.REFRESH && !rt.IsRevoked
+            // Bây giờ hàm này sẽ hoạt động vì Repository đã có Method GetByUserIdAndTokenValueAsync
+            var verificationToken = await _unitOfWork.UserTokenRepo.GetByUserIdAndTokenValueAsync(
+                userId,
+                token,
+                TokenType.EMAIL_VERIFICATION
             );
-            foreach (var token in userTokens)
+
+            if (verificationToken == null || verificationToken.IsRevoked)
             {
-                token.IsRevoked = true;
-                await _unitOfWork.UserTokenRepo.UpdateAsync(token);
+                return new ResponseDTO("Verification link is invalid or has been used.", 400, false);
             }
-            // Consider calling SaveChangesAsync here or ensure it's called after
+
+            if (verificationToken.ExpiredAt < DateTime.UtcNow)
+            {
+                verificationToken.IsRevoked = true;
+                await _unitOfWork.UserTokenRepo.UpdateAsync(verificationToken);
+                await _unitOfWork.SaveChangeAsync();
+                return new ResponseDTO("Verification link has expired.", 400, false);
+            }
+
+            var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+            if (user == null) return new ResponseDTO("User associated with token not found.", 500, false);
+
+            if (user.IsEmailVerified == true)
+            {
+                verificationToken.IsRevoked = true;
+                await _unitOfWork.UserTokenRepo.UpdateAsync(verificationToken);
+                await _unitOfWork.SaveChangeAsync();
+                return new ResponseDTO("Email is already verified.", 200, true);
+            }
+
+            // Dùng Transaction cho việc update User & Token
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                user.IsEmailVerified = true;
+                user.LastUpdatedAt = DateTime.UtcNow;
+                await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+
+                verificationToken.IsRevoked = true;
+                await _unitOfWork.UserTokenRepo.UpdateAsync(verificationToken);
+
+                await _unitOfWork.CommitTransactionAsync();
+                return new ResponseDTO("Email verified successfully. Account is now active.", 200, true);
+            }
+            catch (Exception)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                return new ResponseDTO("An error occurred during email verification.", 500, false);
+            }
         }
     }
 }
