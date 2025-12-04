@@ -66,6 +66,12 @@ namespace BLL.Services.Impletement
                     FuelLevel = 0,
                     IsEngineLightOn = false,
 
+                    DriverSigned = false,
+                    OwnerSigned = false,
+                    DriverSignedAt = null,
+                    OwnerSignedAt = null,
+                    
+
                     // Copy Checklist từ Template sang Result
                     TermResults = new List<TripVehicleHandoverTermResult>()
                 };
@@ -265,11 +271,12 @@ namespace BLL.Services.Impletement
         }
 
         // ========================================================================
-        // 3. SIGN RECORD (Xác thực OTP & Ký tên)
+        // 3. SIGN RECORD (Xác thực OTP & Ký tên) - [FIXED]
         // ========================================================================
         public async Task<ResponseDTO> SignRecordAsync(SignVehicleHandoverDTO dto)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            // [FIX] Sử dụng 'using' để quản lý Transaction Scope tự động
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
@@ -278,9 +285,9 @@ namespace BLL.Services.Impletement
                 // --- BƯỚC 1: Validate OTP ---
                 var validToken = await _unitOfWork.UserTokenRepo.GetAll()
                     .Where(t => t.UserId == userId
-                             && t.TokenType == TokenType.VEHICLE_HANDOVER_SIGNING_OTP
-                             && !t.IsRevoked
-                             && t.ExpiredAt > DateTime.UtcNow)
+                              && t.TokenType == TokenType.VEHICLE_HANDOVER_SIGNING_OTP
+                              && !t.IsRevoked
+                              && t.ExpiredAt > DateTime.UtcNow)
                     .OrderByDescending(t => t.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -314,10 +321,9 @@ namespace BLL.Services.Impletement
                 }
                 else if (isReceiverSide)
                 {
-                    if (record.DriverSignedAt != null && record.OwnerSigned) return new ResponseDTO("Bạn đã ký rồi.", 400, false);
+                    if (record.DriverSignedAt != null && record.DriverSigned) return new ResponseDTO("Bạn đã ký rồi.", 400, false);
                     record.DriverSigned = true;
                     record.DriverSignedAt = DateTime.UtcNow;
-                   
                 }
 
                 // --- BƯỚC 5: Kiểm tra hoàn tất & Cập nhật Trip/Vehicle ---
@@ -326,51 +332,50 @@ namespace BLL.Services.Impletement
                     record.Status = DeliveryRecordStatus.COMPLETED;
 
                     // A. XỬ LÝ PICKUP (Giao xe cho tài xế)
-                    if (record.Type == DeliveryRecordType.PICKUP)
+                    if (record.Type == DeliveryRecordType.HANDOVER) // Sửa lại enum cho đúng với ngữ cảnh Giao Xe
                     {
-                        // Logic: Chuyển Trip sang MOVING_TO_PICKUP (hoặc ON_TRIP tùy flow)
-                        // Ý nghĩa: Tài xế đã nhận xe và bắt đầu đi
-                        if (record.Trip.Status == TripStatus.VEHICLE_HANDOVER )
+                        // Logic: Chuyển Trip sang LOADING (hoặc trạng thái tiếp theo)
+                        if (record.Trip.Status == TripStatus.VEHICLE_HANDOVERED)
                         {
-                            record.Trip.Status = TripStatus.MOVING_TO_PICKUP;
+                            record.Trip.Status = TripStatus.MOVING_TO_PICKUP; // Hoặc LOADING tùy flow
                             await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                         }
                     }
 
                     // B. XỬ LÝ DROPOFF (Trả xe về bãi)
-                    else if (record.Type == DeliveryRecordType.DROPOFF)
+                    else if (record.Type == DeliveryRecordType.RETURN) // Sửa lại enum cho đúng với ngữ cảnh Trả Xe
                     {
-                        // Logic: Chuyển Trip sang COMPLETED
-                        record.Trip.Status = TripStatus.COMPLETED;
+                        // Logic: Chuyển Trip sang VEHICLE_RETURNED (hoặc COMPLETED)
+                        // Lưu ý: Thường sau khi trả xe mới đến bước thanh toán cuối cùng
+                        record.Trip.Status = TripStatus.DONE_TRIP_AND_WATING_FOR_PAYOUT;
                         record.Trip.ActualCompletedTime = DateTime.UtcNow;
                         await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
 
                         // CẬP NHẬT ODOMETER CHO XE (QUAN TRỌNG)
-                        //var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(record.VehicleId);
+                        var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(record.VehicleId);
                         //if (vehicle != null)
                         //{
                         //    // Chỉ update nếu số mới lớn hơn số cũ (để an toàn)
-                        //    if (record.CurrentOdometer > vehicle.Odometer)
+                        //    if (record.CurrentOdometer > vehicle.CurrentOdometer) // Giả sử Vehicle có CurrentOdometer
                         //    {
-                        //        vehicle.Odometer = record.CurrentOdometer;
-                        //        await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
+                        //        // vehicle.CurrentOdometer = record.CurrentOdometer;
+                        //        // await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
                         //    }
-                        //    // Cập nhật vị trí xe về vị trí trả
-                        //    // vehicle.Location = ... (nếu record có lưu Location)
                         //}
                     }
                 }
 
                 await _unitOfWork.TripVehicleHandoverRecordRepo.UpdateAsync(record);
 
-                await _unitOfWork.SaveChangeAsync(); // Save các thay đổi OTP, Record
-                await _unitOfWork.CommitTransactionAsync(); // Commit
+                // Lưu & Commit
+                await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync(); // [FIX] Gọi qua biến transaction
 
                 return new ResponseDTO("Ký biên bản thành công.", 200, true);
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackTransactionAsync();
+                await transaction.RollbackAsync(); // [FIX] Gọi qua biến transaction
                 return new ResponseDTO($"Lỗi hệ thống: {ex.Message}", 500, false);
             }
         }

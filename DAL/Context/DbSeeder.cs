@@ -88,6 +88,9 @@ namespace DAL.Context
             SeedDeliveryRecordTemplates(modelBuilder); // Đã cập nhật thêm Xe
 
             SeedVehicleType(modelBuilder);
+
+            // [NEW] Seed Giấy tờ tùy thân
+            SeedUserDocuments(modelBuilder);
         }
 
         // ... (Các hàm SeedRole, SeedUser, SeedWallets, SeedDriver, SeedOwner, SeedProvider, SeedContractTemplates giữ nguyên như cũ) ...
@@ -138,7 +141,7 @@ namespace DAL.Context
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
             modelBuilder.Entity<Owner>().HasData(
-                new Owner { UserId = OwnerID, FullName = "Owner_Name", Email = "danglaikp@gmail.com", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m },
+                new Owner { UserId = OwnerID, FullName = "Owner_Name", Email = "trangphse171412@fpt.edu.vn", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m },
                 new Owner { UserId = OwnerID_2, FullName = "Owner_Name_2", Email = "voluongnhuttien@gmail.com", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m }
 
             );
@@ -296,5 +299,119 @@ namespace DAL.Context
                 new VehicleType { VehicleTypeId = VehicleTypeID_Refrigerated, VehicleTypeName = "Xe tải thùng lạnh", Description = "Xe tải chuyên dụng có thùng giữ nhiệt, chở hàng đông lạnh." }
             );
         }
-    }
+
+        // ───────────────────────────────────────────────
+        // 🔹 USER DOCUMENTS (EKYC DATA) - [NEW]
+        // ───────────────────────────────────────────────
+        private static void SeedUserDocuments(ModelBuilder modelBuilder)
+        {
+            var seedTime = new DateTime(2025, 1, 15, 10, 30, 0, DateTimeKind.Utc);
+
+            modelBuilder.Entity<UserDocument>().HasData(
+                // 1. DRIVER 1: Đã xác thực đầy đủ (CCCD + GPLX)
+                new UserDocument
+                {
+                    UserDocumentId = Guid.NewGuid(),
+                    UserId = DriverID, // Tài xế Văn A
+                    DocumentType = DocumentType.CCCD,
+                    Status = VerifileStatus.ACTIVE,
+                    IdentityNumber = "079090001234",
+                    FullName = "TÀI XẾ VĂN A",
+                    DateOfBirth = new DateTime(1990, 5, 15),
+                    PlaceOfOrigin = "Hồ Chí Minh",
+                    PlaceOfResidence = "123 Lê Lợi, Q1, TP.HCM",
+                    IssueDate = new DateTime(2021, 5, 15),
+                    ExpiryDate = new DateTime(2041, 5, 15),
+                    IssuePlace = "Cục Cảnh sát QLHC về TTXH",
+                    FrontImageUrl = "https://example.com/driver1_cccd_front.jpg",
+                    BackImageUrl = "https://example.com/driver1_cccd_back.jpg",
+                    PortraitImageUrl = "https://example.com/driver1_face.jpg",
+                    IsDocumentReal = true,
+                    FaceMatchScore = 98.5,
+                    CreatedAt = seedTime,
+                    VerifiedAt = seedTime
+                },
+                new UserDocument
+                {
+                    UserDocumentId = Guid.NewGuid(),
+                    UserId = DriverID,
+                    DocumentType = DocumentType.DRIVER_LINCENSE,
+                    Status = VerifileStatus.ACTIVE,
+                    IdentityNumber = "790123456789", // Số bằng lái
+                    FullName = "TÀI XẾ VĂN A",
+                    DateOfBirth = new DateTime(1990, 5, 15),
+                    LicenseClass = "C", // Bằng C
+                    IssueDate = new DateTime(2020, 1, 10),
+                    ExpiryDate = new DateTime(2025, 1, 10),
+                    IssuePlace = "Sở GTVT TP.HCM",
+                    FrontImageUrl = "https://example.com/driver1_license_front.jpg",
+                    BackImageUrl = "https://example.com/driver1_license_back.jpg",
+                    IsDocumentReal = true,
+                    CreatedAt = seedTime,
+                    VerifiedAt = seedTime
+                },
+
+                // 2. DRIVER 2: Mới đăng ký, chưa xác thực (Để test luồng verify)
+                // (Không seed data cho DriverID_2 để giả lập trường hợp chưa có gì)
+
+                // 3. OWNER 1: Đã xác thực CCCD (Owner chỉ cần CCCD)
+                new UserDocument
+                {
+                    UserDocumentId = Guid.NewGuid(),
+                    UserId = OwnerID, // Owner Name
+                    DocumentType = DocumentType.CCCD,
+                    Status = VerifileStatus.ACTIVE,
+                    IdentityNumber = "079085005678",
+                    FullName = "OWNER NAME",
+                    DateOfBirth = new DateTime(1985, 10, 20),
+                    PlaceOfOrigin = "Hà Nội",
+                    PlaceOfResidence = "456 Nguyễn Huệ, Q1, TP.HCM",
+                    IssueDate = new DateTime(2018, 10, 20),
+                    ExpiryDate = new DateTime(2038, 10, 20),
+                    IssuePlace = "Cục Cảnh sát ĐKQL cư trú và DLQG về dân cư",
+                    FrontImageUrl = "https://example.com/owner1_cccd_front.jpg",
+                    BackImageUrl = "https://example.com/owner1_cccd_back.jpg",
+                    PortraitImageUrl = "https://example.com/owner1_face.jpg",
+                    IsDocumentReal = true,
+                    FaceMatchScore = 95.0,
+                    CreatedAt = seedTime,
+                    VerifiedAt = seedTime
+                },
+
+                // 4. OWNER 2: Bị từ chối (Để test luồng Rejection / Manual Review)
+                new UserDocument
+                {
+                    UserDocumentId = Guid.NewGuid(),
+                    UserId = OwnerID_2, // Owner Name 2
+                    DocumentType = DocumentType.CCCD,
+                    Status = VerifileStatus.REJECTED, // Bị từ chối
+                    RejectionReason = "Ảnh mờ, không nhìn rõ số CMND; Nghi vấn chỉnh sửa ảnh.",
+                    FrontImageUrl = "https://example.com/owner2_cccd_front_blur.jpg",
+                    BackImageUrl = "https://example.com/owner2_cccd_back.jpg",
+                    CreatedAt = DateTime.UtcNow.AddDays(-1), // Tạo hôm qua
+                    LastUpdatedAt = DateTime.UtcNow
+                },
+
+                // 5. PROVIDER 1: Đã xác thực
+                new UserDocument
+                {
+                    UserDocumentId = Guid.NewGuid(),
+                    UserId = ProviderID,
+                    DocumentType = DocumentType.CCCD,
+                    Status = VerifileStatus.ACTIVE,
+                    IdentityNumber = "079088009999",
+                    FullName = "PROVIDER NAME",
+                    DateOfBirth = new DateTime(1988, 3, 1),
+                    PlaceOfOrigin = "Đà Nẵng",
+                    IssueDate = new DateTime(2019, 1, 1),
+                    ExpiryDate = new DateTime(2039, 1, 1),
+                    FrontImageUrl = "https://example.com/provider_cccd.jpg",
+                    IsDocumentReal = true,
+                    FaceMatchScore = 92.0,
+                    CreatedAt = seedTime,
+                    VerifiedAt = seedTime
+                }
+            );
+            } 
+        }
 }

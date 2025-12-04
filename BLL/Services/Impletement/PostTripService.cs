@@ -2,6 +2,7 @@
 using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
+using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
@@ -15,11 +16,13 @@ namespace BLL.Services.Impletement
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
+        private readonly IUserDocumentService _userDocumentService;
 
-        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility)
+        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
+            _userDocumentService = userDocumentService;
         }
 
 
@@ -128,42 +131,61 @@ namespace BLL.Services.Impletement
             }
         }
 
-        // 1. CREATE POST TRIP
+        // =========================================================================
+        // 1. CREATE POST TRIP (ĐĂNG BÀI TÌM TÀI XẾ)
+        // =========================================================================
         public async Task<ResponseDTO> CreatePostTripAsync(PostTripCreateDTO dto)
         {
+            // Dùng Transaction để đảm bảo tính toàn vẹn (PostTrip + PostTripDetails)
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var ownerId = _userUtility.GetUserIdFromToken();
-                if (ownerId == Guid.Empty)
-                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
+                if (ownerId == Guid.Empty) return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
+                // --- BƯỚC 0: CHECK GIẤY TỜ (QUAN TRỌNG) ---
+                var verifyCheck = await _userDocumentService.ValidateUserDocumentsAsync(ownerId);
+                if (!verifyCheck.IsValid)
+                {
+                    // Trả về lỗi 403 Forbidden nếu chưa xác thực giấy tờ
+                    return new ResponseDTO(verifyCheck.Message, 403, false);
+                }
+
+                // 1. Validate Trip
                 var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
-                if (trip == null || trip.OwnerId != ownerId)
-                    return new ResponseDTO("Trip not found or does not belong to this owner", 404, false);
+                if (trip == null) return new ResponseDTO("Trip not found.", 404, false);
+                if (trip.OwnerId != ownerId) return new ResponseDTO("Forbidden: Bạn không sở hữu chuyến đi này.", 403, false);
+
+                // 2. Validate Trạng thái Trip (Không thể đăng bài cho chuyến đã xong/hủy)
+                if (trip.Status == TripStatus.COMPLETED || trip.Status == TripStatus.CANCELLED || trip.Status != TripStatus.PENDING_DRIVER_ASSIGNMENT)
+                {
+                    return new ResponseDTO("Không thể đăng bài cho chuyến đã hoàn thành hoặc bị hủy.", 400, false);
+                }
 
                 // =================================================================================
                 // 🛑 VALIDATE: KIỂM TRA TÀI XẾ CHÍNH (PRIMARY DRIVER)
                 // =================================================================================
 
-                // 1. Kiểm tra xem bài đăng này có ý định tuyển Tài xế chính không?
-                bool isRecruitingMainDriver = dto.PostTripDetails.Any(d => d.Type == Common.Enums.Type.DriverType.PRIMARY);
+                // Kiểm tra xem trong các detail của bài đăng MỚI này có tuyển PRIMARY không?
+                bool isRecruitingMainDriver = dto.PostTripDetails.Any(d => d.Type == DriverType.PRIMARY);
 
                 if (isRecruitingMainDriver)
                 {
-                    // 2. Nếu có tuyển Main Driver -> Check DB xem Trip đã có Main Driver nào được chấp nhận chưa
+                    // Nếu có tuyển, phải kiểm tra xem Trip đã có ai làm PRIMARY chưa (Tính cả những người đã ACCEPTED)
                     bool mainDriverExists = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
                         a => a.TripId == dto.TripId &&
-                             a.Type == Common.Enums.Type.DriverType.PRIMARY &&
-                             a.AssignmentStatus == Common.Enums.Status.AssignmentStatus.ACCEPTED
+                             a.Type == DriverType.PRIMARY &&
+                             a.AssignmentStatus == AssignmentStatus.ACCEPTED
                     );
 
                     if (mainDriverExists)
                     {
-                        return new ResponseDTO("Chuyến đi này đã có Tài xế chính (Primary Driver). Không thể tạo bài tuyển thêm.", 400, false);
+                        return new ResponseDTO("Chuyến đi này ĐÃ CÓ Tài xế chính. Bạn chỉ có thể tuyển thêm Phụ xe (Assistant).", 400, false);
                     }
                 }
                 // =================================================================================
 
+                // 3. Tạo PostTrip Entity
                 var postTrip = new PostTrip
                 {
                     PostTripId = Guid.NewGuid(),
@@ -172,18 +194,19 @@ namespace BLL.Services.Impletement
                     Title = dto.Title,
                     Description = dto.Description,
                     RequiredPayloadInKg = dto.RequiredPayloadInKg,
-                    Status = dto.Status,
-                    CreateAt = DateTime.Now,
-                    UpdateAt = DateTime.Now,
+                    Status = PostStatus.OPEN, // Mặc định là OPEN khi tạo mới
+                    CreateAt = DateTime.UtcNow,
+                    UpdateAt = DateTime.UtcNow,
                 };
 
+                // 4. Tạo Details
                 foreach (var detailDto in dto.PostTripDetails)
                 {
                     var detail = new PostTripDetail
                     {
                         PostTripDetailId = Guid.NewGuid(),
                         PostTripId = postTrip.PostTripId,
-                        Type = detailDto.Type,
+                        Type = detailDto.Type, // PRIMARY hoặc ASSISTANT
                         RequiredCount = detailDto.RequiredCount,
                         PricePerPerson = detailDto.PricePerPerson,
                         PickupLocation = detailDto.PickupLocation,
@@ -194,15 +217,19 @@ namespace BLL.Services.Impletement
                     postTrip.PostTripDetails.Add(detail);
                 }
 
+                // 5. Lưu xuống DB
                 await _unitOfWork.PostTripRepo.AddAsync(postTrip);
                 await _unitOfWork.SaveChangeAsync();
 
-                var result = new { PostTripId = postTrip.PostTripId };
-                return new ResponseDTO("Create Post Trip Successfully!", 201, true, result);
+                // Commit Transaction
+                await transaction.CommitAsync();
+
+                return new ResponseDTO("Tạo bài đăng tuyển tài xế thành công!", 201, true, new { PostTripId = postTrip.PostTripId });
             }
             catch (Exception ex)
             {
-                return new ResponseDTO($"Error while creating Post Trip: {ex.Message}", 500, false);
+                await transaction.RollbackAsync();
+                return new ResponseDTO($"Lỗi khi tạo bài đăng: {ex.Message}", 500, false);
             }
         }
 

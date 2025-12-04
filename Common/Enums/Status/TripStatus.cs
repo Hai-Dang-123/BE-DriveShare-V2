@@ -41,17 +41,15 @@ namespace Common.Enums.Status
         PENDING_DRIVER_ASSIGNMENT,
 
 
-        /// <summary>
-        /// (Đợi HĐ Tài xế) - Áp dụng khi thuê tài xế ngoài. Đã tìm thấy tài xế,
-        /// đang đợi Owner và Driver ký hợp đồng (DriverContract).
-        /// </summary>
-        AWAITING_DRIVER_CONTRACT,
 
-        /// <summary>
-        /// ( Đợi Owner thanh toán tài xế ) - HĐ Tài xế đã ký, đang đợi Owner
-        /// Sau khi Owner và Driver ký hợp đồng, Owner cần thanh toán cho Driver (cọc/toàn bộ)
+        // / <summary>
+        /// (Đợi thanh toán của Chủ xe) - HĐ Owner-Driver đã ký,
         /// </summary>
         AWAITING_OWNER_PAYMENT,
+        /// <summary>
+        /// đã hoàn tất kí hợp đồng với tài xế hoặc đã gán tài xế thành công.
+        /// </summary>
+        DONE_ASSIGNING_DRIVER,
 
         // ─────────────── GIAI ĐOẠN 3: CHUẨN BỊ VẬN HÀNH ───────────────
 
@@ -62,9 +60,9 @@ namespace Common.Enums.Status
         READY_FOR_VEHICLE_HANDOVER,
 
         /// <summary>
-        /// (Đang bàn giao xe) - Tài xế đang trong quá trình nhận xe từ Chủ xe (Owner).
+        /// ĐÃ LẤY XE - Tài xế đã nhận xe từ Chủ xe (Owner),
         /// </summary>
-        VEHICLE_HANDOVER,
+        VEHICLE_HANDOVERED,
 
         /// <summary>
         /// (Đang ĐI lấy hàng) - Tài xế đang trên đường đi lấy hàng
@@ -100,13 +98,18 @@ namespace Common.Enums.Status
         /// <summary>
         /// (Đang trả xe) - Tài xế đang trên đường mang xe về trả cho Chủ xe (Owner).
         /// </summary>
-        RETURNING_VEHICLE,
+        READY_FOR_VEHICLE_RETURN,
 
         /// <summary>
         /// (Đã trả xe) - Tài xế đã hoàn tất trả xe cho Owner,
         /// chuyến đi về mặt vận hành đã kết thúc.
         /// </summary>
-        VEHICLE_RETURNED,
+        VEHICLE_RETURNING,
+
+        /// <summary>
+        /// Xong chuyến đi và đang chờ thanh toán.
+        /// </summary>
+        DONE_TRIP_AND_WATING_FOR_PAYOUT,
 
         // ─────────────── GIAI ĐOẠN 6: QUYẾT TOÁN & THANH TOÁN ───────────────
 

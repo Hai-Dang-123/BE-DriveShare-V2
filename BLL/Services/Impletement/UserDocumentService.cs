@@ -9,6 +9,7 @@ using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Internal;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -422,5 +423,353 @@ namespace BLL.Services.Impletement
 
         public Task<ResponseDTO> UpdateAsync(Guid id, UserDocumentDTO dto) => Task.FromResult(new ResponseDTO("Not supported", 400, false));
         public Task<ResponseDTO> DeleteAsync(Guid id) => Task.FromResult(new ResponseDTO("Not supported", 400, false));
+
+        public async Task<(bool IsValid, string Message)> ValidateUserDocumentsAsync(Guid userId)
+        {
+            // 1. Lấy thông tin User (Chỉ lấy Role và List Document active để tối ưu query)
+            var user = await _unitOfWork.BaseUserRepo.GetAll()
+                .AsNoTracking()
+                .Include(u => u.Role)
+                .Include(u => u.UserDocuments)
+                .Where(u => u.UserId == userId)
+                .Select(u => new
+                {
+                    RoleName = u.Role != null ? u.Role.RoleName : "",
+                    ActiveDocTypes = u.UserDocuments
+                                      .Where(d => d.Status == VerifileStatus.ACTIVE)
+                                      .Select(d => d.DocumentType)
+                                      .ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (user == null)
+                return (false, "Không tìm thấy thông tin người dùng.");
+
+            // 2. Check xem có CCCD chưa (Ai cũng cần)
+            bool hasCCCD = user.ActiveDocTypes.Contains(DocumentType.CCCD);
+
+            // 3. Logic check theo Role
+            // Case: TÀI XẾ (DRIVER)
+            if (user.RoleName.ToUpper().Contains("DRIVER"))
+            {
+                bool hasLicense = user.ActiveDocTypes.Contains(DocumentType.DRIVER_LINCENSE);
+
+                if (hasCCCD && hasLicense)
+                {
+                    return (true, "Đã xác thực đầy đủ.");
+                }
+
+                // Báo lỗi chi tiết thiếu cái gì
+                var missing = new List<string>();
+                if (!hasCCCD) missing.Add("CCCD/CMND");
+                if (!hasLicense) missing.Add("Bằng lái xe");
+
+                return (false, $"Tài xế cần xác thực: {string.Join(", ", missing)}.");
+            }
+
+            // Case: CÁC ROLE KHÁC (PROVIDER, OWNER...)
+            // Chỉ cần CCCD là đủ đăng bài
+            if (!hasCCCD)
+            {
+                return (false, "Bạn cần xác thực CCCD (eKYC) và được duyệt trước khi thực hiện chức năng này.");
+            }
+
+            // Nếu OK hết
+            return (true, "Hợp lệ.");
+        }
+
+        // ============================================================
+        // 1. USER GỬI YÊU CẦU DUYỆT THỦ CÔNG
+        // ============================================================
+        public async Task<ResponseDTO> RequestManualReviewAsync(RequestManualReviewDTO dto)
+        {
+            try
+            {
+                var userId = _userUtility.GetUserIdFromToken();
+                var doc = await _unitOfWork.UserDocumentRepo.GetByIdAsync(dto.UserDocumentId);
+
+                if (doc == null) return new ResponseDTO("Không tìm thấy tài liệu.", 404, false);
+
+                // Validate
+                if (doc.UserId != userId) return new ResponseDTO("Bạn không có quyền thao tác tài liệu này.", 403, false);
+                if (doc.Status == VerifileStatus.ACTIVE) return new ResponseDTO("Tài liệu này đã được xác thực rồi.", 400, false);
+                if (doc.Status == VerifileStatus.PENDING_REVIEW) return new ResponseDTO("Tài liệu đang chờ duyệt, vui lòng đợi.", 400, false);
+
+                // Update Status
+                doc.Status = VerifileStatus.PENDING_REVIEW;
+                // Lưu lý do user khiếu nại vào field RejectionReason tạm thời (hoặc tạo field UserNote riêng ở DB)
+                doc.RejectionReason = $"[USER REQUEST]: {dto.UserNote}";
+
+                // Nếu có field LastUpdatedAt trong Base Entity
+                // doc.LastUpdatedAt = DateTime.UtcNow; 
+
+                await _unitOfWork.UserDocumentRepo.UpdateAsync(doc);
+                await _unitOfWork.SaveChangeAsync();
+
+                // Trả về DTO chi tiết thay vì string
+                return new ResponseDTO("Đã gửi yêu cầu thành công.", 200, true, MapToDetailDTO(doc));
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi hệ thống: {ex.Message}", 500, false);
+            }
+        }
+
+        // ============================================================
+        // 2. STAFF DUYỆT HOẶC TỪ CHỐI
+        // ============================================================
+        public async Task<ResponseDTO> ReviewDocumentAsync(ReviewDocumentDTO dto)
+        {
+            try
+            {
+                var doc = await _unitOfWork.UserDocumentRepo.GetByIdAsync(dto.UserDocumentId);
+                if (doc == null) return new ResponseDTO("Tài liệu không tồn tại.", 404, false);
+
+                // Chỉ duyệt những đơn đang PENDING (hoặc INACTIVE tùy logic)
+                if (doc.Status != VerifileStatus.PENDING_REVIEW && doc.Status != VerifileStatus.INACTIVE)
+                {
+                    return new ResponseDTO("Trạng thái tài liệu không hợp lệ để duyệt.", 400, false);
+                }
+
+                if (dto.IsApproved)
+                {
+                    // DUYỆT
+                    doc.Status = VerifileStatus.ACTIVE;
+                    doc.VerifiedAt = DateTime.UtcNow;
+                    doc.RejectionReason = null; // Xóa lý do từ chối/khiếu nại cũ
+                    doc.IsDocumentReal = true;  // Override kết quả AI
+                }
+                else
+                {
+                    // TỪ CHỐI
+                    if (string.IsNullOrWhiteSpace(dto.RejectReason))
+                        return new ResponseDTO("Vui lòng nhập lý do từ chối.", 400, false);
+
+                    doc.Status = VerifileStatus.REJECTED;
+                    doc.RejectionReason = dto.RejectReason;
+                    doc.VerifiedAt = null;
+                }
+
+                await _unitOfWork.UserDocumentRepo.UpdateAsync(doc);
+                await _unitOfWork.SaveChangeAsync();
+
+                return new ResponseDTO(
+                    dto.IsApproved ? "Đã duyệt tài liệu." : "Đã từ chối tài liệu.",
+                    200,
+                    true,
+                    MapToDetailDTO(doc)
+                );
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
+            }
+        }
+
+        // ============================================================
+        // 3.1. GET PENDING LIST (SUMMARY - TỐI ƯU HIỆU NĂNG)
+        // ============================================================
+        public async Task<ResponseDTO> GetPendingReviewListAsync(
+            int pageNumber,
+            int pageSize,
+            string? search = null,
+            string? sortField = null,
+            string? sortOrder = "DESC")
+        {
+            try
+            {
+                // 1. Base Query (Chỉ lấy PENDING_REVIEW)
+                var query = _unitOfWork.UserDocumentRepo.GetAll()
+                    .AsNoTracking()
+                    .Include(d => d.User) // Include User để lấy tên/email
+                    .Where(d => d.Status == VerifileStatus.PENDING_REVIEW);
+
+                // 2. Search (Tìm theo Tên User, Email, hoặc Loại giấy tờ)
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    string keyword = search.Trim().ToLower();
+                    query = query.Where(d =>
+                        (d.User.FullName != null && d.User.FullName.ToLower().Contains(keyword)) ||
+                        (d.User.Email != null && d.User.Email.ToLower().Contains(keyword)) ||
+                        d.DocumentType.ToString().ToLower().Contains(keyword)
+                    );
+                }
+
+                // 3. Sort (Sắp xếp động)
+                bool isDesc = (sortOrder?.ToUpper() == "DESC");
+                query = sortField?.ToLower() switch
+                {
+                    "username" => isDesc ? query.OrderByDescending(d => d.User.FullName) : query.OrderBy(d => d.User.FullName),
+                    "email" => isDesc ? query.OrderByDescending(d => d.User.Email) : query.OrderBy(d => d.User.Email),
+                    "type" => isDesc ? query.OrderByDescending(d => d.DocumentType) : query.OrderBy(d => d.DocumentType),
+                    "date" => isDesc ? query.OrderByDescending(d => d.LastUpdatedAt ?? d.CreatedAt) : query.OrderBy(d => d.LastUpdatedAt ?? d.CreatedAt), // Ưu tiên ngày update mới nhất (lúc user gửi request)
+                    _ => query.OrderByDescending(d => d.LastUpdatedAt ?? d.CreatedAt) // Mặc định: Mới nhất lên đầu
+                };
+
+                // 4. Paging & Projection (Chỉ lấy field cần thiết)
+                var totalCount = await query.CountAsync();
+                var items = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(d => new PendingReviewSummaryDTO
+                    {
+                        UserDocumentId = d.UserDocumentId,
+                        UserId = d.UserId,
+                        UserName = d.User.FullName ?? "N/A",
+                        Email = d.User.Email,
+                        DocumentType = d.DocumentType.ToString(),
+                        UserNote = d.RejectionReason ?? "", // Lý do user gửi
+                        CreatedAt = d.CreatedAt,
+                        LastUpdatedAt = d.LastUpdatedAt // Thời điểm gửi request
+                    })
+                    .ToListAsync();
+
+                var paginatedResult = new PaginatedDTO<PendingReviewSummaryDTO>(items, totalCount, pageNumber, pageSize);
+                return new ResponseDTO("Lấy danh sách chờ duyệt thành công.", 200, true, paginatedResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
+            }
+        }
+
+        // ============================================================
+        // 3.2. GET PENDING DETAIL (FULL INFO + EKYC ANALYSIS)
+        // ============================================================
+        public async Task<ResponseDTO> GetPendingReviewDetailAsync(Guid userDocumentId)
+        {
+            try
+            {
+                var doc = await _unitOfWork.UserDocumentRepo.GetAll()
+                    .AsNoTracking()
+                    .Include(d => d.User)
+                    .FirstOrDefaultAsync(d => d.UserDocumentId == userDocumentId);
+
+                if (doc == null) return new ResponseDTO("Tài liệu không tồn tại.", 404, false);
+
+                // Kiểm tra quyền truy cập nếu cần (ví dụ chỉ staff mới xem được status này)
+                // if (doc.Status != VerifileStatus.PENDING_REVIEW) ...
+
+                // Map sang Detail DTO
+                var detailDto = new PendingReviewDetailDTO
+                {
+                    // Thông tin chung (kế thừa từ Summary)
+                    UserDocumentId = doc.UserDocumentId,
+                    UserId = doc.UserId,
+                    UserName = doc.User?.FullName ?? "N/A",
+                    Email = doc.User?.Email ?? "N/A",
+                    DocumentType = doc.DocumentType.ToString(),
+                    UserNote = doc.RejectionReason ?? "",
+                    CreatedAt = doc.CreatedAt,
+                    LastUpdatedAt = doc.LastUpdatedAt,
+
+                    // Thông tin chi tiết (Ảnh + Log)
+                    FrontImageUrl = doc.FrontImageUrl,
+                    BackImageUrl = doc.BackImageUrl,
+                    PortraitImageUrl = doc.PortraitImageUrl,
+                    EkycLog = doc.EkycLog,
+
+                    // 🌟 PHÂN TÍCH EKYC LOG (Chỉ chạy khi xem detail)
+                    AnalysisResult = AnalyzeEkycLog(doc.EkycLog)
+                };
+
+                return new ResponseDTO("Lấy chi tiết thành công.", 200, true, detailDto);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
+            }
+        }
+
+        // ============================================================
+        // 9. PRIVATE HELPERS (ANALYZE LOG & MAPPERS)
+        // ============================================================
+
+        private EkycAnalysisResultDTO AnalyzeEkycLog(string? jsonLog)
+        {
+            var result = new EkycAnalysisResultDTO();
+            if (string.IsNullOrWhiteSpace(jsonLog)) { result.Warnings.Add("No log data."); return result; }
+
+            try
+            {
+                var root = JObject.Parse(jsonLog);
+                var data = root["object"];
+                if (data == null) return result;
+
+                // Basic Info
+                result.OcrName = data["name"]?.ToString() ?? "";
+                result.OcrId = data["id"]?.ToString() ?? "";
+                result.OcrBirthDay = data["birth_day"]?.ToString() ?? "";
+                result.DocumentType = data["card_type"]?.ToString() ?? "";
+
+                // Tampering Check
+                var tampering = data["tampering"];
+                if (tampering?["is_legal"]?.ToString().ToLower() == "no")
+                {
+                    result.IsValidDocument = false;
+                    result.HasTampering = true;
+                    result.Warnings.Add("Phát hiện chỉnh sửa/giả mạo (Tampering).");
+
+                    var tw = tampering["warning"]?.ToObject<List<string>>();
+                    if (tw != null) foreach (var w in tw) result.Warnings.Add(TranslateEkycCode(w));
+                }
+                else result.IsValidDocument = true;
+
+                // General Warning
+                var warnings = data["general_warning"]?.ToObject<List<string>>();
+                if (warnings != null) foreach (var w in warnings) result.Warnings.Add(TranslateEkycCode(w));
+
+                // Check Fake (Recapture/Edited)
+                CheckFake(data["checking_result_front"], "Mặt trước", result);
+                CheckFake(data["checking_result_back"], "Mặt sau", result);
+
+                // Quality
+                CheckQuality(data["quality_front"], "Mặt trước", result);
+                CheckQuality(data["quality_back"], "Mặt sau", result);
+
+                // Match Front-Back
+                var match = data["match_front_back"];
+                if (match != null)
+                {
+                    foreach (JProperty prop in match)
+                        if (prop.Value.ToString().ToLower() == "no")
+                        {
+                            result.DataMismatch = true;
+                            result.Warnings.Add($"Không khớp: {TranslateEkycCode(prop.Name)}");
+                        }
+                }
+            }
+            catch { result.Warnings.Add("Error parsing EKYC log."); }
+            return result;
+        }
+
+        private void CheckFake(JToken? token, string side, EkycAnalysisResultDTO res)
+        {
+            if (token == null) return;
+            if (token["recaptured_result"]?.ToString() == "1") { res.IsScreenRecapture = true; res.Warnings.Add($"{side}: Chụp qua màn hình."); }
+            if (token["corner_cut_result"]?.ToString() == "1") { res.IsCornerCut = true; res.Warnings.Add($"{side}: Mất góc."); }
+            if (token["edited_result"]?.ToString() == "1") { res.HasTampering = true; res.Warnings.Add($"{side}: Chỉnh sửa (Edited)."); }
+        }
+
+        private void CheckQuality(JToken? q, string side, EkycAnalysisResultDTO res)
+        {
+            if (q?["final_result"] == null) return;
+            var f = q["final_result"];
+            if (f["blurred_likelihood"]?.ToString() != "unlikely") res.Warnings.Add($"{side}: Mờ.");
+            if (f["bright_spot_likelihood"]?.ToString() != "unlikely") res.Warnings.Add($"{side}: Lóa sáng.");
+        }
+
+        private string TranslateEkycCode(string code)
+        {
+            // Simple translation map
+            code = code.ToLower();
+            if (code.Contains("mat_goc")) return "Mất góc";
+            if (code.Contains("het_han")) return "Hết hạn";
+            if (code.Contains("match_name")) return "Họ tên";
+            if (code.Contains("match_id")) return "Số ID";
+            if (code.Contains("match_bod")) return "Ngày sinh";
+            if (code.Contains("match_valid_date")) return "Ngày hết hạn";
+            return code;
+        }
     }
 }

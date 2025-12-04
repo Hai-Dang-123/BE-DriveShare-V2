@@ -47,6 +47,7 @@ namespace DAL.Entities
         public string? RejectionReason { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? LastUpdatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? VerifiedAt { get; set; }
 
         public virtual BaseUser User { get; set; } = null!;

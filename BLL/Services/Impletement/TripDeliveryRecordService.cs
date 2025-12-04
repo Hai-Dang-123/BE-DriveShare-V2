@@ -388,7 +388,7 @@ namespace BLL.Services.Impletement
                             {
                                 // Nếu còn tiền chưa thanh toán -> AWAITING_FINAL_PAYOUT
                                 // Nếu xong xuôi -> COMPLETED
-                                record.Trip.Status = TripStatus.RETURNING_VEHICLE;
+                                record.Trip.Status = TripStatus.READY_FOR_VEHICLE_RETURN;
                                 record.Trip.ActualCompletedTime = DateTime.UtcNow; // Ghi nhận giờ giao thực tế
                                 await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                             }
@@ -1044,7 +1044,7 @@ namespace BLL.Services.Impletement
                             // Từ MOVING_TO_DROPOFF/UNLOADING -> COMPLETED
                             if (record.Trip.Status == TripStatus.MOVING_TO_DROPOFF || record.Trip.Status == TripStatus.UNLOADING)
                             {
-                                record.Trip.Status = TripStatus.RETURNING_VEHICLE; // Hoặc RETURNING_VEHICLE
+                                record.Trip.Status = TripStatus.READY_FOR_VEHICLE_RETURN; // Hoặc RETURNING_VEHICLE
                                 record.Trip.ActualCompletedTime = DateTime.UtcNow;
                                 await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                             }

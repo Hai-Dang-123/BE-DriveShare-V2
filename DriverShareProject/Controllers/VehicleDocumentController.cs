@@ -19,17 +19,82 @@ namespace DriverShareProject.Controllers
             _service = service;
         }
 
+        // =========================================================================
+        // 1. [USER/OWNER] Upload giấy tờ xe (Cà vẹt, Bảo hiểm...)
+        // =========================================================================
         /// <summary>
-        /// Thêm mới giấy tờ cho xe (Cà vẹt, Bảo hiểm...)
+        /// Owner upload giấy tờ cho xe. Trạng thái mặc định là PENDING_REVIEW.
         /// </summary>
-        /// <param name="vehicleId">ID của xe cần thêm giấy tờ</param>
-        /// <param name="request">Form chứa ảnh và thông tin</param>
+        /// <param name="vehicleId">ID của xe</param>
+        /// <param name="request">Form chứa ảnh (Front/Back) và ngày hết hạn</param>
         [HttpPost("add/{vehicleId:guid}")]
         [Authorize] // Bắt buộc đăng nhập
+        [Consumes("multipart/form-data")] // Quan trọng để nhận file upload
         public async Task<IActionResult> AddDocument(Guid vehicleId, [FromForm] AddVehicleDocumentDTO request)
         {
+            // Validate cơ bản
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
             var response = await _service.AddDocumentAsync(vehicleId, request);
             return StatusCode(response.StatusCode, response);
+        }
+
+        // =========================================================================
+        // 2. [STAFF/ADMIN] Duyệt giấy tờ xe (Manual Review)
+        // =========================================================================
+        /// <summary>
+        /// Staff duyệt hoặc từ chối giấy tờ xe.
+        /// </summary>
+        /// <param name="request">DTO chứa ID giấy tờ và kết quả duyệt</param>
+        [HttpPost("review")]
+        [Authorize(Roles = "Admin,Staff")] // Chỉ Staff/Admin mới được gọi
+        public async Task<IActionResult> ReviewDocument([FromBody] ReviewDocumentDTO request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            // Gọi hàm Review trong Service
+            var response = await _service.ReviewVehicleDocumentAsync(
+                request.UserDocumentId, // Lưu ý: Dùng chung DTO ReviewDocumentDTO (UserDocumentId ở đây hiểu là VehicleDocumentId)
+                request.IsApproved,
+                request.RejectReason
+            );
+
+            return StatusCode(response.StatusCode, response);
+        }
+
+        /// <summary>
+        /// 1. Lấy danh sách tóm tắt các giấy tờ xe đang chờ duyệt (Phân trang)
+        /// </summary>
+        [HttpGet("pending-reviews")]
+        //[Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetPendingReviewsList(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,      // Tìm kiếm: Biển số, Tên chủ, Loại giấy
+            [FromQuery] string? sortField = null,   // Sắp xếp: "date", "plate", "owner", "type"
+            [FromQuery] string? sortOrder = "DESC") // Thứ tự: "ASC" hoặc "DESC"
+        {
+            var response = await _service.GetPendingVehicleDocumentsListAsync(
+                pageNumber,
+                pageSize,
+                search,
+                sortField,
+                sortOrder
+            );
+            return StatusCode(response.StatusCode, response);
+        }
+
+        /// <summary>
+        /// 2. Lấy chi tiết một giấy tờ xe để Staff kiểm tra (Ảnh, Thông tin xe...)
+        /// </summary>
+        [HttpGet("pending-reviews/{id:guid}")]
+        //[Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetPendingReviewDetail(Guid id)
+        {
+            var response = await _service.GetVehicleDocumentDetailAsync(id);
+
+            if (!response.IsSuccess) return StatusCode(response.StatusCode, response);
+            return Ok(response);
         }
     }
 }

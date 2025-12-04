@@ -1,12 +1,11 @@
 ﻿using BLL.Services.Interface;
 using BLL.Utilities;
 using Common.DTOs;
-
 using Common.Enums.Status;
 using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore; // Vẫn cần để dùng Include
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,8 +20,6 @@ namespace BLL.Services.Impletement
         private readonly ITripDeliveryRecordService _tripDeliveryRecordService;
         private readonly IDeliveryRecordTemplateService _templateService;
         private readonly IVietMapService _vietMapService;
-
-        // 1. INJECT SERVICE GIAO NHẬN XE (MỚI)
         private readonly ITripVehicleHandoverRecordService _vehicleHandoverService;
 
         public TripDriverAssignmentService(
@@ -32,7 +29,7 @@ namespace BLL.Services.Impletement
             ITripDeliveryRecordService tripDeliveryRecordService,
             IDeliveryRecordTemplateService templateService,
             IVietMapService vietMapService,
-            ITripVehicleHandoverRecordService vehicleHandoverService) // Inject vào đây
+            ITripVehicleHandoverRecordService vehicleHandoverService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -43,61 +40,58 @@ namespace BLL.Services.Impletement
             _vehicleHandoverService = vehicleHandoverService;
         }
 
-        /// <summary>
-        /// (Owner) Gán tài xế (nội bộ/thuê) vào Trip.
-        /// </summary>
+        // =========================================================================================================
+        // 1. OWNER GÁN TÀI XẾ (ASSIGNMENT BY OWNER) - [UPDATED]
+        // =========================================================================================================
         public async Task<ResponseDTO> CreateAssignmentByOwnerAsync(CreateAssignmentDTO dto)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            // [OPTIMIZED] Sử dụng 'using' để tự động quản lý transaction scope
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var ownerId = _userUtility.GetUserIdFromToken();
                 var userRole = _userUtility.GetUserRoleFromToken();
+
+                // 1. Validate Quyền
                 if (ownerId == Guid.Empty || userRole != "Owner")
                     return new ResponseDTO("Unauthorized: Chỉ 'Owner' mới có thể gán tài xế.", 401, false);
 
+                // 2. Validate Trip
                 var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
-                if (trip == null)
-                    return new ResponseDTO("Trip not found.", 404, false);
-                if (trip.OwnerId != ownerId)
-                    return new ResponseDTO("Forbidden: Bạn không sở hữu chuyến đi này.", 403, false);
+                if (trip == null) return new ResponseDTO("Trip not found.", 404, false);
+                if (trip.OwnerId != ownerId) return new ResponseDTO("Forbidden: Bạn không sở hữu chuyến đi này.", 403, false);
 
+                // [NEW] 3. VALIDATE TRIP STATUS (CHẶN NẾU ĐANG CHỜ KÝ HỢP ĐỒNG)
+                if (trip.Status != TripStatus.PENDING_DRIVER_ASSIGNMENT)
+                {
+                    return new ResponseDTO("Không thể gán tài xế khi chuyến đi đang chờ ký hợp đồng với Provider (AWAITING_OWNER_CONTRACT).", 400, false);
+                }
+
+                // 4. Validate Driver
                 var driver = await _unitOfWork.DriverRepo.GetByIdAsync(dto.DriverId);
-                if (driver == null)
-                    return new ResponseDTO("Driver not found.", 404, false);
+                if (driver == null) return new ResponseDTO("Driver not found.", 404, false);
 
-                // --- VALIDATE 1: TÀI XẾ ĐÃ CÓ TRONG TRIP CHƯA? ---
+                // 5. Check tài xế đã trong trip chưa
                 bool isDriverAlreadyInTrip = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
                     a => a.TripId == dto.TripId && a.DriverId == dto.DriverId
                 );
+                if (isDriverAlreadyInTrip) return new ResponseDTO("Driver is already assigned to this trip.", 400, false);
 
-                if (isDriverAlreadyInTrip)
-                {
-                    return new ResponseDTO("Driver is already assigned to this trip.", 400, false);
-                }
-
-                bool isMainDriver = dto.Type == Common.Enums.Type.DriverType.PRIMARY;
-
-                // --- VALIDATE 2: CHỈ CÓ 1 TÀI XẾ CHÍNH ---
+                // 6. Check Main Driver (Chỉ được 1 tài chính)
+                bool isMainDriver = dto.Type == DriverType.PRIMARY;
                 if (isMainDriver)
                 {
                     bool mainDriverExists = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
-                        a => a.TripId == dto.TripId && a.Type == Common.Enums.Type.DriverType.PRIMARY
+                        a => a.TripId == dto.TripId && a.Type == DriverType.PRIMARY
                     );
-                    if (mainDriverExists)
-                        return new ResponseDTO("This trip already has a main driver assigned.", 400, false);
+                    if (mainDriverExists) return new ResponseDTO("This trip already has a main driver assigned.", 400, false);
                 }
 
-                // ==========================================================
-                // GỌI VIETMAP & TẠO ASSIGNMENT
-                // ==========================================================
+                // 7. VietMap Geocode (Xử lý null safe)
+                var startLocationObj = await _vietMapService.GeocodeAsync(dto.StartLocation) ?? new Common.ValueObjects.Location(dto.StartLocation, 0, 0);
+                var endLocationObj = await _vietMapService.GeocodeAsync(dto.EndLocation) ?? new Common.ValueObjects.Location(dto.EndLocation, 0, 0);
 
-                var startLocationObj = await _vietMapService.GeocodeAsync(dto.StartLocation);
-                if (startLocationObj == null) startLocationObj = new Common.ValueObjects.Location(dto.StartLocation, 0, 0);
-
-                var endLocationObj = await _vietMapService.GeocodeAsync(dto.EndLocation);
-                if (endLocationObj == null) endLocationObj = new Common.ValueObjects.Location(dto.EndLocation, 0, 0);
-
+                // 8. Tạo Assignment
                 var newAssignment = new TripDriverAssignment
                 {
                     TripDriverAssignmentId = Guid.NewGuid(),
@@ -115,14 +109,15 @@ namespace BLL.Services.Impletement
                 };
                 await _unitOfWork.TripDriverAssignmentRepo.AddAsync(newAssignment);
 
-                // --- TẠO BIÊN BẢN (NẾU LÀ MAIN DRIVER) ---
-                // Gọi helper function để tạo cả biên bản Hàng Hóa và Xe
+                // 9. Nếu là Main Driver -> Tạo các biên bản (Hàng hóa & Xe)
                 if (isMainDriver)
                 {
-                    await CreateRecordsForMainDriver(trip.TripId, dto.DriverId);
+                    await CreateRecordsForMainDriver(trip.TripId, dto.DriverId, trip.OwnerId);
                 }
 
-                await _unitOfWork.CommitTransactionAsync();
+                // 10. Lưu & Commit
+                await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
 
                 return new ResponseDTO("Driver assigned successfully.", 201, true, new
                 {
@@ -133,66 +128,66 @@ namespace BLL.Services.Impletement
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackTransactionAsync();
+                await transaction.RollbackAsync();
                 return new ResponseDTO($"Error assigning driver: {ex.Message}", 500, false);
             }
         }
 
-        /// <summary>
-        /// (Driver) Ứng tuyển vào PostTrip.
-        /// </summary>
+        // =========================================================================================================
+        // 2. TÀI XẾ ỨNG TUYỂN (APPLY POST TRIP) - FIXED & OPTIMIZED
+        // =========================================================================================================
         public async Task<ResponseDTO> CreateAssignmentByPostTripAsync(CreateAssignmentByPostTripDTO dto)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            // Sử dụng 'using' để transaction tự động Dispose/Rollback nếu có lỗi
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
+                // 1. Validate User
                 var driverId = _userUtility.GetUserIdFromToken();
-                // ... (Validation User/Role)
+                if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
+                // 2. Lấy PostTrip và Details
+                // Dùng IQueryable để Include dữ liệu cần thiết
                 var postTrip = await _unitOfWork.PostTripRepo.GetAll()
                     .Include(p => p.PostTripDetails)
                     .FirstOrDefaultAsync(p => p.PostTripId == dto.PostTripId);
 
                 if (postTrip == null) return new ResponseDTO("PostTrip not found.", 404, false);
 
+                // 3. Tìm vị trí (Slot) mà tài xế muốn ứng tuyển
                 var postDetail = postTrip.PostTripDetails.FirstOrDefault(d => d.PostTripDetailId == dto.PostTripDetailId);
-                if (postDetail == null) return new ResponseDTO("Slot not found.", 404, false);
+                if (postDetail == null) return new ResponseDTO("Slot details not found.", 404, false);
 
                 var trip = await _unitOfWork.TripRepo.GetByIdAsync(postTrip.TripId);
+                if (trip == null) return new ResponseDTO("Trip associated with this post not found.", 404, false);
 
-                // --- VALIDATE: ĐÃ ỨNG TUYỂN CHƯA ---
-                var existingAssignment = await _unitOfWork.TripDriverAssignmentRepo.FirstOrDefaultAsync(
+                // 4. Validate: Đã ứng tuyển vào chuyến này chưa?
+                bool alreadyApplied = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
                     a => a.TripId == postTrip.TripId && a.DriverId == driverId
                 );
-                if (existingAssignment != null)
-                    return new ResponseDTO("You have already applied for this trip.", 409, false);
+                if (alreadyApplied) return new ResponseDTO("You have already applied for this trip.", 409, false);
 
-                // --- VALIDATE SLOT ---
-                var appliedDriverType = postDetail.Type;
-                bool isMainDriver = (appliedDriverType == DriverType.PRIMARY);
-
-                // Nếu là Main Driver -> Check xem đã có ai làm Main Driver chưa
+                // 5. Validate: Nếu là Main Driver, kiểm tra xem chuyến đã có Main Driver chưa
+                bool isMainDriver = (postDetail.Type == DriverType.PRIMARY);
                 if (isMainDriver)
                 {
                     bool mainDriverExists = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
-                        a => a.TripId == trip.TripId
-                             && a.Type == DriverType.PRIMARY
-                             && a.AssignmentStatus == AssignmentStatus.ACCEPTED
+                        a => a.TripId == trip.TripId && a.Type == DriverType.PRIMARY && a.AssignmentStatus == AssignmentStatus.ACCEPTED
                     );
-                    if (mainDriverExists)
-                        return new ResponseDTO("This trip already has a main driver.", 400, false);
+                    if (mainDriverExists) return new ResponseDTO("This trip already has a main driver.", 400, false);
                 }
 
-                // ... (Logic VietMap & Tạo Assignment) ...
+                // 6. VietMap Geocode (Xử lý Null safe)
                 var startLocationObj = await _vietMapService.GeocodeAsync(dto.StartLocation) ?? new Common.ValueObjects.Location(dto.StartLocation, 0, 0);
                 var endLocationObj = await _vietMapService.GeocodeAsync(dto.EndLocation) ?? new Common.ValueObjects.Location(dto.EndLocation, 0, 0);
 
+                // 7. Tạo Assignment Mới
                 var newAssignment = new TripDriverAssignment
                 {
                     TripDriverAssignmentId = Guid.NewGuid(),
                     TripId = postTrip.TripId,
                     DriverId = driverId,
-                    Type = appliedDriverType,
+                    Type = postDetail.Type, // Lưu đúng loại (Primary/Assistant) dựa trên detail
                     CreateAt = DateTime.UtcNow,
                     UpdateAt = DateTime.UtcNow,
                     BaseAmount = postDetail.PricePerPerson,
@@ -203,68 +198,90 @@ namespace BLL.Services.Impletement
                 };
                 await _unitOfWork.TripDriverAssignmentRepo.AddAsync(newAssignment);
 
-                // ... (Logic Contract) ...
+                // 8. Tạo Hợp đồng (Nếu là tài xế ngoài)
                 bool isInternalDriver = await _unitOfWork.OwnerDriverLinkRepo.CheckLinkExistsAsync(trip.OwnerId, driverId, FleetJoinStatus.APPROVED);
                 if (!isInternalDriver)
                 {
                     await _tripDriverContractService.CreateContractInternalAsync(trip.TripId, trip.OwnerId, driverId, postDetail.PricePerPerson);
                 }
 
-                // --- TẠO BIÊN BẢN (NẾU LÀ MAIN DRIVER) ---
+                // 9. Xử lý logic riêng cho Main Driver (Cập nhật Trip & Tạo biên bản)
                 if (isMainDriver)
                 {
-                    //await CreateRecordsForMainDriver(trip.TripId, driverId);
-                    // 1. Chuyển trạng thái Trip đúng giai đoạn
-                    trip.Status = TripStatus.READY_FOR_VEHICLE_HANDOVER;
+                    // Cập nhật trạng thái Trip (nếu cần)
+                    // trip.Status = ...; 
                     trip.UpdateAt = DateTime.UtcNow;
                     await _unitOfWork.TripRepo.UpdateAsync(trip);
 
-                    // 2. Sau đó mới được phép tạo biên bản giao – nhận xe
-                    await CreateRecordsForMainDriver(trip.TripId, driverId);
+                    // Tạo biên bản Hàng hóa & Giao xe
+                    await CreateRecordsForMainDriver(trip.TripId, driverId, trip.OwnerId);
                 }
 
-                // ... (Update Trip & PostTrip Status) ...
-                await _unitOfWork.TripRepo.UpdateAsync(trip);
+                // =================================================================================
+                // 🛑 10. FIX LOGIC CHECK FULL SLOT (QUAN TRỌNG)
+                // =================================================================================
 
-                // Logic check full slot để đóng PostTrip
-                int totalAccepted = await _unitOfWork.TripDriverAssignmentRepo.GetAll().CountAsync(
-                     a => a.TripId == postTrip.TripId && a.AssignmentStatus == AssignmentStatus.ACCEPTED
-                ) + 1;
-                int totalRequired = postTrip.PostTripDetails.Sum(d => d.RequiredCount);
+                // A. Lấy danh sách tất cả tài xế ĐÃ NHẬN của chuyến này từ DB
+                var currentAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                    .Where(a => a.TripId == postTrip.TripId && a.AssignmentStatus == AssignmentStatus.ACCEPTED)
+                    .ToListAsync();
 
-                if (totalAccepted >= totalRequired)
+                // B. Thêm tài xế VỪA MỚI TẠO vào danh sách (để tính toán vì chưa commit DB)
+                currentAssignments.Add(newAssignment);
+
+                // C. Duyệt qua từng yêu cầu trong bài đăng (PostTripDetails)
+                bool isAllSlotsFilled = true;
+
+                foreach (var detail in postTrip.PostTripDetails)
                 {
-                    postTrip.Status = PostStatus.DONE;
+                    // Đếm xem hiện tại có bao nhiêu người thuộc Role này (Primary/Assistant)
+                    // Lưu ý: detail.Type là loại tài xế yêu cầu (VD: Assistant)
+                    int countForThisType = currentAssignments.Count(a => a.Type == detail.Type);
+
+                    // Lấy tổng chỉ tiêu cho Role này (trong trường hợp DB chia nhỏ dòng detail, nên Sum lại)
+                    // Thường thì: 1 dòng Primary (count=1) + 1 dòng Assistant (count=2)
+                    int requiredForThisType = postTrip.PostTripDetails
+                                                .Where(d => d.Type == detail.Type)
+                                                .Sum(d => d.RequiredCount);
+
+                    // Nếu số lượng hiện có < số lượng yêu cầu => Chưa Đủ
+                    if (countForThisType < requiredForThisType)
+                    {
+                        isAllSlotsFilled = false;
+                        break; // Thoát vòng lặp ngay, không cần check tiếp
+                    }
+                }
+
+                // D. Nếu tất cả đều đủ -> Đóng bài đăng
+                if (isAllSlotsFilled)
+                {
+                    //postTrip.Status = PostStatus.DONE;
+                    //postTrip.UpdateAt = DateTime.UtcNow; // Kiểm tra tên field trong Entity (Updated hoặc UpdateAt)
+
+                    // SẼ NOTIFIY CHO OWNER Ở PHẦN KHÁC
+
                     await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                 }
 
-                await _unitOfWork.CommitTransactionAsync();
+                // 11. COMMIT TRANSACTION
+                await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
 
                 return new ResponseDTO("Applied successfully.", 201, true, new { assignmentId = newAssignment.TripDriverAssignmentId });
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackTransactionAsync();
+                await transaction.RollbackAsync();
                 return new ResponseDTO($"Error: {ex.Message}", 500, false);
             }
         }
 
-        // ─────── HÀM PRIVATE HELPER (QUAN TRỌNG NHẤT) ───────
-
-        /// <summary>
-        /// Tạo toàn bộ biên bản cần thiết cho Tài xế Chính:
-        /// 1. Biên bản Hàng hóa (TripDeliveryRecord) - Pickup & Dropoff
-        /// 2. Biên bản Giao nhận xe (TripVehicleHandoverRecord) - Pickup & Dropoff
-        /// </summary>
-        private async Task CreateRecordsForMainDriver(Guid tripId, Guid mainDriverId)
+        // =========================================================================================================
+        // PRIVATE HELPER: TẠO BIÊN BẢN (RECORDS)
+        // =========================================================================================================
+        private async Task CreateRecordsForMainDriver(Guid tripId, Guid mainDriverId, Guid ownerId)
         {
-            // 0. Lấy thông tin Trip (cần OwnerId)
-            var trip = await _unitOfWork.TripRepo.GetByIdAsync(tripId);
-            if (trip == null) return;
-
-            // -----------------------------------------------------------
-            // A. TẠO BIÊN BẢN HÀNG HÓA (Cargo)
-            // -----------------------------------------------------------
+            // 1. Lấy thông tin Contact để tạo Delivery Records (Hàng hóa)
             var contacts = await _unitOfWork.TripContactRepo.GetAll()
                                             .Where(c => c.TripId == tripId)
                                             .ToListAsync();
@@ -272,7 +289,6 @@ namespace BLL.Services.Impletement
             var senderContact = contacts.FirstOrDefault(c => c.Type == ContactType.SENDER);
             var receiverContact = contacts.FirstOrDefault(c => c.Type == ContactType.RECEIVER);
 
-            // Chỉ tạo biên bản hàng hóa nếu đủ thông tin Contact
             if (senderContact != null && receiverContact != null)
             {
                 var pickupTemplate = await _templateService.GetLatestTemplateByTypeAsync(DeliveryRecordType.PICKUP);
@@ -285,7 +301,7 @@ namespace BLL.Services.Impletement
                         TripId = tripId,
                         DeliveryRecordTempalteId = pickupTemplate.DeliveryRecordTemplateId,
                         StripContractId = senderContact.TripContactId,
-                        Notes = "Biên bản nhận hàng (Tự động tạo)",
+                        Notes = "Biên bản nhận hàng (Auto-generated)",
                         type = DeliveryRecordType.PICKUP
                     };
                     await _tripDeliveryRecordService.CreateTripDeliveryRecordAsync(pickupDto, mainDriverId);
@@ -298,40 +314,40 @@ namespace BLL.Services.Impletement
                         TripId = tripId,
                         DeliveryRecordTempalteId = dropoffTemplate.DeliveryRecordTemplateId,
                         StripContractId = receiverContact.TripContactId,
-                        Notes = "Biên bản giao hàng (Tự động tạo)",
+                        Notes = "Biên bản giao hàng (Auto-generated)",
                         type = DeliveryRecordType.DROPOFF
                     };
                     await _tripDeliveryRecordService.CreateTripDeliveryRecordAsync(dropoffDto, mainDriverId);
                 }
             }
 
-            // -----------------------------------------------------------
-            // B. TẠO BIÊN BẢN GIAO NHẬN XE (Vehicle) - DÙNG SERVICE MỚI
-            // -----------------------------------------------------------
+            // 2. Tạo biên bản Giao nhận xe (Vehicle Handover Records)
+            // LƯU Ý QUAN TRỌNG: 
+            // TripVehicleHandoverRecordCreateDTO cần phải khớp với DTO bên Service Vehicle Handover
+            // Nếu Service bên kia cần UserId từ Token, ta phải truyền thủ công vào hàm CreateTripVehicleHandoverRecordAsync (nếu hàm đó hỗ trợ nhận userId làm tham số).
+            // Ở đây giả định hàm CreateTripVehicleHandoverRecordAsync nhận DTO chứa sẵn ID người Giao/Nhận.
 
-            // 1. Biên bản GIAO XE (PICKUP)
-            // Ngữ cảnh: Chủ xe (Handover) giao xe cho Tài xế (Receiver) tại điểm xuất phát
+            // A. GIAO XE (PICKUP): Chủ xe giao -> Tài xế nhận
             var vehiclePickupDto = new TripVehicleHandoverRecordCreateDTO
             {
                 TripId = tripId,
-                Type = DeliveryRecordType.HANDOVER,
-                HandoverUserId = trip.OwnerId,   // Chủ xe giao
-                ReceiverUserId = mainDriverId,   // Tài xế nhận
-                Notes = "Biên bản giao xe cho tài xế (Khởi tạo tự động)"
+                Type = DeliveryRecordType.HANDOVER, // Handover = Giao xe đi
+                HandoverUserId = ownerId,           // Chủ xe
+                ReceiverUserId = mainDriverId,      // Tài xế
+                Notes = "Biên bản giao xe cho tài xế (Auto-generated)"
             };
             await _vehicleHandoverService.CreateTripVehicleHandoverRecordAsync(vehiclePickupDto);
 
-            // 2. Biên bản TRẢ XE (DROPOFF)
-            // Ngữ cảnh: Tài xế (Handover) trả xe lại cho Chủ xe (Receiver) tại điểm kết thúc
-            var vehicleDropoffDto = new TripVehicleHandoverRecordCreateDTO
+            // B. TRẢ XE (RETURN): Tài xế trả -> Chủ xe nhận
+            var vehicleReturnDto = new TripVehicleHandoverRecordCreateDTO
             {
                 TripId = tripId,
-                Type = DeliveryRecordType.RETURN,
-                HandoverUserId = mainDriverId,   // Tài xế trả
-                ReceiverUserId = trip.OwnerId,   // Chủ xe nhận
-                Notes = "Biên bản trả xe về bãi (Khởi tạo tự động)"
+                Type = DeliveryRecordType.RETURN,   // Return = Trả xe về
+                HandoverUserId = mainDriverId,      // Tài xế
+                ReceiverUserId = ownerId,           // Chủ xe
+                Notes = "Biên bản trả xe về bãi (Auto-generated)"
             };
-            await _vehicleHandoverService.CreateTripVehicleHandoverRecordAsync(vehicleDropoffDto);
+            await _vehicleHandoverService.CreateTripVehicleHandoverRecordAsync(vehicleReturnDto);
         }
     }
 }

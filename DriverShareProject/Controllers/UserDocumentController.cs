@@ -1,3 +1,4 @@
+using BLL.Services.Impletement;
 using BLL.Services.Interface;
 using Common.DTOs;
 using Common.Enums.Type; // Nhớ using Enum
@@ -97,6 +98,56 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> GetByUserId(Guid userId)
         {
             var response = await _service.GetByUserIdAsync(userId);
+            return StatusCode(response.StatusCode, response);
+        }
+
+
+        // =================================================================
+        // 1. [USER] Gửi yêu cầu duyệt thủ công
+        // =================================================================
+        [HttpPost("request-review")]
+        //[Authorize] // Bất kỳ User đăng nhập nào cũng được
+        public async Task<IActionResult> RequestManualReview([FromBody] RequestManualReviewDTO dto)
+        {
+
+            var response = await _service.RequestManualReviewAsync(dto);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        // =================================================================
+        // 2. [STAFF/ADMIN] Duyệt hoặc Từ chối tài liệu
+        // =================================================================
+        [HttpPost("review")]
+        //[Authorize(Roles = "Admin,Staff")] // Chỉ định Role được phép duyệt
+        public async Task<IActionResult> ReviewDocument([FromBody] ReviewDocumentDTO dto)
+        {
+            var response = await _service.ReviewDocumentAsync(dto);
+
+            return StatusCode(response.StatusCode, response);
+        }
+
+        [HttpGet("pending-reviews")]
+        //[Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetPendingReviews(
+             [FromQuery] int pageNumber = 1,
+             [FromQuery] int pageSize = 10,
+             [FromQuery] string? search = null,      // <--- Thêm tham số Search
+             [FromQuery] string? sortField = null,   // <--- Thêm tham số Sort Field
+             [FromQuery] string? sortOrder = "DESC"  // <--- Thêm tham số Sort Order (Mặc định DESC)
+         )
+        {
+            // Lưu ý: Tên hàm service ở bước trước mình đã đổi thành "GetPendingReviewListAsync" 
+            // để phân biệt với hàm lấy chi tiết. Bạn kiểm tra lại tên hàm trong Interface nhé.
+            var result = await _service.GetPendingReviewListAsync(pageNumber, pageSize, search, sortField, sortOrder);
+
+            // Trả về kết quả chuẩn
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("pending-reviews/{id:guid}")]
+        public async Task<IActionResult> GetPendingReviewById(Guid id)
+        {
+            var response = await _service.GetPendingReviewDetailAsync(id);
             return StatusCode(response.StatusCode, response);
         }
     }

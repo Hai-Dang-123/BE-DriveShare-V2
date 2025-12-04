@@ -56,4 +56,42 @@ namespace Common.DTOs
         public DateTime? VerifiedAt { get; set; }
         public string? RejectionReason { get; set; }
     }
+
+    // DTO input cho User yêu cầu duyệt
+    public class RequestManualReviewDTO
+    {
+        public Guid UserDocumentId { get; set; }
+        public string UserNote { get; set; } = string.Empty;
+    }
+
+    // DTO input cho Staff duyệt bài
+    public class ReviewDocumentDTO
+    {
+        public Guid UserDocumentId { get; set; }
+        public bool IsApproved { get; set; }
+        public string? RejectReason { get; set; } // Bắt buộc nếu từ chối
+    }
+
+    // DTO hiển thị danh sách chờ duyệt (Output)
+    public class PendingReviewSummaryDTO
+    {
+        public Guid UserDocumentId { get; set; }
+        public Guid UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string DocumentType { get; set; } = string.Empty;
+        public string UserNote { get; set; } = string.Empty; // Lý do khiếu nại (ngắn gọn)
+        public DateTime CreatedAt { get; set; }
+        public DateTime? LastUpdatedAt { get; set; } // Thời điểm user gửi yêu cầu review
+    }
+
+    // DTO chi tiết cho màn hình Review (Đầy đủ thông tin)
+    public class PendingReviewDetailDTO : PendingReviewSummaryDTO
+    {
+        public string FrontImageUrl { get; set; } = string.Empty;
+        public string? BackImageUrl { get; set; }
+        public string? PortraitImageUrl { get; set; }
+        public string? EkycLog { get; set; } // Log gốc (nếu cần debug)
+        public EkycAnalysisResultDTO AnalysisResult { get; set; } // Kết quả phân tích chi tiết
+    }
 }

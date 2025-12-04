@@ -1,4 +1,5 @@
 ﻿using BLL.Services.Interface;
+using Common.DTOs;
 using Common.Settings;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Options;
@@ -302,119 +303,100 @@ namespace BLL.Services.Impletement
         {
             var subject = $"✅ [Báo cáo hoàn thành] Chuyến đi #{model.TripCode}";
 
-            // Màu sắc tài chính
-            string amountColor = model.IsIncome ? "#16A34A" : "#DC2626"; // Xanh lá hoặc Đỏ
-            string amountSign = model.IsIncome ? "+" : "-";
-            string amountBg = model.IsIncome ? "#F0FDF4" : "#FEF2F2";
+            // --- KHỐI TÀI CHÍNH (DYNAMIC) ---
+            string financialHtml = "";
 
+            if (model.Role == "Owner")
+            {
+                // ---------------- OWNER: HIỂN THỊ QUYẾT TOÁN TỔNG HỢP ----------------
+                var expenseRows = "";
+                foreach (var exp in model.DriverExpenses)
+                {
+                    expenseRows += $@"
+            <div style='display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed #E5E7EB; padding-bottom:4px;'>
+                <span style='font-size:13px; color:#4B5563;'>Trả {exp.Role} ({exp.DriverName})</span>
+                <span style='font-size:13px; color:#DC2626; font-weight:600;'>-{exp.Amount:N0} ₫</span>
+            </div>";
+                }
+
+                financialHtml = $@"
+        <div style='background-color:#F3F4F6; border-radius:8px; padding:20px; margin-bottom:30px;'>
+            <div style='font-size:12px; font-weight:700; color:#6B7280; text-transform:uppercase; margin-bottom:15px;'>Bảng quyết toán chuyến đi</div>
+            
+            <div style='display:flex; justify-content:space-between; margin-bottom:12px;'>
+                <span style='color:#374151;'>Thu từ Provider (sau phí sàn)</span>
+                <span style='color:#16A34A; font-weight:700; font-size:16px;'>+{model.TotalIncome:N0} ₫</span>
+            </div>
+
+            {expenseRows}
+
+            <div style='border-top:2px solid #D1D5DB; margin:15px 0;'></div>
+
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <span style='font-weight:700; color:#111827;'>LỢI NHUẬN RÒNG</span>
+                <span style='color:#2563EB; font-weight:800; font-size:24px;'>{model.NetProfit:N0} ₫</span>
+            </div>
+        </div>";
+            }
+            else
+            {
+                // ---------------- PROVIDER / DRIVER: HIỂN THỊ ĐƠN GIẢN ----------------
+                string color = model.IsIncome ? "#16A34A" : "#DC2626"; // Xanh/Đỏ
+                string sign = model.IsIncome ? "+" : "-";
+                string bg = model.IsIncome ? "#F0FDF4" : "#FEF2F2";
+
+                financialHtml = $@"
+        <div style='background-color:{bg}; border-left:5px solid {color}; padding:20px; border-radius:8px; margin-bottom:30px;'>
+            <div style='font-size:12px; text-transform:uppercase; color:#6B7280; font-weight:700; letter-spacing:0.5px;'>{model.FinancialDescription}</div>
+            <div style='font-size:32px; font-weight:800; color:{color}; margin:5px 0;'>{sign}{model.Amount:N0} ₫</div>
+            <div style='font-size:14px; color:#4B5563;'>Giao dịch đã được ghi nhận vào hệ thống.</div>
+        </div>";
+            }
+
+            // --- TEMPLATE CHUNG ---
             var body = $@"
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <style>
-        body {{ font-family: 'Segoe UI', Helvetica, Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
-        .container {{ max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); margin-top: 20px; }}
-        
-        .header {{ background: linear-gradient(to right, #1e40af, #3b82f6); padding: 30px; text-align: center; color: white; }}
-        .header h1 {{ margin: 0; font-size: 24px; letter-spacing: 1px; }}
-        .trip-code {{ background-color: rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 4px; font-size: 14px; margin-top: 10px; display: inline-block; }}
-
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
+        .container {{ max-width: 600px; margin: 20px auto; background: #FFF; border-radius: 12px; overflow: hidden; }}
+        .header {{ background: #2563EB; padding: 30px; text-align: center; color: white; }}
         .content {{ padding: 30px; color: #374151; }}
-        
-        /* FINANCIAL CARD */
-        .financial-card {{ background-color: {amountBg}; border-left: 5px solid {amountColor}; padding: 20px; border-radius: 8px; margin-bottom: 30px; }}
-        .fin-label {{ font-size: 12px; text-transform: uppercase; color: #6B7280; font-weight: 700; letter-spacing: 0.5px; }}
-        .fin-amount {{ font-size: 32px; font-weight: 800; color: {amountColor}; margin: 5px 0; }}
-        .fin-desc {{ font-size: 14px; color: #4B5563; }}
-
-        /* TRIP DETAILS */
-        .section-title {{ font-size: 14px; font-weight: 700; color: #111827; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; }}
-        
-        /* ROUTE TIMELINE */
-        .route-box {{ display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; }}
-        .route-item {{ display: flex; align-items: flex-start; }}
-        .route-icon {{ width: 24px; text-align: center; margin-right: 12px; font-size: 18px; }}
-        .route-text {{ flex: 1; }}
-        .route-label {{ font-size: 11px; color: #9CA3AF; font-weight: 600; }}
-        .route-val {{ font-size: 14px; color: #1F2937; font-weight: 500; }}
-        .route-connector {{ margin-left: 11px; height: 20px; border-left: 2px dashed #D1D5DB; margin-top: -5px; margin-bottom: -5px; }}
-
-        /* INFO GRID */
-        .grid {{ display: table; width: 100%; border-collapse: collapse; }}
-        .row {{ display: table-row; }}
-        .cell {{ display: table-cell; width: 50%; padding-bottom: 15px; }}
-        .cell-label {{ font-size: 12px; color: #6B7280; display: block; margin-bottom: 4px; }}
-        .cell-val {{ font-size: 14px; color: #111827; font-weight: 600; }}
-
-        .footer {{ background-color: #F9FAFB; padding: 20px; text-align: center; font-size: 12px; color: #9CA3AF; border-top: 1px solid #E5E7EB; }}
+        .section-title {{ font-size: 14px; font-weight: 700; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; }}
+        .grid {{ width: 100%; border-collapse: collapse; }}
+        .cell {{ width: 50%; padding-bottom: 15px; vertical-align: top; }}
+        .label {{ font-size: 12px; color: #6B7280; display: block; margin-bottom: 4px; }}
+        .val {{ font-size: 14px; font-weight: 600; color: #111827; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <h1>BÁO CÁO HOÀN THÀNH</h1>
-            <div class='trip-code'>#{model.TripCode}</div>
+            <h1 style='margin:0; font-size:24px;'>BÁO CÁO HOÀN THÀNH</h1>
+            <div style='background:rgba(255,255,255,0.2); padding:5px 10px; border-radius:4px; display:inline-block; margin-top:10px;'>#{model.TripCode}</div>
         </div>
         
         <div class='content'>
             <p>Xin chào <strong>{model.RecipientName}</strong>,</p>
-            <p>Chuyến đi đã kết thúc thành công vào lúc {model.CompletedAt}. Dưới đây là báo cáo chi tiết dành cho bạn.</p>
+            <p>Chuyến đi đã kết thúc lúc {model.CompletedAt}.</p>
 
-            <div class='financial-card'>
-                <div class='fin-label'>{model.FinancialDescription}</div>
-                <div class='fin-amount'>{amountSign}{model.Amount:N0} ₫</div>
-                <div class='fin-desc'>Đã được cập nhật vào ví hệ thống.</div>
-            </div>
-
-            <div class='section-title'>Lộ trình vận chuyển</div>
-            <div class='route-box'>
-                <div class='route-item'>
-                    <div class='route-icon'>🔵</div>
-                    <div class='route-text'>
-                        <div class='route-label'>ĐIỂM LẤY HÀNG</div>
-                        <div class='route-val'>{model.StartAddress}</div>
-                    </div>
-                </div>
-                <div class='route-connector'></div>
-                <div class='route-item'>
-                    <div class='route-icon'>🏁</div>
-                    <div class='route-text'>
-                        <div class='route-label'>ĐIỂM GIAO HÀNG</div>
-                        <div class='route-val'>{model.EndAddress}</div>
-                    </div>
-                </div>
-            </div>
+            {financialHtml}
 
             <div class='section-title'>Thông tin vận hành</div>
-            <div class='grid'>
-                <div class='row'>
-                    <div class='cell'>
-                        <span class='cell-label'>Phương tiện</span>
-                        <span class='cell-val'>{model.VehiclePlate} ({model.VehicleType})</span>
-                    </div>
-                    <div class='cell'>
-                        <span class='cell-label'>Khoảng cách</span>
-                        <span class='cell-val'>{model.DistanceKm:N1} km</span>
-                    </div>
-                </div>
-                <div class='row'>
-                    <div class='cell'>
-                        <span class='cell-label'>Số lượng hàng</span>
-                        <span class='cell-val'>{model.PackageCount} kiện</span>
-                    </div>
-                    <div class='cell'>
-                        <span class='cell-label'>Tổng trọng lượng</span>
-                        <span class='cell-val'>{model.TotalPayload:N0} kg</span>
-                    </div>
-                </div>
-            </div>
+            <table class='grid'>
+                <tr>
+                    <td class='cell'><span class='label'>Điểm đi</span><span class='val'>{model.StartAddress}</span></td>
+                    <td class='cell'><span class='label'>Điểm đến</span><span class='val'>{model.EndAddress}</span></td>
+                </tr>
+                <tr>
+                    <td class='cell'><span class='label'>Phương tiện</span><span class='val'>{model.VehiclePlate}</span></td>
+                    <td class='cell'><span class='label'>Quãng đường</span><span class='val'>{model.DistanceKm:N1} km</span></td>
+                </tr>
+            </table>
         </div>
-
-        <div class='footer'>
-            <p>DriveShare Logistics Platform &copy; {DateTime.Now.Year}</p>
-            <p>Email này được gửi tự động, vui lòng không trả lời.</p>
+        <div style='background:#F9FAFB; padding:20px; text-align:center; font-size:12px; color:#9CA3AF;'>
+            DriveShare Platform &copy; {DateTime.Now.Year}
         </div>
     </div>
 </body>

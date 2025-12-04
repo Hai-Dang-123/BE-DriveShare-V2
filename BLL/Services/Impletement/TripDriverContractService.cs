@@ -65,12 +65,21 @@ namespace BLL.Services.Implement
                     ContractTemplateId = template.ContractTemplateId,
                     Version = template.Version,
 
+
                     Type = ContractType.DRIVER_CONTRACT,
                     Status = ContractStatus.PENDING,
                     CreateAt = DateTime.UtcNow
                 };
 
                 await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
+
+                // chuyển status trip
+                trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
+                trip.UpdateAt = DateTime.UtcNow;
+
+                await _unitOfWork.TripRepo.UpdateAsync(trip);
+
+
                 await _unitOfWork.SaveChangeAsync();
 
                 var dtoOut = new TripDriverContractDTO
@@ -188,7 +197,9 @@ namespace BLL.Services.Implement
                     contract.Status = ContractStatus.COMPLETED; // Hoặc ACTIVE tùy Enum của bạn
                     contract.EffectiveDate = DateTime.UtcNow;
 
-
+                    // Cập nhật trạng thái Trip
+                    trip.Status = TripStatus.DONE_ASSIGNING_DRIVER; // Hoàn tất gán tài xế
+                    trip.UpdateAt = DateTime.UtcNow;
                 }
                 else
                 {
@@ -368,8 +379,8 @@ namespace BLL.Services.Implement
                     OwnerSignAt = DateTime.UtcNow,
 
                     // Driver (Counterparty) ký
-                    CounterpartySigned = true,
-                    CounterpartySignAt = DateTime.UtcNow,
+                    CounterpartySigned = false,
+                    CounterpartySignAt = null,
 
                     // Giá trị hợp đồng (Lấy từ Assignment nếu có)
                     ContractValue = fare ?? 0,

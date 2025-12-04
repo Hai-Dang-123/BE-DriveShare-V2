@@ -16,6 +16,7 @@ namespace Common.Enums.Status
         OPEN, // ĐANG HOẠT ĐỘNG
         IN_PROGRESS, // ĐANG DI CHUYỂN
         DONE, // HOÀN THÀNH
+        OUT_OF_DATE, // HẾT HẠN
         DELETED // XÓA
     }
 }

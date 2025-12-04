@@ -11,163 +11,165 @@ namespace DAL.UnitOfWork
     {
         private readonly DriverShareAppContext _context;
         private bool _disposed = false;
-        private IDbContextTransaction? _transaction;
-
-
 
         public UnitOfWork(DriverShareAppContext context)
         {
             _context = context;
-            BaseContractRepo = new BaseContractRepository(context);
-
-            BaseUserRepo = new BaseUserRepository(context); // Giả sử bạn có class BaseUserRepository
-            ContractTemplateRepo = new ContractTemplateRepository(context);
-            ContractTermRepo = new ContractTermRepository(context);
-            DeliveryRecordRepo = new DeliveryRecordRepository(context);
-            DeliveryRecordTemplateRepo = new DeliveryRecordTemplateRepository(context);
-            DeliveryRecordTermRepo = new DeliveryRecordTermRepository(context);
-            DriverActivityLogRepo = new DriverActivityLogRepository(context);
-            DriverRepo = new DriverRepository(context); // Giả sử bạn có class DriverRepository
-            ItemImageRepo = new ItemImageRepository(context);
-            ItemRepo = new ItemRepository(context);
-            OwnerDriverLinkRepo = new OwnerDriverLinkRepository(context);
-            OwnerRepo = new OwnerRepository(context); // Giả sử bạn có class OwnerRepository
-            PackageImageRepo = new PackageImageRepository(context);
-            PackageRepo = new PackageRepository(context);
-            PostPackageRepo = new PostPackageRepository(context);
-            PostTripRepo = new PostTripRepository(context);
-            ProviderRepo = new ProviderRepository(context); // Giả sử bạn có class ProviderRepository
-            RoleRepo = new RoleRepository(context);
-            ShippingRouteRepo = new ShippingRouteRepository(context);
-            TransactionRepo = new TransactionRepository(context);
-            TripCompensationRepo = new TripCompensationRepository(context);
-            TripContactRepo = new TripContactRepository(context);
-            // Lưu ý tên class TripDeliveryIssueImageRepository có thể sai, kiểm tra lại nhé
-            TripDeliveryIssueImageRepo = new TripDeliveryIssueImageRepository(context);
-            TripDeliveryIssueRepo = new TripDeliveryIssueRepository(context);
-            TripDeliveryRecordRepo = new TripDeliveryRecordRepository(context);
-            TripDriverAssignmentRepo = new TripDriverAssignmentRepository(context);
-            TripDriverContractRepo = new TripDriverContractRepository(context);
-            TripProviderContractRepo = new TripProviderContractRepository(context);
-            TripRepo = new TripRepository(context);
-            TripRouteRepo = new TripRouteRepository(context);
-            TripRouteSuggestionRepo = new TripRouteSuggestionRepository(context);
-            UserDocumentRepo = new UserDocumentRepository(context);
-            UserTokenRepo = new UserTokenRepository(context);
-            UserViolationRepo = new UserViolationRepository(context);
-            VehicleDocumentRepo = new VehicleDocumentRepository(context);
-            VehicleImageRepo = new VehicleImageRepository(context);
-            VehicleRepo = new VehicleRepository(context);
-            VehicleTypeRepo = new VehicleTypeRepository(context);
-            WalletRepo = new WalletRepository(context);
-            PostContactRepo = new PostContactRepository(context);
-
-            DriverWorkSessionRepo = new DriverWorkSessionRepository(context);
-            ContactTokenRepo = new ContactTokenRepository(context);
-            TripVehicleHandoverTermResultRepo = new TripVehicleHandoverTermResultRepository(context);
-            TripVehicleHandoverIssueRepo = new TripVehicleHandoverIssueRepository(context);
-            TripVehicleHandoverRecordRepo = new TripVehicleHandoverRecordRepository(context);
-            TripSurchargeRepo = new TripSurchargeRepository(context);
-            TripVehicleHandoverIssueImageRepo = new TripVehicleHandoverIssueImageRepository(context);
-
-
+            // Constructor giờ rất nhẹ, không khởi tạo gì cả.
         }
 
-        public IBaseContractRepository BaseContractRepo { get; private set; }
-        public IBaseUserRepository BaseUserRepo { get; private set; }
-        public IContractTemplateRepository ContractTemplateRepo { get; private set; }
-        public IContractTermRepository ContractTermRepo { get; private set; }
-        public IDeliveryRecordRepository DeliveryRecordRepo { get; private set; }
-        public IDeliveryRecordTemplateRepository DeliveryRecordTemplateRepo { get; private set; }
-        public IDeliveryRecordTermRepository DeliveryRecordTermRepo { get; private set; }
-        public IDriverActivityLogRepository DriverActivityLogRepo { get; private set; }
-        public IDriverRepository DriverRepo { get; private set; }
-        public IItemImageRepository ItemImageRepo { get; private set; }
-        public IItemRepository ItemRepo { get; private set; }
-        public IOwnerDriverLinkRepository OwnerDriverLinkRepo { get; private set; }
-        public IOwnerRepository OwnerRepo { get; private set; }
-        public IPackageImageRepository PackageImageRepo { get; private set; }
-        public IPackageRepository PackageRepo { get; private set; }
-        public IPostPackageRepository PostPackageRepo { get; private set; }
-        public IPostTripRepository PostTripRepo { get; private set; }
-        public IProviderRepository ProviderRepo { get; private set; }
-        public IRoleRepository RoleRepo { get; private set; }
-        public IShippingRouteRepository ShippingRouteRepo { get; private set; }
-        public ITransactionRepository TransactionRepo { get; private set; }
-        public ITripCompensationRepository TripCompensationRepo { get; private set; }
-        public ITripContactRepository TripContactRepo { get; private set; }
-        public ITripDeliveryIssueImageRepository TripDeliveryIssueImageRepo { get; private set; }
-        public ITripDeliveryIssueRepository TripDeliveryIssueRepo { get; private set; }
-        public ITripDeliveryRecordRepository TripDeliveryRecordRepo { get; private set; }
-        public ITripDriverAssignmentRepository TripDriverAssignmentRepo { get; private set; }
-        public ITripDriverContractRepository TripDriverContractRepo { get; private set; }
-        public ITripProviderContractRepository TripProviderContractRepo { get; private set; }
-        public ITripRepository TripRepo { get; private set; }
-        public ITripRouteRepository TripRouteRepo { get; private set; }
-        public ITripRouteSuggestionRepository TripRouteSuggestionRepo { get; private set; }
-        public IUserDocumentRepository UserDocumentRepo { get; private set; }
-        public IUserTokenRepository UserTokenRepo { get; private set; }
-        public IUserViolationRepository UserViolationRepo { get; private set; }
-        public IVehicleDocumentRepository VehicleDocumentRepo { get; private set; }
-        public IVehicleImageRepository VehicleImageRepo { get; private set; }
-        public IVehicleRepository VehicleRepo { get; private set; }
-        public IVehicleTypeRepository VehicleTypeRepo { get; private set; }
-        public IWalletRepository WalletRepo { get; private set; }
+        // =======================================================================
+        // REPOSITORIES (LAZY LOADING IMPLEMENTATION)
+        // =======================================================================
 
-        public IPostContactRepository PostContactRepo { get; private set; }
-        public IDriverWorkSessionRepository DriverWorkSessionRepo { get; private set; } 
-        public IContactTokenRepository ContactTokenRepo { get; private set; }
-        public ITripVehicleHandoverTermResultRepository TripVehicleHandoverTermResultRepo { get; private set; }
-        public ITripVehicleHandoverIssueRepository TripVehicleHandoverIssueRepo { get; private set; }
-        public ITripVehicleHandoverRecordRepository TripVehicleHandoverRecordRepo { get; private set; }
-        public ITripSurchargeRepository TripSurchargeRepo { get; private set; }
-        public ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo { get; private set; }
+        private IBaseContractRepository? _baseContractRepo;
+        public IBaseContractRepository BaseContractRepo => _baseContractRepo ??= new BaseContractRepository(_context);
+
+        private IBaseUserRepository? _baseUserRepo;
+        public IBaseUserRepository BaseUserRepo => _baseUserRepo ??= new BaseUserRepository(_context);
+
+        private IContractTemplateRepository? _contractTemplateRepo;
+        public IContractTemplateRepository ContractTemplateRepo => _contractTemplateRepo ??= new ContractTemplateRepository(_context);
+
+        private IContractTermRepository? _contractTermRepo;
+        public IContractTermRepository ContractTermRepo => _contractTermRepo ??= new ContractTermRepository(_context);
+
+        private IDeliveryRecordRepository? _deliveryRecordRepo;
+        public IDeliveryRecordRepository DeliveryRecordRepo => _deliveryRecordRepo ??= new DeliveryRecordRepository(_context);
+
+        private IDeliveryRecordTemplateRepository? _deliveryRecordTemplateRepo;
+        public IDeliveryRecordTemplateRepository DeliveryRecordTemplateRepo => _deliveryRecordTemplateRepo ??= new DeliveryRecordTemplateRepository(_context);
+
+        private IDeliveryRecordTermRepository? _deliveryRecordTermRepo;
+        public IDeliveryRecordTermRepository DeliveryRecordTermRepo => _deliveryRecordTermRepo ??= new DeliveryRecordTermRepository(_context);
+
+        private IDriverActivityLogRepository? _driverActivityLogRepo;
+        public IDriverActivityLogRepository DriverActivityLogRepo => _driverActivityLogRepo ??= new DriverActivityLogRepository(_context);
+
+        private IDriverRepository? _driverRepo;
+        public IDriverRepository DriverRepo => _driverRepo ??= new DriverRepository(_context);
+
+        private IItemImageRepository? _itemImageRepo;
+        public IItemImageRepository ItemImageRepo => _itemImageRepo ??= new ItemImageRepository(_context);
+
+        private IItemRepository? _itemRepo;
+        public IItemRepository ItemRepo => _itemRepo ??= new ItemRepository(_context);
+
+        private IOwnerDriverLinkRepository? _ownerDriverLinkRepo;
+        public IOwnerDriverLinkRepository OwnerDriverLinkRepo => _ownerDriverLinkRepo ??= new OwnerDriverLinkRepository(_context);
+
+        private IOwnerRepository? _ownerRepo;
+        public IOwnerRepository OwnerRepo => _ownerRepo ??= new OwnerRepository(_context);
+
+        private IPackageImageRepository? _packageImageRepo;
+        public IPackageImageRepository PackageImageRepo => _packageImageRepo ??= new PackageImageRepository(_context);
+
+        private IPackageRepository? _packageRepo;
+        public IPackageRepository PackageRepo => _packageRepo ??= new PackageRepository(_context);
+
+        private IPostPackageRepository? _postPackageRepo;
+        public IPostPackageRepository PostPackageRepo => _postPackageRepo ??= new PostPackageRepository(_context);
+
+        private IPostTripRepository? _postTripRepo;
+        public IPostTripRepository PostTripRepo => _postTripRepo ??= new PostTripRepository(_context);
+
+        private IProviderRepository? _providerRepo;
+        public IProviderRepository ProviderRepo => _providerRepo ??= new ProviderRepository(_context);
+
+        private IRoleRepository? _roleRepo;
+        public IRoleRepository RoleRepo => _roleRepo ??= new RoleRepository(_context);
+
+        private IShippingRouteRepository? _shippingRouteRepo;
+        public IShippingRouteRepository ShippingRouteRepo => _shippingRouteRepo ??= new ShippingRouteRepository(_context);
+
+        private ITransactionRepository? _transactionRepo;
+        public ITransactionRepository TransactionRepo => _transactionRepo ??= new TransactionRepository(_context);
+
+        private ITripCompensationRepository? _tripCompensationRepo;
+        public ITripCompensationRepository TripCompensationRepo => _tripCompensationRepo ??= new TripCompensationRepository(_context);
+
+        private ITripContactRepository? _tripContactRepo;
+        public ITripContactRepository TripContactRepo => _tripContactRepo ??= new TripContactRepository(_context);
+
+        private ITripDeliveryIssueImageRepository? _tripDeliveryIssueImageRepo;
+        public ITripDeliveryIssueImageRepository TripDeliveryIssueImageRepo => _tripDeliveryIssueImageRepo ??= new TripDeliveryIssueImageRepository(_context);
+
+        private ITripDeliveryIssueRepository? _tripDeliveryIssueRepo;
+        public ITripDeliveryIssueRepository TripDeliveryIssueRepo => _tripDeliveryIssueRepo ??= new TripDeliveryIssueRepository(_context);
+
+        private ITripDeliveryRecordRepository? _tripDeliveryRecordRepo;
+        public ITripDeliveryRecordRepository TripDeliveryRecordRepo => _tripDeliveryRecordRepo ??= new TripDeliveryRecordRepository(_context);
+
+        private ITripDriverAssignmentRepository? _tripDriverAssignmentRepo;
+        public ITripDriverAssignmentRepository TripDriverAssignmentRepo => _tripDriverAssignmentRepo ??= new TripDriverAssignmentRepository(_context);
+
+        private ITripDriverContractRepository? _tripDriverContractRepo;
+        public ITripDriverContractRepository TripDriverContractRepo => _tripDriverContractRepo ??= new TripDriverContractRepository(_context);
+
+        private ITripProviderContractRepository? _tripProviderContractRepo;
+        public ITripProviderContractRepository TripProviderContractRepo => _tripProviderContractRepo ??= new TripProviderContractRepository(_context);
+
+        private ITripRepository? _tripRepo;
+        public ITripRepository TripRepo => _tripRepo ??= new TripRepository(_context);
+
+        private ITripRouteRepository? _tripRouteRepo;
+        public ITripRouteRepository TripRouteRepo => _tripRouteRepo ??= new TripRouteRepository(_context);
+
+        private ITripRouteSuggestionRepository? _tripRouteSuggestionRepo;
+        public ITripRouteSuggestionRepository TripRouteSuggestionRepo => _tripRouteSuggestionRepo ??= new TripRouteSuggestionRepository(_context);
+
+        private IUserDocumentRepository? _userDocumentRepo;
+        public IUserDocumentRepository UserDocumentRepo => _userDocumentRepo ??= new UserDocumentRepository(_context);
+
+        private IUserTokenRepository? _userTokenRepo;
+        public IUserTokenRepository UserTokenRepo => _userTokenRepo ??= new UserTokenRepository(_context);
+
+        private IUserViolationRepository? _userViolationRepo;
+        public IUserViolationRepository UserViolationRepo => _userViolationRepo ??= new UserViolationRepository(_context);
+
+        private IVehicleDocumentRepository? _vehicleDocumentRepo;
+        public IVehicleDocumentRepository VehicleDocumentRepo => _vehicleDocumentRepo ??= new VehicleDocumentRepository(_context);
+
+        private IVehicleImageRepository? _vehicleImageRepo;
+        public IVehicleImageRepository VehicleImageRepo => _vehicleImageRepo ??= new VehicleImageRepository(_context);
+
+        private IVehicleRepository? _vehicleRepo;
+        public IVehicleRepository VehicleRepo => _vehicleRepo ??= new VehicleRepository(_context);
+
+        private IVehicleTypeRepository? _vehicleTypeRepo;
+        public IVehicleTypeRepository VehicleTypeRepo => _vehicleTypeRepo ??= new VehicleTypeRepository(_context);
+
+        private IWalletRepository? _walletRepo;
+        public IWalletRepository WalletRepo => _walletRepo ??= new WalletRepository(_context);
+
+        private IPostContactRepository? _postContactRepo;
+        public IPostContactRepository PostContactRepo => _postContactRepo ??= new PostContactRepository(_context);
+
+        private IDriverWorkSessionRepository? _driverWorkSessionRepo;
+        public IDriverWorkSessionRepository DriverWorkSessionRepo => _driverWorkSessionRepo ??= new DriverWorkSessionRepository(_context);
+
+        private IContactTokenRepository? _contactTokenRepo;
+        public IContactTokenRepository ContactTokenRepo => _contactTokenRepo ??= new ContactTokenRepository(_context);
+
+        private ITripVehicleHandoverTermResultRepository? _tripVehicleHandoverTermResultRepo;
+        public ITripVehicleHandoverTermResultRepository TripVehicleHandoverTermResultRepo => _tripVehicleHandoverTermResultRepo ??= new TripVehicleHandoverTermResultRepository(_context);
+
+        private ITripVehicleHandoverIssueRepository? _tripVehicleHandoverIssueRepo;
+        public ITripVehicleHandoverIssueRepository TripVehicleHandoverIssueRepo => _tripVehicleHandoverIssueRepo ??= new TripVehicleHandoverIssueRepository(_context);
+
+        private ITripVehicleHandoverRecordRepository? _tripVehicleHandoverRecordRepo;
+        public ITripVehicleHandoverRecordRepository TripVehicleHandoverRecordRepo => _tripVehicleHandoverRecordRepo ??= new TripVehicleHandoverRecordRepository(_context);
+
+        private ITripSurchargeRepository? _tripSurchargeRepo;
+        public ITripSurchargeRepository TripSurchargeRepo => _tripSurchargeRepo ??= new TripSurchargeRepository(_context);
+
+        private ITripVehicleHandoverIssueImageRepository? _tripVehicleHandoverIssueImageRepo;
+        public ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo => _tripVehicleHandoverIssueImageRepo ??= new TripVehicleHandoverIssueImageRepository(_context);
 
 
-
-
-        // Transaction methods
-        public async Task BeginTransactionAsync()
-        {
-            _transaction = await _context.Database.BeginTransactionAsync();
-        }
-
-
-        public async Task CommitTransactionAsync()
-        {
-            if (_transaction != null)
-            {
-                try
-                {
-                    await _context.SaveChangesAsync();
-                    await _transaction.CommitAsync();
-                }
-                catch
-                {
-                    await RollbackTransactionAsync();
-                    throw;
-                }
-                finally
-                {
-                    await _transaction.DisposeAsync();
-                }
-            }
-        }
-
-
-        //public IBookingRepository BookingRepo { get; private set; } 
-       
-
-        public async Task RollbackTransactionAsync()
-        {
-            if (_transaction != null)
-            {
-                await _transaction.RollbackAsync();
-                await _transaction.DisposeAsync();
-            }
-        }
-
-        // Save changes
+        // =======================================================================
+        // TRANSACTION & SAVE (OPTIMIZED)
+        // =======================================================================
 
         public async Task<int> SaveAsync()
         {
@@ -179,14 +181,20 @@ namespace DAL.UnitOfWork
             return await SaveAsync() > 0;
         }
 
-        // Dispose pattern
+        public async Task<IDbContextTransaction> BeginTransactionAsync()
+        {
+            return await _context.Database.BeginTransactionAsync();
+        }
+
+        // =======================================================================
+        // DISPOSE
+        // =======================================================================
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposed)
             {
                 if (disposing)
                 {
-                    _transaction?.Dispose();
                     _context.Dispose();
                 }
                 _disposed = true;

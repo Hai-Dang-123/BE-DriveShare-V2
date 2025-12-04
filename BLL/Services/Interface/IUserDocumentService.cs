@@ -26,5 +26,24 @@ namespace BLL.Services.Interface
         /// - GPLX: Chỉ cần front (back, selfie có thể null).
         /// </summary>
         Task<ResponseDTO> CreateAndVerifyDocumentAsync(IFormFile frontImg, IFormFile? backImg, IFormFile? selfieImg, DocumentType docType);
+
+        Task<(bool IsValid, string Message)> ValidateUserDocumentsAsync(Guid userId);
+
+        // 1. User gửi yêu cầu duyệt lại
+        Task<ResponseDTO> RequestManualReviewAsync(RequestManualReviewDTO dto);
+
+        // 2. Staff duyệt hoặc từ chối
+        Task<ResponseDTO> ReviewDocumentAsync(ReviewDocumentDTO dto);
+
+        // 1. Get List (Phân trang, Search, Sort) - Trả về SummaryDTO
+        Task<ResponseDTO> GetPendingReviewListAsync(
+            int pageNumber,
+            int pageSize,
+            string? search = null,
+            string? sortField = null,
+            string? sortOrder = "DESC");
+
+        // 2. Get Detail - Trả về DetailDTO (Kèm phân tích EKYC)
+        Task<ResponseDTO> GetPendingReviewDetailAsync(Guid userDocumentId);
     }
 }

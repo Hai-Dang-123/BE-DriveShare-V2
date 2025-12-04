@@ -1,4 +1,5 @@
 ﻿using DAL.Repositories.Interface;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Threading.Tasks;
 
@@ -6,6 +7,7 @@ namespace DAL.UnitOfWork
 {
     public interface IUnitOfWork : IDisposable
     {
+        // --- 1. Repositories ---
         IBaseContractRepository BaseContractRepo { get; }
         IBaseUserRepository BaseUserRepo { get; }
         IContractTemplateRepository ContractTemplateRepo { get; }
@@ -46,9 +48,7 @@ namespace DAL.UnitOfWork
         IVehicleRepository VehicleRepo { get; }
         IVehicleTypeRepository VehicleTypeRepo { get; }
         IWalletRepository WalletRepo { get; }
-
         IPostContactRepository PostContactRepo { get; }
-
         IDriverWorkSessionRepository DriverWorkSessionRepo { get; }
         IContactTokenRepository ContactTokenRepo { get; }
         ITripSurchargeRepository TripSurchargeRepo { get; }
@@ -57,15 +57,12 @@ namespace DAL.UnitOfWork
         ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo { get; }
         ITripVehicleHandoverTermResultRepository TripVehicleHandoverTermResultRepo { get; }
 
-
-        // Save changes
-
+        // --- 2. Save Changes ---
         Task<int> SaveAsync();
         Task<bool> SaveChangeAsync();
 
-        // Transaction methods
-        Task BeginTransactionAsync();
-        Task CommitTransactionAsync();
-        Task RollbackTransactionAsync();
+        // --- 3. Transaction ---
+        // Trả về IDbContextTransaction để Service tự quản lý scope
+        Task<IDbContextTransaction> BeginTransactionAsync();
     }
 }

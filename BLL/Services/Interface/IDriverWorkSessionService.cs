@@ -15,5 +15,6 @@ namespace BLL.Services.Interface
         // Không cần truyền ID, tự lấy từ token
         Task<ResponseDTO> CheckDriverEligibilityAsync();
         Task<ResponseDTO> GetDriverHistoryAsync(DriverHistoryFilterDTO filter);
+        Task<ResponseDTO> GetCurrentSessionInTripAsync(Guid tripId);
     }
 }

@@ -11,5 +11,7 @@ namespace Common.Enums.Status
         ACTIVE,
         INACTIVE,
         DELETED,
+        PENDING_REVIEW , //  Đang chờ nhân viên duyệt
+        REJECTED         //  Nhân viên đã từ chối
     }
 }

@@ -80,7 +80,8 @@ namespace BLL.Services.Implement
         // Hàm lõi này VẪN trả về ResponseDTO vì nó cần cho cả hai loại hàm (public và internal)
         private async Task<ResponseDTO> ExecuteBalanceChangeAsync(Guid userId, decimal amount, TransactionType type, Guid? tripId, Guid? postId, string description, string? externalCode = null)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            // [FIX 1] Sử dụng 'using' để quản lý Transaction Scope
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 // 1. Lấy & Validate Wallet
@@ -104,7 +105,7 @@ namespace BLL.Services.Implement
                     TransactionId = Guid.NewGuid(),
                     WalletId = wallet.WalletId,
                     TripId = tripId,
-                     //PostId = postId, // Uncomment nếu Entity Transaction có trường này
+                    // PostId = postId, // Uncomment nếu Entity Transaction có trường này
                     Amount = amount,
                     Currency = "VND",
                     BalanceBefore = balanceBefore,
@@ -120,35 +121,35 @@ namespace BLL.Services.Implement
                 await _unitOfWork.TransactionRepo.AddAsync(newTransaction);
                 await _unitOfWork.WalletRepo.UpdateAsync(wallet);
 
-                // ⚠️ 5. [UPDATE] CẬP NHẬT TRẠNG THÁI POST (CHECK CẢ PACKAGE VÀ TRIP)
+                // 5. [UPDATE] CẬP NHẬT TRẠNG THÁI POST (CHECK CẢ PACKAGE VÀ TRIP)
                 if (postId.HasValue)
                 {
                     bool isPostUpdated = false;
 
-                    // A. Thử tìm trong PostPackage (Bài đăng hàng hóa)
+                    // A. Thử tìm trong PostPackage
                     var postPackage = await _unitOfWork.PostPackageRepo.GetByIdAsync(postId.Value);
                     if (postPackage != null)
                     {
-                        // Khi thanh toán xong -> Chuyển sang OPEN (Đang tìm xe) hoặc trạng thái phù hợp
                         postPackage.Status = PostStatus.OPEN;
+                        postPackage.Updated = DateTime.UtcNow; // Nhớ update time
                         await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                         isPostUpdated = true;
                     }
 
-                    // B. Nếu không phải Package, thử tìm trong PostTrip (Bài đăng tìm tài xế)
+                    // B. Nếu không phải Package, thử tìm trong PostTrip
                     if (!isPostUpdated)
                     {
                         var postTrip = await _unitOfWork.PostTripRepo.GetByIdAsync(postId.Value);
                         if (postTrip != null)
                         {
-                            // Khi thanh toán xong -> Chuyển sang OPEN (Đang tuyển tài xế)
                             postTrip.Status = PostStatus.OPEN;
+                            postTrip.UpdateAt = DateTime.UtcNow; // Nhớ update time
                             await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                         }
                     }
                 }
 
-                // ⚠️ 6. CẬP NHẬT TRẠNG THÁI TRIP & ASSIGNMENT
+                // 6. CẬP NHẬT TRẠNG THÁI TRIP & ASSIGNMENT
                 if (tripId.HasValue)
                 {
                     var trip = await _unitOfWork.TripRepo.GetByIdAsync(tripId.Value);
@@ -210,19 +211,22 @@ namespace BLL.Services.Implement
                 }
 
                 // 7. Commit
-                await _unitOfWork.CommitTransactionAsync();
+                await _unitOfWork.SaveChangeAsync();
 
-                // Map DTO (Giả sử bạn có hàm này hoặc dùng AutoMapper)
+                // [FIX 2] Gọi Commit từ biến 'transaction'
+                await transaction.CommitAsync();
+
+                // Map DTO
                 var transactionDto = MapTransactionToDTO(newTransaction);
                 return new ResponseDTO($"Transaction {type} successful.", 200, true, transactionDto);
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackTransactionAsync();
+                // [FIX 3] Gọi Rollback từ biến 'transaction'
+                await transaction.RollbackAsync();
                 return new ResponseDTO($"Transaction failed: {ex.Message}", 400, false);
             }
         }
-
         // ─────── HÀM PRIVATE HELPER (MAPPER) ───────
 
         private TransactionDTO MapTransactionToDTO(Transaction t)

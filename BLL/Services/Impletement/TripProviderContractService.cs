@@ -191,7 +191,6 @@ namespace BLL.Services.Implement
                     contract.Status = ContractStatus.COMPLETED;
                     contract.EffectiveDate = DateTime.UtcNow;
 
-                    //// Cập nhật Trip sang trạng thái "Đợi Provider Thanh Toán"
                     trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
                 }
                 else
@@ -200,7 +199,7 @@ namespace BLL.Services.Implement
                     contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE;
 
                     //// Có thể giữ nguyên hoặc cập nhật lại cho chắc
-                    trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
+                    trip.Status = TripStatus.AWAITING_OWNER_CONTRACT;
                 }
 
                 // 6. Lưu thay đổi (Transaction: Token + Contract + Trip cùng lúc)
