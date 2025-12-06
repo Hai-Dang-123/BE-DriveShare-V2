@@ -20,7 +20,7 @@ namespace Common.DTOs
 
         public DeliveryIssueType IssueType { get; set; } // DAMAGED, LOST...
         public string Description { get; set; }
-        public List<string> ImageUrls { get; set; } = new List<string>();
+        public List<IFormFile> Images {get; set; } = new List<IFormFile>();
     }
 
     // DTO để đọc dữ liệu ra (Read)
@@ -31,7 +31,11 @@ namespace Common.DTOs
         public Guid? DeliveryRecordId { get; set; }
 
         // Người báo cáo
-        public Guid ReportedByUserId { get; set; }
+        // SỬA: Đổi thành Guid? (Nullable)
+        public Guid? ReportedByUserId { get; set; }
+
+        // THÊM: Để biết nếu là Contact báo thì ID là gì
+        public Guid? ReportedByContactId { get; set; }
         public string ReportedByUserName { get; set; }
 
         public string IssueType { get; set; } // Trả về string cho FE dễ hiển thị

@@ -36,32 +36,7 @@ namespace DriverShareProject.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
-        [HttpGet("get-all-packages")]
-        public async Task<IActionResult> GetAllPackages(
-    [FromQuery] int pageNumber = 1,
-    [FromQuery] int pageSize = 10,
-    [FromQuery] string? search = null,
-    [FromQuery] string? sortBy = null,
-    [FromQuery] string? sortOrder = "ASC"
-)
-        {
-            var result = await _packageService.GetAllPackagesAsync(
-                pageNumber,
-                pageSize,
-                search,
-                sortBy,
-                sortOrder
-            );
 
-            return StatusCode(result.StatusCode, result);
-        }
-
-        [HttpGet("get-packages-by-user")]
-        public async Task<IActionResult> GetPackagesByUser([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
-        {
-            var result = await _packageService.GetPackagesByUserIdAsync(pageNumber, pageSize);
-            return StatusCode(result.StatusCode, result);
-        }
         [HttpPut("update-package")]
         public async Task<IActionResult> UpdatePackage([FromBody] PackageUpdateDTO packageUpdateDTO)
         {
@@ -75,13 +50,47 @@ namespace DriverShareProject.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
-        [HttpGet("get-my-pending-packages")]
-        public async Task<IActionResult> GetMyPendingPackages(
-    [FromQuery] int pageNumber = 1,
-    [FromQuery] int pageSize = 10)
+
+        [HttpGet("get-all-packages")]
+        public async Task<IActionResult> GetAllPackages(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = "DESC" // Mặc định mới nhất
+        )
         {
-            var result = await _packageService.GetMyPendingPackagesAsync(pageNumber, pageSize);
+            var result = await _packageService.GetAllPackagesAsync(pageNumber, pageSize, search, sortField, sortOrder);
             return StatusCode(result.StatusCode, result);
         }
+
+        [HttpGet("get-packages-by-user")]
+        //[Authorize]
+        public async Task<IActionResult> GetPackagesByUser(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = "DESC"
+        )
+        {
+            var result = await _packageService.GetPackagesByUserIdAsync(pageNumber, pageSize, search, sortField, sortOrder);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("get-my-pending-packages")]
+        //[Authorize]
+        public async Task<IActionResult> GetMyPendingPackages(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = "DESC"
+        )
+        {
+            var result = await _packageService.GetMyPendingPackagesAsync(pageNumber, pageSize, search, sortField, sortOrder);
+            return StatusCode(result.StatusCode, result);
+        }
+
     }
     }

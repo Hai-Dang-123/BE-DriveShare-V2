@@ -36,5 +36,24 @@ namespace BLL.Services.Interface
         /// <param name="capacityKg">Trọng tải (kg), BẮT BUỘC nếu vehicleType="truck"</param>
         /// <returns>Đối tượng VietMapPath chứa (polyline, distance, time) hoặc null nếu lỗi</returns>
         Task<VietMapPath?> GetRouteAsync(Location start, Location end, string vehicleType = "car", int capacityKg = 0);
+
+
+        /// <summary>
+        /// hàm để ước tính thời gian di chuyển (giờ) giữa 2 điểm
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <param name="vehicle"></param>
+        /// <returns></returns>
+        Task<double> GetEstimatedDurationHoursAsync(Location start, Location end, string vehicle = "truck");
+
+        /// <summary>
+        /// HÀM KIỂM TRA ĐIỂM CÓ NẰM TRÊN TUYẾN ĐƯỜNG HAY KHÔNG
+        /// </summary>
+        /// <param name="point"></param>
+        /// <param name="encodedPolyline"></param>
+        /// <param name="bufferKm"></param>
+        /// <returns></returns>
+        bool IsLocationOnRoute(Location point, string encodedPolyline, double bufferKm = 5.0);
     }
 }

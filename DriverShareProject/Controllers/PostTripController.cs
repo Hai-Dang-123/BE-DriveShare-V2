@@ -19,19 +19,46 @@ namespace DriverShareProject.Controllers
         }
 
 
+        // 1. Get All (Admin)
         [HttpGet("all")]
         public async Task<IActionResult> GetAllPostTrips(
-    [FromQuery] int pageNumber = 1,
-    [FromQuery] int pageSize = 10,
-    [FromQuery] string? search = null,
-    [FromQuery] string? sortField = null,
-    [FromQuery] string? sortDirection = "ASC"
-)
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortDirection = "ASC"
+        )
         {
-            var response = await _postTripService.GetAllPostTripsAsync(
-                pageNumber, pageSize, search, sortField, sortDirection
-            );
+            var response = await _postTripService.GetAllPostTripsAsync(pageNumber, pageSize, search, sortField, sortDirection);
+            return StatusCode(response.StatusCode, response);
+        }
 
+        // 2. Get Open (Public)
+        [HttpGet("open")]
+        public async Task<IActionResult> GetAllOpenPostTrips(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,      // Thêm
+            [FromQuery] string? sortField = null,   // Thêm
+            [FromQuery] string? sortDirection = "ASC" // Thêm
+        )
+        {
+            var response = await _postTripService.GetAllOpenPostTripsAsync(pageNumber, pageSize, search, sortField, sortDirection);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        // 3. Get My Posts (Owner)
+        [HttpGet("my-posts")]
+        [Authorize]
+        public async Task<IActionResult> GetMyPostTrips(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,      // Thêm
+            [FromQuery] string? sortField = null,   // Thêm
+            [FromQuery] string? sortDirection = "ASC" // Thêm
+        )
+        {
+            var response = await _postTripService.GetMyPostTripsAsync(pageNumber, pageSize, search, sortField, sortDirection);
             return StatusCode(response.StatusCode, response);
         }
 
@@ -48,27 +75,7 @@ namespace DriverShareProject.Controllers
             return StatusCode(response.StatusCode, response);
         }
 
-        /// <summary>
-        /// [Public] Lấy tất cả bài đăng đang MỞ (OPEN) (có phân trang).
-        /// </summary>
-        [HttpGet("open")]
-        //[AllowAnonymous] // Ai cũng có thể xem
-        public async Task<IActionResult> GetAllOpenPostTrips([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
-        {
-            var response = await _postTripService.GetAllOpenPostTripsAsync(pageNumber, pageSize);
-            return StatusCode(response.StatusCode, response);
-        }
-
-        /// <summary>
-        /// [Owner] Lấy tất cả bài đăng của CHÍNH TÔI (Owner đã đăng nhập) (có phân trang).
-        /// </summary>
-        [HttpGet("my-posts")]
-        //[Authorize(Roles = "Owner")] // Chỉ Owner xem được
-        public async Task<IActionResult> GetMyPostTrips([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
-        {
-            var response = await _postTripService.GetMyPostTripsAsync(pageNumber, pageSize);
-            return StatusCode(response.StatusCode, response);
-        }
+      
 
         /// <summary>
         /// [Public] Lấy chi tiết một bài đăng bằng ID.

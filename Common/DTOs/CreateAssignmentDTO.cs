@@ -36,18 +36,14 @@ namespace Common.DTOs
     public class CreateAssignmentByPostTripDTO
     {
         [Required]
-        public Guid PostTripId { get; set; } // Tài xế ứng tuyển vào bài đăng nào?
+        public Guid PostTripId { get; set; }
         public Guid PostTripDetailId { get; set; }
 
-        [Required]
-        [Range(0, (double)decimal.MaxValue)]
-        public decimal OfferedAmount { get; set; } // Số tiền tài xế "ra giá" (bid)
+        // [Bỏ Required] Không bắt buộc, vì tài phụ có thể đi theo xe từ đầu
+        // Hoặc tài chính thì luôn bị override
+        public string? StartLocation { get; set; }
+        public string? EndLocation { get; set; }
 
-        // (Tài xế cũng cần cung cấp địa điểm lấy/trả xe của họ)
-        [Required]
-        public string StartLocation { get; set; } = null!; // Tài xế sẽ lấy xe ở đâu?
-
-        [Required]
-        public string EndLocation { get; set; } = null!; // Tài xế sẽ trả xe ở đâu?
+        // public decimal OfferedAmount { get; set; } // (Nếu bạn dùng tính năng Bid giá thì giữ, còn nếu Fixed Price thì bỏ qua)
     }
 }

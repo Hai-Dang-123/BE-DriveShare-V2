@@ -12,5 +12,6 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateSurchargeAsync(TripSurchargeCreateDTO dto);
         Task<ResponseDTO> GetSurchargesByTripIdAsync(Guid tripId);
         Task<ResponseDTO> UpdateStatusAsync(UpdateSurchargeStatusDTO dto);
+        Task<ResponseDTO> CreateSurchargeForContactAsync(TripSurchargeCreateDTO dto, string accessToken);
     }
 }

@@ -69,7 +69,7 @@ namespace BLL.Services.Impletement
         public async Task<ShippingRoute> CreateAndAddShippingRouteAsync(ShippingRouteInputDTO dto)
         {
             // 1. Geocode điểm đi
-            Location startLocation = await _vietMapService.GeocodeAsync(dto.StartLocation);
+            Location startLocation = await _vietMapService.GeocodeAsync(dto.StartLocation.Address);
             if (startLocation == null || startLocation.Latitude == 0)
             {
                 // Ném lỗi để transaction bên ngoài có thể rollback
@@ -77,7 +77,7 @@ namespace BLL.Services.Impletement
             }
 
             // 2. Geocode điểm đến
-            Location endLocation = await _vietMapService.GeocodeAsync(dto.EndLocation);
+            Location endLocation = await _vietMapService.GeocodeAsync(dto.EndLocation.Address);
             if (endLocation == null || endLocation.Latitude == 0)
             {
                 throw new Exception("Không thể Geocode địa điểm đến (EndLocation).");

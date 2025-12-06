@@ -810,6 +810,14 @@ namespace DAL.Context
 
                 // Cấu hình tiền tệ
                 entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+
+                modelBuilder.Entity<Trip>()
+                    .Property(e => e.ActualDuration)
+                    .HasConversion(
+                        v => v.Ticks,                // C# -> DB: Lưu số Ticks (long/bigint)
+                        v => TimeSpan.FromTicks(v)   // DB -> C#: Đọc lên thành TimeSpan
+                    )
+                    .HasColumnType("bigint");
             });
 
         }

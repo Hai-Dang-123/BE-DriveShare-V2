@@ -13,7 +13,8 @@ namespace DAL.Entities
         public Guid TripDeliveryIssueId { get; set; }
         public Guid TripId { get; set; } // FK to Trip
         public Guid? DeliveryRecordId { get; set; } // FK to DeliveryRecord
-        public Guid ReportedByUserId { get; set; } // FK to BaseUser
+        public Guid? ReportedByUserId { get; set; } // Nên đổi thành Nullable (Guid?)
+        public virtual BaseUser? ReportedByUser { get; set; }
 
         // GỢI Ý: Dùng Enum thay vì string để nhất quán
         public DeliveryIssueType IssueType { get; set; } // Enum: DAMAGED, LOST, LATE, WRONG_ITEM
@@ -27,7 +28,10 @@ namespace DAL.Entities
         // Liên kết n-1
         public virtual Trip Trip { get; set; } = null!;
         public virtual TripDeliveryRecord? TripDeliveryRecord { get; set; }
-        public virtual BaseUser ReportedByUser { get; set; } = null!;
+
+        // [THÊM MỚI] Người báo cáo là Contact (Người nhận/Gửi không có tk)
+        public Guid? ReportedByContactId { get; set; }
+        public virtual TripContact? ReportedByContact { get; set; }
 
         // Liên kết 1-n
         public virtual ICollection<TripDeliveryIssueImage> DeliveryIssueImages { get; set; } = new List<TripDeliveryIssueImage>();

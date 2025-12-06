@@ -12,19 +12,16 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateProviderPostPackageAsync(PostPackageCreateDTO postPackageCreateDTO);
         Task<ResponseDTO> ChangePostPackageStatusAsync(ChangePostPackageStatusDTO changePostPackageStatusDTO);
 
-        Task<ResponseDTO> GetAllPostPackagesAsync(
-            int pageNumber,
-            int pageSize,
-            string? search,
-            string? sortBy,
-            string? sortOrder
-        );
-        Task<ResponseDTO> GetPostPackagesByProviderIdAsync(Guid providerId, int pageNumber, int pageSize);
+        Task<ResponseDTO> GetAllPostPackagesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
 
-        Task<ResponseDTO> GetMyPostPackagesAsync(int pageNumber, int pageSize);
+        Task<ResponseDTO> GetPostPackagesByProviderIdAsync(Guid providerId, int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
+
+        Task<ResponseDTO> GetOpenPostPackagesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
+
+        Task<ResponseDTO> GetMyPostPackagesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
         Task<ResponseDTO> GetPostPackageDetailsAsync(Guid postPackageId);
-
-        Task<ResponseDTO> GetOpenPostPackagesAsync(int pageNumber, int pageSize);
+        // Trong IPostPackageService.cs
+        Task<ResponseDTO> CalculateAndValidateRouteAsync(RouteCalculationRequestDTO dto);
 
 
     }

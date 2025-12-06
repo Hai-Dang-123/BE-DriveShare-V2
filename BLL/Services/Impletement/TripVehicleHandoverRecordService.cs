@@ -273,6 +273,9 @@ namespace BLL.Services.Impletement
         // ========================================================================
         // 3. SIGN RECORD (Xác thực OTP & Ký tên) - [FIXED]
         // ========================================================================
+        // ========================================================================
+        // 3. SIGN RECORD (Xác thực OTP & Ký tên) - [FIXED & UPDATED]
+        // ========================================================================
         public async Task<ResponseDTO> SignRecordAsync(SignVehicleHandoverDTO dto)
         {
             // [FIX] Sử dụng 'using' để quản lý Transaction Scope tự động
@@ -326,43 +329,46 @@ namespace BLL.Services.Impletement
                     record.DriverSignedAt = DateTime.UtcNow;
                 }
 
-                // --- BƯỚC 5: Kiểm tra hoàn tất & Cập nhật Trip/Vehicle ---
+                // --- BƯỚC 5: Kiểm tra hoàn tất & Cập nhật Trạng Thái ---
+
+                // [UPDATE] Logic Trạng Thái Record
                 if (record.OwnerSignedAt != null && record.DriverSignedAt != null)
                 {
+                    // Cả 2 đã ký -> COMPLETED
                     record.Status = DeliveryRecordStatus.COMPLETED;
 
+                    // --- CHỈ KHI COMPLETED MỚI UPDATE TRIP ---
+
                     // A. XỬ LÝ PICKUP (Giao xe cho tài xế)
-                    if (record.Type == DeliveryRecordType.HANDOVER) // Sửa lại enum cho đúng với ngữ cảnh Giao Xe
+                    if (record.Type == DeliveryRecordType.HANDOVER) // Sửa lại enum cho đúng
                     {
-                        // Logic: Chuyển Trip sang LOADING (hoặc trạng thái tiếp theo)
                         if (record.Trip.Status == TripStatus.VEHICLE_HANDOVERED)
                         {
-                            record.Trip.Status = TripStatus.MOVING_TO_PICKUP; // Hoặc LOADING tùy flow
+                            record.Trip.Status = TripStatus.MOVING_TO_PICKUP;
                             await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                         }
                     }
 
                     // B. XỬ LÝ DROPOFF (Trả xe về bãi)
-                    else if (record.Type == DeliveryRecordType.RETURN) // Sửa lại enum cho đúng với ngữ cảnh Trả Xe
+                    else if (record.Type == DeliveryRecordType.RETURN) // Sửa lại enum cho đúng
                     {
-                        // Logic: Chuyển Trip sang VEHICLE_RETURNED (hoặc COMPLETED)
-                        // Lưu ý: Thường sau khi trả xe mới đến bước thanh toán cuối cùng
                         record.Trip.Status = TripStatus.DONE_TRIP_AND_WATING_FOR_PAYOUT;
                         record.Trip.ActualCompletedTime = DateTime.UtcNow;
                         await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
 
-                        // CẬP NHẬT ODOMETER CHO XE (QUAN TRỌNG)
+                        // CẬP NHẬT ODOMETER (Nếu cần)
                         var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(record.VehicleId);
-                        //if (vehicle != null)
-                        //{
-                        //    // Chỉ update nếu số mới lớn hơn số cũ (để an toàn)
-                        //    if (record.CurrentOdometer > vehicle.CurrentOdometer) // Giả sử Vehicle có CurrentOdometer
-                        //    {
-                        //        // vehicle.CurrentOdometer = record.CurrentOdometer;
-                        //        // await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
-                        //    }
-                        //}
+                        if (vehicle != null)
+                        {
+                            // vehicle.CurrentOdometer = record.CurrentOdometer;
+                            // await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
+                        }
                     }
+                }
+                else
+                {
+                    // [UPDATE] Mới có 1 người ký -> AWAITING_SIGNATURE
+                    record.Status = DeliveryRecordStatus.AWAITING_DELIVERY_RECORD_SIGNATURE;
                 }
 
                 await _unitOfWork.TripVehicleHandoverRecordRepo.UpdateAsync(record);

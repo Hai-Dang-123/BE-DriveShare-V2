@@ -321,33 +321,35 @@ namespace BLL.Services.Impletement
             }
         }
 
-        public async Task<ResponseDTO> GetItemsByUserIdAsync(int pageNumber, int pageSize)
+        // =============================================================================
+        // 1. GET ITEMS BY USER ID (Của tôi - Trừ Deleted)
+        // =============================================================================
+        public async Task<ResponseDTO> GetItemsByUserIdAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
-                if (userId == Guid.Empty)
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized User", 401, false);
+
+                // 1. Base Query
+                var query = _unitOfWork.ItemRepo.GetItemsByUserIdQueryable(userId)
+                    .AsNoTracking() // Tối ưu đọc
+                    .Where(item => item.Status != ItemStatus.DELETED); // Lọc bỏ Deleted
+
+                // 2. Search
+                if (!string.IsNullOrWhiteSpace(search))
                 {
-                    return new ResponseDTO
-                    {
-                        IsSuccess = false,
-                        StatusCode = StatusCodes.Status401Unauthorized,
-                        Message = "Unauthorized User",
-                    };
+                    string k = search.Trim().ToLower();
+                    query = query.Where(x => x.ItemName.ToLower().Contains(k) ||
+                                             (x.Description != null && x.Description.ToLower().Contains(k)));
                 }
 
-                // BƯỚC 1: Lấy IQueryable từ Repo (chưa gọi DB)
-                var itemsQuery = _unitOfWork.ItemRepo.GetItemsByUserIdQueryable(userId);
+                // 3. Sort
+                query = ApplySorting(query, sortBy, sortOrder);
 
-                // ***** THAY ĐỔI: LỌC BỎ TRẠNG THÁI DELETED *****
-                var filteredQuery = itemsQuery.Where(item => item.Status != ItemStatus.DELETED);
-                // ***********************************************
-
-                // BƯỚC 2: Đếm tổng số (dùng query đã lọc)
-                var totalCount = await filteredQuery.CountAsync(); // <-- Dùng query đã lọc
-
-                // BƯỚC 3: Lấy dữ liệu trang hiện tại (dùng query đã lọc)
-                var itemDTOs = await filteredQuery // <-- Dùng query đã lọc
+                // 4. Paging & Map
+                var totalCount = await query.CountAsync();
+                var items = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .Select(item => new ItemReadDTO
@@ -367,84 +369,45 @@ namespace BLL.Services.Impletement
                             ItemImageId = pi.ItemImageId,
                             ItemId = pi.ItemId,
                             ImageUrl = pi.ItemImageURL
-                        }).ToList() ?? new List<ItemImageReadDTO>()
+                        }).ToList()
                     })
-                    .ToListAsync(); // (gọi DB - SELECT)
+                    .ToListAsync();
 
-                // BƯN 4: Tạo đối tượng PaginatedDTO
-                var paginatedResult = new PaginatedDTO<ItemReadDTO>(itemDTOs, totalCount, pageNumber, pageSize);
-
-                return new ResponseDTO
-                {
-                    IsSuccess = true,
-                    StatusCode = StatusCodes.Status200OK,
-                    Message = "Items retrieved successfully",
-                    Result = paginatedResult
-                };
+                return new ResponseDTO("Items retrieved successfully", 200, true, new PaginatedDTO<ItemReadDTO>(items, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    IsSuccess = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = "An error occurred while retrieving items.",
-                    Result = ex.Message
-                };
+                return new ResponseDTO($"Error: {ex.Message}", 500, false);
             }
         }
 
-        public async Task<ResponseDTO> GetAllItemsAsync(
-      int pageNumber,
-      int pageSize,
-      string? search,
-      string? sortBy,
-      string? sortOrder
-  )
+        // =============================================================================
+        // 2. GET ALL ITEMS (Admin/Public)
+        // =============================================================================
+        public async Task<ResponseDTO> GetAllItemsAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
-                // 1) Lấy IQueryable gốc
-                var query = _unitOfWork.ItemRepo.GetAllItemsQueryable();
+                // 1. Base Query
+                var query = _unitOfWork.ItemRepo.GetAllItemsQueryable()
+                    .AsNoTracking()
+                    .Where(item => item.Status != ItemStatus.DELETED);
 
-                // 2) SEARCH
+                // 2. Search
                 if (!string.IsNullOrWhiteSpace(search))
                 {
-                    string keyword = search.Trim().ToLower();
-
-                    query = query.Where(x =>
-                        x.ItemName.ToLower().Contains(keyword) ||
-                        (x.Description != null && x.Description.ToLower().Contains(keyword)) ||
-                        (x.OwnerId != null && x.OwnerId.ToString().ToLower().Contains(keyword)) ||
-                        (x.ProviderId != null && x.ProviderId.ToString().ToLower().Contains(keyword))
-                    );
+                    string k = search.Trim().ToLower();
+                    query = query.Where(x => x.ItemName.ToLower().Contains(k) ||
+                                             (x.Description != null && x.Description.ToLower().Contains(k)) ||
+                                             (x.OwnerId != null && x.OwnerId.ToString().ToLower().Contains(k)));
                 }
 
-                // 3) SORTING
-                sortBy = (sortBy ?? "itemname").Trim().ToLower();
-                sortOrder = (sortOrder ?? "ASC").Trim().ToUpper();
+                // 3. Sort
+                query = ApplySorting(query, sortBy, sortOrder);
 
-                bool desc = sortOrder == "DESC";
-
-                query = sortBy switch
-                {
-                    "itemname" => desc ? query.OrderByDescending(x => x.ItemName)
-                                       : query.OrderBy(x => x.ItemName),
-
-                    "declaredvalue" => desc ? query.OrderByDescending(x => x.DeclaredValue)
-                                            : query.OrderBy(x => x.DeclaredValue),
-
-                    "status" => desc ? query.OrderByDescending(x => x.Status)
-                                     : query.OrderBy(x => x.Status),
-
-                    // Item KHÔNG CÓ CREATED – nên không sort theo created nữa
-                    _ => query.OrderBy(x => x.ItemName)   // default
-                };
-
-                // 4) Pagination
-                int totalCount = await query.CountAsync();
-
-                var list = await query
+                // 4. Paging & Map
+                var totalCount = await query.CountAsync();
+                var items = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .Select(item => new ItemReadDTO
@@ -454,6 +417,8 @@ namespace BLL.Services.Impletement
                         Currency = item.Currency,
                         DeclaredValue = item.DeclaredValue,
                         Description = item.Description,
+                        Quantity = item.Quantity,
+                        Unit = item.Unit,
                         OwnerId = item.OwnerId,
                         ProviderId = item.ProviderId,
                         Status = item.Status.ToString(),
@@ -466,56 +431,43 @@ namespace BLL.Services.Impletement
                     })
                     .ToListAsync();
 
-                var paginatedResult = new PaginatedDTO<ItemReadDTO>(list, totalCount, pageNumber, pageSize);
-
-                return new ResponseDTO
-                {
-                    IsSuccess = true,
-                    StatusCode = StatusCodes.Status200OK,
-                    Message = "Items retrieved successfully",
-                    Result = paginatedResult
-                };
+                return new ResponseDTO("Items retrieved successfully", 200, true, new PaginatedDTO<ItemReadDTO>(items, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    IsSuccess = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = $"An error occurred: {ex.Message}"
-                };
+                return new ResponseDTO($"Error: {ex.Message}", 500, false);
             }
         }
 
-
-        public async Task<ResponseDTO> GetPendingItemsByUserIdAsync(int pageNumber, int pageSize)
+        // =============================================================================
+        // 3. GET PENDING ITEMS BY USER ID (Của tôi - Chỉ Pending)
+        // =============================================================================
+        public async Task<ResponseDTO> GetPendingItemsByUserIdAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
-                if (userId == Guid.Empty)
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized User", 401, false);
+
+                // 1. Base Query
+                var query = _unitOfWork.ItemRepo.GetItemsByUserIdQueryable(userId)
+                    .AsNoTracking()
+                    .Where(item => item.Status == ItemStatus.PENDING); // Chỉ lấy Pending
+
+                // 2. Search
+                if (!string.IsNullOrWhiteSpace(search))
                 {
-                    return new ResponseDTO
-                    {
-                        IsSuccess = false,
-                        StatusCode = StatusCodes.Status401Unauthorized,
-                        Message = "Unauthorized User",
-                    };
+                    string k = search.Trim().ToLower();
+                    query = query.Where(x => x.ItemName.ToLower().Contains(k) ||
+                                             (x.Description != null && x.Description.ToLower().Contains(k)));
                 }
 
-                // BƯỚC 1: Lấy IQueryable từ Repo (chưa gọi DB)
-                var itemsQuery = _unitOfWork.ItemRepo.GetItemsByUserIdQueryable(userId);
+                // 3. Sort
+                query = ApplySorting(query, sortBy, sortOrder);
 
-                // ***** THAY ĐỔI DUY NHẤT *****
-                // Thêm bộ lọc (filter) cho trạng thái PENDING
-                var pendingItemsQuery = itemsQuery.Where(item => item.Status == ItemStatus.PENDING);
-                // *******************************
-
-                // BƯỚC 2: Đếm tổng số (sử dụng query đã lọc)
-                var totalCount = await pendingItemsQuery.CountAsync();
-
-                // BƯỚC 3: Lấy dữ liệu trang hiện tại (sử dụng query đã lọc)
-                var itemDTOs = await pendingItemsQuery // <-- Dùng query đã lọc
+                // 4. Paging & Map
+                var totalCount = await query.CountAsync();
+                var items = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .Select(item => new ItemReadDTO
@@ -527,37 +479,42 @@ namespace BLL.Services.Impletement
                         Description = item.Description,
                         OwnerId = item.OwnerId,
                         ProviderId = item.ProviderId,
-                        Status = item.Status.ToString(), // (Kết quả sẽ luôn là "PENDING")
+                        Status = item.Status.ToString(),
+                        Quantity = item.Quantity,
+                        Unit = item.Unit,
                         ImageUrls = item.ItemImages.Select(pi => new ItemImageReadDTO
                         {
                             ItemImageId = pi.ItemImageId,
                             ItemId = pi.ItemId,
                             ImageUrl = pi.ItemImageURL
-                        }).ToList() ?? new List<ItemImageReadDTO>()
+                        }).ToList()
                     })
-                    .ToListAsync(); // (gọi DB - SELECT)
+                    .ToListAsync();
 
-                // BƯỚC 4: Tạo đối tượng PaginatedDTO
-                var paginatedResult = new PaginatedDTO<ItemReadDTO>(itemDTOs, totalCount, pageNumber, pageSize);
-
-                return new ResponseDTO
-                {
-                    IsSuccess = true,
-                    StatusCode = StatusCodes.Status200OK,
-                    Message = "Pending items retrieved successfully", // Cập nhật message
-                    Result = paginatedResult
-                };
+                return new ResponseDTO("Pending items retrieved successfully", 200, true, new PaginatedDTO<ItemReadDTO>(items, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    IsSuccess = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = "An error occurred while retrieving pending items.", // Cập nhật message
-                    Result = ex.Message
-                };
+                return new ResponseDTO($"Error: {ex.Message}", 500, false);
             }
+        }
+
+        // =============================================================================
+        // PRIVATE HELPER: SORTING (Tái sử dụng cho cả 3 hàm)
+        // =============================================================================
+        private IQueryable<DAL.Entities.Item> ApplySorting(IQueryable<DAL.Entities.Item> query, string? sortBy, string? sortOrder)
+        {
+            bool desc = sortOrder?.ToUpper() == "DESC";
+            sortBy = sortBy?.ToLower();
+
+            return sortBy switch
+            {
+                "itemname" => desc ? query.OrderByDescending(x => x.ItemName) : query.OrderBy(x => x.ItemName),
+                "declaredvalue" => desc ? query.OrderByDescending(x => x.DeclaredValue) : query.OrderBy(x => x.DeclaredValue),
+                "status" => desc ? query.OrderByDescending(x => x.Status) : query.OrderBy(x => x.Status),
+                // "createdat" => ... (Nếu Item có trường CreatedAt thì thêm vào đây)
+                _ => query.OrderBy(x => x.ItemName) // Default sort
+            };
         }
     }
 }

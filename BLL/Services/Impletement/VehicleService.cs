@@ -70,7 +70,7 @@ namespace BLL.Services.Impletement
                     VolumeInM3 = dto.VolumeInM3,
                     Features = dto.Features ?? new(),
                     CurrentAddress = dto.CurrentAddress,
-                    Status = VehicleStatus.ACTIVE,
+                    Status = VehicleStatus.INACTIVE,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _unitOfWork.VehicleRepo.AddAsync(vehicle);
@@ -164,132 +164,6 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO("Error while deleting Vehicle", 500, false, ex.Message);
             }
         }
-
-        // GET ALL
-        public async Task<ResponseDTO> GetAllAsync(
-      int pageNumber = 1,
-      int pageSize = 10,
-      string? search = null,
-      string? sortBy = null,
-      string? sortOrder = "ASC")
-        {
-            try
-            {
-                // ========= 1) BASE QUERY =========
-                IQueryable<Vehicle> baseQuery = _unitOfWork.VehicleRepo.GetAll()
-                    .Where(v => v.Status != VehicleStatus.DELETED)
-                    .AsNoTracking()
-                    .Include(v => v.Owner)
-                    .Include(v => v.VehicleType)
-                    .Include(v => v.VehicleImages)
-                    .Include(v => v.VehicleDocuments);
-
-                // ========= 2) SEARCH =========
-                if (!string.IsNullOrWhiteSpace(search))
-                {
-                    string s = search.Trim().ToLower();
-
-                    baseQuery = baseQuery.Where(v =>
-                        v.PlateNumber.ToLower().Contains(s) ||
-                        v.Brand.ToLower().Contains(s) ||
-                        v.Model.ToLower().Contains(s) ||
-                        v.Owner.FullName.ToLower().Contains(s)
-                    );
-                }
-
-                // ========= 3) SORTING =========
-                sortBy = (sortBy ?? "").Trim().ToLower();
-                sortOrder = (sortOrder ?? "ASC").Trim().ToUpper();
-                bool desc = sortOrder == "DESC";
-
-                baseQuery = sortBy switch
-                {
-                    "brand" => desc ? baseQuery.OrderByDescending(v => v.Brand) : baseQuery.OrderBy(v => v.Brand),
-                    "model" => desc ? baseQuery.OrderByDescending(v => v.Model) : baseQuery.OrderBy(v => v.Model),
-                    "year" => desc ? baseQuery.OrderByDescending(v => v.YearOfManufacture) : baseQuery.OrderBy(v => v.YearOfManufacture),
-                    "payload" => desc ? baseQuery.OrderByDescending(v => v.PayloadInKg) : baseQuery.OrderBy(v => v.PayloadInKg),
-                    "volume" => desc ? baseQuery.OrderByDescending(v => v.VolumeInM3) : baseQuery.OrderBy(v => v.VolumeInM3),
-                    "createdat" => desc ? baseQuery.OrderByDescending(v => v.CreatedAt) : baseQuery.OrderBy(v => v.CreatedAt),
-                    _ => baseQuery.OrderByDescending(v => v.CreatedAt) // default
-                };
-
-                // ========= 4) PAGINATION =========
-                int totalCount = await baseQuery.CountAsync();
-
-                var vehicles = await baseQuery
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(v => new VehicleDetailDTO
-                    {
-                        VehicleId = v.VehicleId,
-                        PlateNumber = v.PlateNumber,
-                        Model = v.Model,
-                        Brand = v.Brand,
-                        Color = v.Color,
-                        YearOfManufacture = v.YearOfManufacture,
-                        PayloadInKg = v.PayloadInKg,
-                        VolumeInM3 = v.VolumeInM3,
-                        Status = v.Status,
-
-                        // VEHICLE TYPE
-                        VehicleType = new VehicleTypeDTO
-                        {
-                            VehicleTypeId = v.VehicleType.VehicleTypeId,
-                            VehicleTypeName = v.VehicleType.VehicleTypeName,
-                            Description = v.VehicleType.Description
-                        },
-
-                        // OWNER
-                        Owner = new GetDetailOwnerDTO
-                        {
-                            UserId = v.Owner.UserId,
-                            FullName = v.Owner.FullName,
-                            CompanyName = v.Owner.CompanyName
-                        },
-
-                        // IMAGES
-                        ImageUrls = v.VehicleImages
-                            .Select(img => new VehicleImageDetailDTO
-                            {
-                                VehicleImageId = img.VehicleImageId,
-                                VehicleId = img.VehicleId,
-                                ImageURL = img.ImageURL,
-                                Caption = img.Caption,
-                                CreatedAt = img.CreatedAt
-                            })
-                            .ToList(),
-
-                        // DOCUMENTS
-                        Documents = v.VehicleDocuments
-                            .Select(d => new VehicleDocumentDetailDTO
-                            {
-                                VehicleDocumentId = d.VehicleDocumentId,
-                                DocumentType = d.DocumentType.ToString(),
-                                FrontDocumentUrl = d.FrontDocumentUrl,
-                                BackDocumentUrl = d.BackDocumentUrl,
-                                ExpirationDate = d.ExpirationDate,
-                                Status = d.Status.ToString(),
-                                AdminNotes = d.AdminNotes,
-                                CreatedAt = d.CreatedAt,
-                                ProcessedAt = d.ProcessedAt
-                            })
-                            .ToList()
-                    })
-                    .ToListAsync();
-
-                var paginated = new PaginatedDTO<VehicleDetailDTO>(
-                    vehicles, totalCount, pageNumber, pageSize);
-
-                return new ResponseDTO("Success", 200, true, paginated);
-            }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error getting vehicles: {ex.Message}", 500, false);
-            }
-        }
-
-
-
 
         // GET BY ID
         public async Task<ResponseDTO> GetByIdAsync(Guid id)
@@ -385,173 +259,202 @@ namespace BLL.Services.Impletement
             }
         }
 
-
-        // (Thêm vào cuối lớp VehicleService của bạn)
-        // (Nhớ import: using Microsoft.EntityFrameworkCore;)
-
-        public async Task<ResponseDTO> GetMyVehiclesAsync(int pageNumber, int pageSize)
+        // =========================================================================
+        // 1. GET ALL VEHICLES (ADMIN/PUBLIC)
+        // =========================================================================
+        public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
-                var ownerId = _userUtility.GetUserIdFromToken();
-                if (ownerId == Guid.Empty)
-                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
+                // [FIX LỖI] Khai báo rõ kiểu IQueryable<Vehicle>
+                IQueryable<Vehicle> query = _unitOfWork.VehicleRepo.GetAll()
+                    .Where(v => v.Status != VehicleStatus.DELETED)
+                    .AsNoTracking()
+                    .Include(v => v.Owner)
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.VehicleImages)
+                    .Include(v => v.VehicleDocuments);
 
-                // 1. Lấy IQueryable từ Repo
-                var query = _unitOfWork.VehicleRepo.GetVehiclesByOwnerIdQueryable(ownerId)
-                                // QUAN TRỌNG: Phải Include Documents để check trạng thái
-                                .Include(v => v.VehicleDocuments)
-                                .Include(v => v.VehicleType)     // Include sẵn để map
-                                .Include(v => v.VehicleImages)   // Include sẵn để map
-                                .Include(v => v.Owner)           // Include sẵn để map
-                                .Where(v => v.Status != VehicleStatus.DELETED);
+                // 2. Search & Sort (Helper)
+                query = ApplyVehicleFilter(query, search);
+                query = ApplyVehicleSort(query, sortBy, sortOrder);
 
-                // 2. Đếm tổng số
+                // 3. Paging & Map
                 var totalCount = await query.CountAsync();
+                var vehicles = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
 
-                // 3. Lấy dữ liệu của trang
-                var vehicles = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
+                var dtos = vehicles.Select(MapToVehicleDetailDTO).ToList();
 
-                // 4. Map sang DTO & Xử lý logic xác minh
-                var result = vehicles.Select(v =>
-                {
-                    // LOGIC XÁC MINH:
-                    // Xe được coi là "Đã xác minh" nếu có Cà vẹt (VEHICLE_LINCENSE) và trạng thái là ACTIVE
-                    bool isVerified = v.VehicleDocuments.Any(d =>
-                                        d.DocumentType == DocumentType.VEHICLE_LINCENSE);
-                                  //&&  d.Status == VerifileStatus.ACTIVE);              // Thêm sau nhé.
-
-                    return new VehicleDetailDTO
-                    {
-                        VehicleId = v.VehicleId,
-                        PlateNumber = v.PlateNumber,
-                        Model = v.Model,
-                        Brand = v.Brand,
-                        Color = v.Color,
-                        YearOfManufacture = v.YearOfManufacture,
-                        PayloadInKg = v.PayloadInKg,
-                        VolumeInM3 = v.VolumeInM3,
-                        Status = v.Status,
-
-                        // Map thông tin xác thực mới thêm
-                        IsVerified = isVerified,
-
-                        VehicleType = new VehicleTypeDTO
-                        {
-                            VehicleTypeId = v.VehicleType.VehicleTypeId,
-                            VehicleTypeName = v.VehicleType.VehicleTypeName,
-                            Description = v.VehicleType.Description
-                        },
-                        Owner = new GetDetailOwnerDTO
-                        {
-                            UserId = v.Owner.UserId,
-                            FullName = v.Owner.FullName,
-                            CompanyName = v.Owner.CompanyName
-                        },
-                        ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
-                        {
-                            VehicleImageId = i.VehicleImageId,
-                            ImageURL = i.ImageURL,
-                            Caption = i.Caption,
-                            CreatedAt = i.CreatedAt
-                        }).ToList(),
-
-                        // Map danh sách giấy tờ để hiển thị lên App (Ví dụ: Cà vẹt: Đã duyệt, Bảo hiểm: Hết hạn)
-                        Documents = v.VehicleDocuments.Select(d => new VehicleDocumentDetailDTO
-                        {
-                            VehicleDocumentId = d.VehicleDocumentId,
-                            DocumentType = d.DocumentType.ToString(), // Convert Enum sang String
-                            Status = d.Status.ToString(),             // Convert Enum sang String
-                            FrontDocumentUrl = d.FrontDocumentUrl,
-                            BackDocumentUrl = d.BackDocumentUrl,
-                            ExpirationDate = d.ExpirationDate
-                        }).ToList()
-                    };
-                }).ToList();
-
-                // 5. Tạo đối tượng PaginatedDTO
-                var paginatedResult = new PaginatedDTO<VehicleDetailDTO>(result, totalCount, pageNumber, pageSize);
-
-                return new ResponseDTO("Get my vehicles successfully", 200, true, paginatedResult);
+                return new ResponseDTO("Success", 200, true, new PaginatedDTO<VehicleDetailDTO>(dtos, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO("Error while getting vehicles: " + ex.Message, 500, false);
+                return new ResponseDTO($"Error: {ex.Message}", 500, false);
             }
         }
 
-
-        // (Thêm hàm này vào cuối lớp VehicleService của bạn)
-        // (Nhớ import: using Microsoft.EntityFrameworkCore;)
-        // (Nhớ import: using Common.DTOs;) // Cho PaginatedDTO
-
-        public async Task<ResponseDTO> GetMyActiveVehiclesAsync(int pageNumber, int pageSize)
+        // =========================================================================
+        // 2. GET MY VEHICLES (OWNER)
+        // =========================================================================
+        public async Task<ResponseDTO> GetMyVehiclesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
                 var ownerId = _userUtility.GetUserIdFromToken();
-                if (ownerId == Guid.Empty)
-                    return new ResponseDTO("Unauthorized or invalid token", 401, false);
+                if (ownerId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // 1. Lấy IQueryable từ Repo
-                var query = _unitOfWork.VehicleRepo.GetVehiclesByOwnerIdQueryable(ownerId)
-                                 // ***** THAY ĐỔI LỌC TẠI ĐÂY *****
-                                 .Where(v => v.Status == VehicleStatus.ACTIVE);
+                // [FIX LỖI] Khai báo rõ kiểu IQueryable<Vehicle>
+                IQueryable<Vehicle> query = _unitOfWork.VehicleRepo.GetVehiclesByOwnerIdQueryable(ownerId)
+                    .Where(v => v.Status != VehicleStatus.DELETED)
+                    .Include(v => v.VehicleDocuments)
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.VehicleImages)
+                    .Include(v => v.Owner);
 
-                // 2. Đếm tổng số (dùng query đã lọc)
+                // 2. Search & Sort
+                query = ApplyVehicleFilter(query, search);
+                query = ApplyVehicleSort(query, sortBy, sortOrder);
+
+                // 3. Paging & Map
                 var totalCount = await query.CountAsync();
+                var vehicles = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
 
-                // 3. Lấy dữ liệu của trang
-                var vehicles = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
+                var dtos = vehicles.Select(MapToVehicleDetailDTO).ToList();
 
-                // 4. Map sang DTO (Dùng lại DTO từ hàm GetAll/GetById của bạn)
-                var result = vehicles.Select(v => new VehicleDetailDTO
-                {
-                    VehicleId = v.VehicleId,
-                    PlateNumber = v.PlateNumber,
-                    Model = v.Model,
-                    Brand = v.Brand,
-                    Color = v.Color,
-                    YearOfManufacture = v.YearOfManufacture,
-                    PayloadInKg = v.PayloadInKg,
-                    VolumeInM3 = v.VolumeInM3,
-                    Status = v.Status, // Sẽ luôn là ACTIVE
-                    VehicleType = new VehicleTypeDTO
-                    {
-                        VehicleTypeId = v.VehicleType.VehicleTypeId,
-                        VehicleTypeName = v.VehicleType.VehicleTypeName,
-                        Description = v.VehicleType.Description
-                    },
-                    Owner = new GetDetailOwnerDTO
-                    {
-                        UserId = v.Owner.UserId,
-                        FullName = v.Owner.FullName,
-                        CompanyName = v.Owner.CompanyName
-                    },
-                    ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
-                    {
-                        VehicleImageId = i.VehicleImageId,
-                        ImageURL = i.ImageURL,
-                        Caption = i.Caption,
-                        CreatedAt = i.CreatedAt
-                    }).ToList()
-                }).ToList();
-
-                // 5. Tạo đối tượng PaginatedDTO
-                var paginatedResult = new PaginatedDTO<VehicleDetailDTO>(result, totalCount, pageNumber, pageSize);
-
-                return new ResponseDTO("Get my active vehicles successfully", 200, true, paginatedResult);
+                return new ResponseDTO("Get my vehicles successfully", 200, true, new PaginatedDTO<VehicleDetailDTO>(dtos, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO("Error while getting active vehicles", 500, false, ex.Message);
+                return new ResponseDTO($"Error: {ex.Message}", 500, false);
             }
+        }
+
+        // =========================================================================
+        // 3. GET MY ACTIVE VEHICLES (OWNER - CHỈ LẤY XE ACTIVE ĐỂ CHẠY)
+        // =========================================================================
+        public async Task<ResponseDTO> GetMyActiveVehiclesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
+        {
+            try
+            {
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
+                // [FIX LỖI] Khai báo rõ kiểu IQueryable<Vehicle>
+                IQueryable<Vehicle> query = _unitOfWork.VehicleRepo.GetVehiclesByOwnerIdQueryable(ownerId)
+                    .Where(v => v.Status == VehicleStatus.ACTIVE)
+                    .Include(v => v.VehicleDocuments)
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.VehicleImages)
+                    .Include(v => v.Owner);
+
+                // 2. Search & Sort
+                query = ApplyVehicleFilter(query, search);
+                query = ApplyVehicleSort(query, sortBy, sortOrder);
+
+                // 3. Paging & Map
+                var totalCount = await query.CountAsync();
+                var vehicles = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+
+                var dtos = vehicles.Select(MapToVehicleDetailDTO).ToList();
+
+                return new ResponseDTO("Get my active vehicles successfully", 200, true, new PaginatedDTO<VehicleDetailDTO>(dtos, totalCount, pageNumber, pageSize));
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error: {ex.Message}", 500, false);
+            }
+        }
+
+        // =========================================================================
+        // PRIVATE HELPERS (TÁI SỬ DỤNG LOGIC)
+        // =========================================================================
+
+        private IQueryable<Vehicle> ApplyVehicleFilter(IQueryable<Vehicle> query, string? search)
+        {
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                string s = search.Trim().ToLower();
+                query = query.Where(v =>
+                    v.PlateNumber.ToLower().Contains(s) ||
+                    v.Brand.ToLower().Contains(s) ||
+                    v.Model.ToLower().Contains(s) ||
+                    (v.Owner != null && v.Owner.FullName.ToLower().Contains(s))
+                );
+            }
+            return query;
+        }
+
+        private IQueryable<Vehicle> ApplyVehicleSort(IQueryable<Vehicle> query, string? sortBy, string? sortOrder)
+        {
+            sortBy = (sortBy ?? "").Trim().ToLower();
+            bool desc = (sortOrder ?? "ASC").Trim().ToUpper() == "DESC";
+
+            return sortBy switch
+            {
+                "brand" => desc ? query.OrderByDescending(v => v.Brand) : query.OrderBy(v => v.Brand),
+                "model" => desc ? query.OrderByDescending(v => v.Model) : query.OrderBy(v => v.Model),
+                "year" => desc ? query.OrderByDescending(v => v.YearOfManufacture) : query.OrderBy(v => v.YearOfManufacture),
+                "payload" => desc ? query.OrderByDescending(v => v.PayloadInKg) : query.OrderBy(v => v.PayloadInKg),
+                "volume" => desc ? query.OrderByDescending(v => v.VolumeInM3) : query.OrderBy(v => v.VolumeInM3),
+                "plate" => desc ? query.OrderByDescending(v => v.PlateNumber) : query.OrderBy(v => v.PlateNumber),
+                "createdat" => desc ? query.OrderByDescending(v => v.CreatedAt) : query.OrderBy(v => v.CreatedAt),
+                _ => query.OrderByDescending(v => v.CreatedAt) // Default
+            };
+        }
+
+        private VehicleDetailDTO MapToVehicleDetailDTO(Vehicle v)
+        {
+            // Logic check verify: Có Cà vẹt
+            bool isVerified = v.VehicleDocuments.Any(d => d.DocumentType == DocumentType.VEHICLE_LINCENSE);
+
+            return new VehicleDetailDTO
+            {
+                VehicleId = v.VehicleId,
+                PlateNumber = v.PlateNumber,
+                Model = v.Model,
+                Brand = v.Brand,
+                Color = v.Color,
+                YearOfManufacture = v.YearOfManufacture,
+                PayloadInKg = v.PayloadInKg,
+                VolumeInM3 = v.VolumeInM3,
+                Status = v.Status,
+                IsVerified = isVerified,
+
+                VehicleType = v.VehicleType == null ? null : new VehicleTypeDTO
+                {
+                    VehicleTypeId = v.VehicleType.VehicleTypeId,
+                    VehicleTypeName = v.VehicleType.VehicleTypeName,
+                    Description = v.VehicleType.Description
+                },
+
+                Owner = v.Owner == null ? null : new GetDetailOwnerDTO
+                {
+                    UserId = v.Owner.UserId,
+                    FullName = v.Owner.FullName,
+                    CompanyName = v.Owner.CompanyName
+                },
+
+                ImageUrls = v.VehicleImages.Select(i => new VehicleImageDetailDTO
+                {
+                    VehicleImageId = i.VehicleImageId,
+                    ImageURL = i.ImageURL,
+                    Caption = i.Caption,
+                    CreatedAt = i.CreatedAt
+                }).ToList(),
+
+                Documents = v.VehicleDocuments.Select(d => new VehicleDocumentDetailDTO
+                {
+                    VehicleDocumentId = d.VehicleDocumentId,
+                    DocumentType = d.DocumentType.ToString(),
+                    FrontDocumentUrl = d.FrontDocumentUrl,
+                    BackDocumentUrl = d.BackDocumentUrl,
+                    ExpirationDate = d.ExpirationDate,
+                    Status = d.Status.ToString(),
+                    AdminNotes = d.AdminNotes,
+                    CreatedAt = d.CreatedAt,
+                    ProcessedAt = d.ProcessedAt
+                }).ToList()
+            };
         }
 
     }

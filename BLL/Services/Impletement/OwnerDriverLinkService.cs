@@ -141,61 +141,6 @@ namespace BLL.Services.Impletement
             }
         }
 
-        //public async Task<ResponseDTO> GetDriversByOwnerAsync(int pageNumber = 1, int pageSize = 10)
-        //{
-        //    try
-        //    {
-        //        // 1. Lấy OwnerId từ Token và xác thực
-        //        var ownerId = _userUtility.GetUserIdFromToken();
-        //        var userRole = _userUtility.GetUserRoleFromToken();
-        //        if (ownerId == Guid.Empty || userRole != "Owner")
-        //        {
-        //            return new ResponseDTO("Unauthorized: Chỉ 'Owner' mới có thể xem danh sách này.", 401, false);
-        //        }
-
-        //        // 2. Lấy IQueryable để phân trang
-        //        var query = _unitOfWork.OwnerDriverLinkRepo.GetAll()
-        //            .Where(link => link.OwnerId == ownerId);
-
-        //        // 3. Đếm tổng số lượng (cho phân trang)
-        //        var totalCount = await query.CountAsync();
-        //        if (totalCount == 0)
-        //        {
-        //            return new ResponseDTO("No drivers found for this owner.", 404, false);
-        //        }
-
-        //        // 4. Lấy dữ liệu (Sử dụng .Select() để tối ưu)
-        //        var links = await query
-        //            .OrderByDescending(l => l.RequestedAt)
-        //            .Skip((pageNumber - 1) * pageSize)
-        //            .Take(pageSize)
-        //            .Select(link => new LinkedDriverDTO // Map sang DTO
-        //            {
-        //                OwnerDriverLinkId = link.OwnerDriverLinkId,
-        //                DriverId = link.DriverId,
-        //                FullName = link.Driver.FullName,
-        //                PhoneNumber = link.Driver.PhoneNumber,
-        //                AvatarUrl = link.Driver.AvatarUrl,
-        //                LicenseNumber = link.Driver.LicenseNumber,
-        //                Status = link.Status.ToString(), // Trả về "PENDING", "APPROVED", ...
-        //                RequestedAt = link.RequestedAt,
-        //                ApprovedAt = link.ApprovedAt
-        //            })
-        //            .ToListAsync();
-
-        //        // 5. Trả về kết quả phân trang
-        //        var paginatedResult = new PaginatedDTO<LinkedDriverDTO>(
-        //            links, totalCount, pageNumber, pageSize
-        //        );
-
-        //        return new ResponseDTO("Get linked drivers successfully.", 200, true, paginatedResult);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine($"Error getting linked drivers: {ex.Message}");
-        //        return new ResponseDTO($"Error getting drivers: {ex.Message}", 500, false);
-        //    }
-        //}
 
 
         public async Task<ResponseDTO> GetDriversByOwnerAsync(int pageNumber = 1, int pageSize = 10)
@@ -346,6 +291,42 @@ namespace BLL.Services.Impletement
                 Math.Round(hMonth, 1),
                 canDrive
             );
+        }
+
+        // Trong OwnerDriverLinkService.cs
+        public async Task<List<LinkedDriverDTO>> GetDriversWithStatsByOwnerIdAsync(Guid ownerId)
+        {
+            // 1. Query lấy danh sách Driver
+            var links = await _unitOfWork.OwnerDriverLinkRepo.GetAll()
+                .Include(l => l.Driver)
+                .Where(link => link.OwnerId == ownerId && link.Status == FleetJoinStatus.APPROVED) // Chỉ lấy đã duyệt
+                .ToListAsync();
+
+            var resultList = new List<LinkedDriverDTO>();
+
+            // 2. Tính toán thống kê cho từng Driver (Tái sử dụng logic cũ)
+            foreach (var link in links)
+            {
+                var stats = await CalculateDriverStatisticsAsync(link.DriverId);
+
+                resultList.Add(new LinkedDriverDTO
+                {
+                    OwnerDriverLinkId = link.OwnerDriverLinkId,
+                    DriverId = link.DriverId,
+                    FullName = link.Driver.FullName,
+                    PhoneNumber = link.Driver.PhoneNumber,
+                    AvatarUrl = link.Driver.AvatarUrl,
+                    LicenseNumber = link.Driver.LicenseNumber,
+                    Status = link.Status.ToString(),
+
+                    // Map chỉ số thống kê
+                    HoursDrivenToday = stats.HoursToday,
+                    HoursDrivenThisWeek = stats.HoursWeek,
+                    CanDrive = stats.CanDrive
+                });
+            }
+
+            return resultList;
         }
 
     }

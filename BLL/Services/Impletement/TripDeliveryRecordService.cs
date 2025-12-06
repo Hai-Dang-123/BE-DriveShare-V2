@@ -35,7 +35,7 @@ namespace BLL.Services.Impletement
             try
             {
                 var userid = _userUtility.GetUserIdFromToken();
-                if (userid == null)
+                if (userid == Guid.Empty)
                 {
                     return new ResponseDTO
                     {
@@ -733,6 +733,30 @@ namespace BLL.Services.Impletement
                         }
                         : null,
 
+                    // [NEW] 4. MAPPING ISSUES & IMAGES
+                    Issues = record.Issues.Select(i => new DeliveryIssueForDriverDTO
+                    {
+                        TripDeliveryIssueId = i.TripDeliveryIssueId,
+                        IssueType = i.IssueType.ToString(),
+                        Description = i.Description,
+                        Status = i.Status.ToString(),
+                        CreatedAt = i.CreatedAt,
+
+                        // Map Images
+                        ImageUrls = i.DeliveryIssueImages
+                                     .Select(img => img.ImageUrl)
+                                     .ToList(),
+                        // [NEW] Map Bồi thường / Phạt
+                        Surcharges = i.Surcharges.Select(s => new IssueSurchargeForDriverDTO
+                        {
+                            TripSurchargeId = s.TripSurchargeId,
+                            Type = s.Type.ToString(),
+                            Amount = s.Amount,
+                            Description = s.Description,
+                            Status = s.Status.ToString()
+                        }).ToList()
+                    }).ToList(),
+
                     // 3. Mapping Trip, Package & Items (QUAN TRỌNG)
                     TripDetail = record.Trip != null ? new TripDetailForRecordForDriverDTO
                     {
@@ -871,6 +895,26 @@ namespace BLL.Services.Impletement
                                 }).ToList()
                         }
                         : null,
+
+                    // [NEW] MAPPING ISSUES
+                    Issues = record.Issues.Select(i => new DeliveryIssueForDriverDTO
+                    {
+                        TripDeliveryIssueId = i.TripDeliveryIssueId,
+                        IssueType = i.IssueType.ToString(),
+                        Description = i.Description,
+                        Status = i.Status.ToString(),
+                        CreatedAt = i.CreatedAt,
+                        ImageUrls = i.DeliveryIssueImages.Select(img => img.ImageUrl).ToList(),
+                        // [NEW] Map Bồi thường / Phạt
+                        Surcharges = i.Surcharges.Select(s => new IssueSurchargeForDriverDTO
+                        {
+                            TripSurchargeId = s.TripSurchargeId,
+                            Type = s.Type.ToString(),
+                            Amount = s.Amount,
+                            Description = s.Description,
+                            Status = s.Status.ToString()
+                        }).ToList()
+                    }).ToList(),
 
                     // 3. Mapping Trip, Package & Items (QUAN TRỌNG)
                     TripDetail = record.Trip != null ? new TripDetailForRecordForDriverDTO

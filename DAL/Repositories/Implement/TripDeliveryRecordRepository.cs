@@ -52,6 +52,10 @@ namespace DAL.Repositories.Implement
                  .Include(r => r.Trip)
                     .ThenInclude(t => t.Packages)
                         .ThenInclude(p => p.PackageImages) // Include ảnh gói hàng (nếu cần)
+                .Include(r => r.Issues) // Include các vấn đề phát sinh
+                    .ThenInclude(i => i.DeliveryIssueImages) // Include ảnh của các vấn đề phát sinh
+                .Include(r => r.Issues)
+                    .ThenInclude(i => i.Surcharges) // Include thông tin tài xế báo cáo vấn đề
                 .FirstOrDefaultAsync(r => r.DeliveryRecordId == id || r.DeliveryRecordId == id); // Tùy tên khóa chính của bạn
         }
     }

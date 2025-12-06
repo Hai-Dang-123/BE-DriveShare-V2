@@ -10,20 +10,14 @@ namespace BLL.Services.Interface
         // 1. CREATE
         Task<ResponseDTO> CreatePostTripAsync(PostTripCreateDTO dto);
 
-        // 2. GET ALL OPEN (public)
-        Task<ResponseDTO> GetAllOpenPostTripsAsync(int pageNumber, int pageSize);
+        // 1. Admin/Public Get All
+        Task<ResponseDTO> GetAllPostTripsAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortDirection);
 
-        // 3. GET ALL (Admin / Public) — Search + Sort + Paging  🔥 NEW
-        Task<ResponseDTO> GetAllPostTripsAsync(
-            int pageNumber,
-            int pageSize,
-            string? search = null,
-            string? sortField = null,
-            string? sortDirection = "ASC"
-        );
+        // 2. Public Get Open
+        Task<ResponseDTO> GetAllOpenPostTripsAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortDirection);
 
-        // 4. GET MY POST TRIPS (Owner)
-        Task<ResponseDTO> GetMyPostTripsAsync(int pageNumber, int pageSize);
+        // 3. Owner Get My Posts
+        Task<ResponseDTO> GetMyPostTripsAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortDirection);
 
         // 5. GET BY ID
         Task<ResponseDTO> GetPostTripByIdAsync(Guid postTripId);
