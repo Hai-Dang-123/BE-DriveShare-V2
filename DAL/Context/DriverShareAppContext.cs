@@ -811,12 +811,27 @@ namespace DAL.Context
                 // Cấu hình tiền tệ
                 entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
 
-                modelBuilder.Entity<Trip>()
-                    .Property(e => e.ActualDuration)
+               
+            });
+
+
+            // CẤU HÌNH CHO TRIP
+            modelBuilder.Entity<Trip>(entity =>
+            {
+                // Chuyển đổi TimeSpan <-> Int64 (Ticks)
+                entity.Property(e => e.ActualDuration)
                     .HasConversion(
-                        v => v.Ticks,                // C# -> DB: Lưu số Ticks (long/bigint)
-                        v => TimeSpan.FromTicks(v)   // DB -> C#: Đọc lên thành TimeSpan
+                        v => v.Ticks,                // Khi lưu vào DB: Đổi TimeSpan thành số Ticks (long)
+                        v => new TimeSpan(v)         // Khi đọc từ DB: Đổi số Ticks thành TimeSpan
                     )
+                    .HasColumnType("bigint");        // Bắt buộc cột trong SQL phải là bigint
+            });
+
+            // Nếu TripRoute cũng bị, làm tương tự:
+            modelBuilder.Entity<TripRoute>(entity =>
+            {
+                entity.Property(e => e.Duration)
+                    .HasConversion(v => v.Ticks, v => new TimeSpan(v))
                     .HasColumnType("bigint");
             });
 

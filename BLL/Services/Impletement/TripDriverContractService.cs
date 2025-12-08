@@ -390,6 +390,10 @@ namespace BLL.Services.Implement
                 // 6. Add vào UoW (KHÔNG SAVE - Để Transaction bên ngoài lo)
                 await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
 
+                trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
+                trip.UpdateAt = DateTime.UtcNow;
+                await _unitOfWork.TripRepo.UpdateAsync(trip);
+
                 return contract;
             }
             catch (Exception ex)
