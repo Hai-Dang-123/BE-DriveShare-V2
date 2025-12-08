@@ -34,6 +34,8 @@ namespace DAL.Entities
         public Guid TripId { get; set; } // FK to Trip
         public virtual Trip Trip { get; set; } = null!;
 
+
+        public string? AIAnalysisJson { get; set; }
         public virtual ICollection<PostTripDetail> PostTripDetails { get; set; } = new List<PostTripDetail>();
 
 

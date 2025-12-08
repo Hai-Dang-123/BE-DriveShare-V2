@@ -55,7 +55,9 @@ namespace Common.DTOs
 
         // 🧩 Records, Compensation, Issues
         public List<TripDeliveryRecordDTO> DeliveryRecords { get; set; } = new();
-        public List<TripCompensationDTO> Compensations { get; set; } = new();
+        //public List<TripCompensationDTO> Compensations { get; set; } = new();
+        // Đổi tên hoặc dùng lại List này nhưng chứa DTO mới
+        public List<TripSurchargeReadDTO> Surcharges { get; set; } = new();
         public List<TripDeliveryIssueDTO> Issues { get; set; } = new();
 
         public List<TripVehicleHandoverReadDTO> handoverReadDTOs { get; set; } = new();

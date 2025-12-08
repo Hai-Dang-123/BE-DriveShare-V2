@@ -26,6 +26,9 @@ namespace Common.DTOs
         public bool IsIncome { get; set; }
         public string FinancialDescription { get; set; }
 
+        // [NEW] Danh sách phạt (nếu có)
+        public List<SurchargeDetail> Surcharges { get; set; } = new List<SurchargeDetail>();
+
         // --- [NEW] FIELD DÀNH RIÊNG CHO OWNER (Quyết toán tổng hợp) ---
         public decimal TotalIncome { get; set; }      // Tiền nhận từ Provider (sau phí sàn)
         public decimal TotalExpense { get; set; }     // Tổng tiền trả cho Drivers
@@ -33,6 +36,13 @@ namespace Common.DTOs
         public List<ExpenseDetail> DriverExpenses { get; set; } = new List<ExpenseDetail>();
 
         public TripCompletionReportModel Clone() => (TripCompletionReportModel)MemberwiseClone();
+    }
+
+    public class SurchargeDetail
+    {
+        public string Type { get; set; } // "Hư Hàng", "Hư Xe"
+        public decimal Amount { get; set; }
+        public string Description { get; set; }
     }
 
     public class ExpenseDetail

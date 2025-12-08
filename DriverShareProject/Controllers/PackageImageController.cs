@@ -8,7 +8,7 @@ namespace DriverShareProject.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    //[Authorize]
     public class PackageImageController : ControllerBase
     {
         private readonly IPackageImageService _packageImageService;
