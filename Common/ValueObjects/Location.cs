@@ -6,26 +6,26 @@ using System.Threading.Tasks;
 
 namespace Common.ValueObjects
 {
-    public class Location // Có thể là struct hoặc class tùy ý định
+    public class Location
     {
-        public string? Address { get; private set; } = null!;
-        public double? Latitude { get; private set; }
-        public double? Longitude { get; private set; }
+        // SỬA Ở ĐÂY: Đổi 'private set' thành 'set' để API nhận được dữ liệu
+        public string? Address { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
 
         public Location() { }
 
-        // Constructor để đảm bảo tính bất biến và khởi tạo đầy đủ
         public Location(string address, double latitude, double longitude)
         {
             if (string.IsNullOrWhiteSpace(address))
                 throw new ArgumentException("Address cannot be null or empty.", nameof(address));
-            // Có thể thêm validation cho latitude/longitude
+
             Address = address;
             Latitude = latitude;
             Longitude = longitude;
         }
 
-        // Nên override Equals và GetHashCode cho Value Object
+        // Giữ nguyên phần override Equals và GetHashCode...
         public override bool Equals(object? obj)
         {
             return obj is Location other &&

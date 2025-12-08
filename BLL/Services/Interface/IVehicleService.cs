@@ -9,16 +9,16 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateAsync(VehicleCreateDTO dto);
         Task<ResponseDTO> UpdateAsync(VehicleUpdateDTO dto);
         Task<ResponseDTO> SoftDeleteAsync(Guid id);
-        Task<ResponseDTO> GetAllAsync(
-            int pageNumber = 1,
-            int pageSize = 10,
-            string? search = null,
-            string? sortBy = null,
-            string? sortOrder = "ASC"
-        );
+
         Task<ResponseDTO> GetByIdAsync(Guid id);
 
-        Task<ResponseDTO> GetMyVehiclesAsync(int pageNumber, int pageSize);
-        Task<ResponseDTO> GetMyActiveVehiclesAsync(int pageNumber, int pageSize);
+        // 1. Admin/Public Get All
+        Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
+
+        // 2. Owner Get My Vehicles
+        Task<ResponseDTO> GetMyVehiclesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
+
+        // 3. Owner Get My Active Vehicles (Chỉ lấy xe đang hoạt động để chọn chạy)
+        Task<ResponseDTO> GetMyActiveVehiclesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
     }
 }

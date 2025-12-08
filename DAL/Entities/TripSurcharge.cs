@@ -16,7 +16,6 @@ namespace DAL.Entities
 
         // Loại phụ phí: Xăng, Quá Km, Vệ sinh, Hư hỏng...
         public SurchargeType Type { get; set; }
-
         public string Description { get; set; } = string.Empty; // Vd: "Thiếu 20% xăng so với lúc nhận"
 
         // Số tiền phải đóng thêm

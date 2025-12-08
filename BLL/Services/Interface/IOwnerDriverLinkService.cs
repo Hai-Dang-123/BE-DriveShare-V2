@@ -13,6 +13,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CreateOwnerDriverLinkAsync(CreateOwerDriverLinkDTO dto);
         Task<ResponseDTO> ChangeStatusAsync(ChangeStatusOwnerDriverLinkDTO dto);
         Task<ResponseDTO> GetDriversByOwnerAsync(int pageNumber = 1, int pageSize = 10);
+        Task<List<LinkedDriverDTO>> GetDriversWithStatsByOwnerIdAsync(Guid ownerId);
     }
 }
 

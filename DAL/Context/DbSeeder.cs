@@ -91,6 +91,7 @@ namespace DAL.Context
 
             // [NEW] Seed Giấy tờ tùy thân
             SeedUserDocuments(modelBuilder);
+            SeedOwnerDriverLinks(modelBuilder);
         }
 
         // ... (Các hàm SeedRole, SeedUser, SeedWallets, SeedDriver, SeedOwner, SeedProvider, SeedContractTemplates giữ nguyên như cũ) ...
@@ -412,6 +413,52 @@ namespace DAL.Context
                     VerifiedAt = seedTime
                 }
             );
-            } 
+        } 
+        
+
+    // ───────────────────────────────────────────────
+        // 🔹 OWNER DRIVER LINKS (SEED ĐỘI XE) - [NEW]
+        // ───────────────────────────────────────────────
+        private static void SeedOwnerDriverLinks(ModelBuilder modelBuilder)
+        {
+            var seedTime = new DateTime(2025, 1, 15, 10, 30, 0, DateTimeKind.Utc);
+
+            modelBuilder.Entity<OwnerDriverLink>().HasData(
+                // 1. Mối quan hệ ĐÃ DUYỆT (Tài xế Văn A thuộc đội của Owner Name)
+                new OwnerDriverLink
+                {
+                    OwnerDriverLinkId = Guid.NewGuid(),
+                    OwnerId = OwnerID,
+                    DriverId = DriverID, // Tài xế Văn A
+                    Status = FleetJoinStatus.APPROVED, // Đã gia nhập thành công
+                    RequestedAt = seedTime.AddDays(-10), // Gửi yêu cầu 10 ngày trước
+                    ApprovedAt = seedTime.AddDays(-9)    // Được duyệt 9 ngày trước
+                },
+
+                // 2. Mối quan hệ ĐANG CHỜ (Tài xế Văn B xin vào đội của Owner Name)
+                new OwnerDriverLink
+                {
+                    OwnerDriverLinkId = Guid.NewGuid(),
+                    OwnerId = OwnerID,
+                    DriverId = DriverID_2, // Tài xế Văn B
+                    Status = FleetJoinStatus.PENDING, // Đang chờ duyệt
+                    RequestedAt = DateTime.UtcNow.AddHours(-2), // Mới gửi yêu cầu 2 tiếng trước
+                    ApprovedAt = null
+                },
+
+                // 3. (Optional) Mối quan hệ của Owner 2 với Tài xế Văn A (Một tài xế có thể thuộc nhiều đội? Tùy logic nghiệp vụ)
+                // Giả sử logic là 1 tài xế chỉ thuộc 1 đội tại 1 thời điểm thì không nên seed cái này.
+                // Nhưng nếu logic là Many-to-Many (Cộng tác viên) thì OK.
+                new OwnerDriverLink
+                {
+                    OwnerDriverLinkId = Guid.NewGuid(),
+                    OwnerId = OwnerID_2, // Owner Name 2
+                    DriverId = DriverID, // Tài xế Văn A cũng đang pending bên này
+                    Status = FleetJoinStatus.PENDING,
+                    RequestedAt = DateTime.UtcNow.AddHours(-5),
+                    ApprovedAt = null
+                }
+            );
         }
-}
+    }
+    }

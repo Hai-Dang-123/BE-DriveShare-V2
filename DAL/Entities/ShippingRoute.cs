@@ -27,6 +27,10 @@ namespace DAL.Entities
         // Lộ trình này được sử dụng bởi Bài đăng gói cước nào?
         public virtual PostPackage? PostPackage { get; set; }
 
+        // [NEW] Lưu trữ kết quả tính toán từ Vietmap
+        public double EstimatedDistanceKm { get; set; }
+        public double EstimatedDurationHours { get; set; }
+
 
     }
 }

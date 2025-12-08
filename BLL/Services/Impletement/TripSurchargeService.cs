@@ -2,6 +2,7 @@
 using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
+using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
@@ -151,6 +152,86 @@ namespace BLL.Services.Impletement
             catch (Exception ex)
             {
                 return new ResponseDTO($"Lỗi cập nhật: {ex.Message}", 500, false);
+            }
+        }
+
+        public async Task<ResponseDTO> CreateSurchargeForContactAsync(TripSurchargeCreateDTO dto, string accessToken)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                // 1. Validate Access Token (Xác thực danh tính Khách)
+                var validAccess = await _unitOfWork.ContactTokenRepo.GetAll()
+                    .Include(t => t.TripContact)
+                    .FirstOrDefaultAsync(t => t.TokenValue == accessToken
+                                           && t.TokenType == TokenType.VIEW_ACCESS_TOKEN
+                                           && !t.IsRevoked
+                                           && t.ExpiredAt > DateTime.UtcNow);
+
+                if (validAccess == null)
+                    return new ResponseDTO("Phiên làm việc đã hết hạn hoặc không hợp lệ.", 401, false);
+
+                // 2. Validate Trip (Đảm bảo tạo đúng Trip của Khách)
+                if (validAccess.TripContact.TripId != dto.TripId)
+                    return new ResponseDTO("Token không khớp với chuyến đi này.", 403, false);
+
+                // 3. Validate Issue (Bắt buộc phải gắn với 1 sự cố cụ thể)
+                // Khách chỉ được phạt dựa trên sự cố hàng hóa (TripDeliveryIssue), không được phạt xe
+                if (!dto.TripDeliveryIssueId.HasValue)
+                {
+                    return new ResponseDTO("Yêu cầu bồi thường phải gắn liền với một sự cố hàng hóa cụ thể.", 400, false);
+                }
+
+                var issue = await _unitOfWork.TripDeliveryIssueRepo.GetByIdAsync(dto.TripDeliveryIssueId.Value);
+                if (issue == null) return new ResponseDTO("Sự cố không tồn tại.", 404, false);
+
+                // Check quyền: Issue này có phải do chính Contact này báo hoặc liên quan đến Record của họ không?
+                // (Logic chặt chẽ: Issue phải thuộc về Record mà Contact này sở hữu)
+                var record = await _unitOfWork.TripDeliveryRecordRepo.GetByIdAsync(issue.DeliveryRecordId ?? Guid.Empty);
+                if (record != null && record.TripContactId != validAccess.TripContactId)
+                {
+                    return new ResponseDTO("Bạn không có quyền tạo yêu cầu trên sự cố này.", 403, false);
+                }
+
+                // 4. Tạo Surcharge (Yêu cầu đền bù)
+                var surcharge = new TripSurcharge
+                {
+                    TripSurchargeId = Guid.NewGuid(),
+                    TripId = dto.TripId,
+
+                    Type = dto.Type, // Thường là CARGO_DAMAGE hoặc CARGO_LOSS
+                    Amount = dto.Amount, // Số tiền khách yêu cầu
+
+                    // Ghi chú rõ nguồn gốc để Owner biết
+                    Description = $"[YÊU CẦU TỪ KHÁCH: {validAccess.TripContact.FullName}] {dto.Description}",
+
+                    Status = SurchargeStatus.PENDING, // Quan trọng: Phải chờ Owner duyệt/trả tiền
+
+                    TripDeliveryIssueId = dto.TripDeliveryIssueId,
+                    TripVehicleHandoverIssueId = null, // Khách không được can thiệp phần xe
+
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _unitOfWork.TripSurchargeRepo.AddAsync(surcharge);
+
+                // 2. Cập nhật trạng thái Issue -> DISPUTED (Đang tranh chấp)
+                // Ý nghĩa: Khách đã báo lỗi (Reported), giờ khách đòi tiền -> Trở thành vấn đề cần giải quyết (Disputed)
+                if (issue.Status != IssueStatus.RESOLVED && issue.Status != IssueStatus.CANCELLED)
+                {
+                    issue.Status = IssueStatus.DISPUTED;
+                    await _unitOfWork.TripDeliveryIssueRepo.UpdateAsync(issue);
+                }
+
+                await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
+
+                return new ResponseDTO("Đã gửi yêu cầu bồi thường thành công. Vui lòng chờ chủ xe xác nhận.", 201, true, new { SurchargeId = surcharge.TripSurchargeId });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return new ResponseDTO($"Lỗi tạo yêu cầu: {ex.Message}", 500, false);
             }
         }
     }

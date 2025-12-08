@@ -17,9 +17,9 @@ namespace Common.DTOs
     public class ShippingRouteInputDTO
     {
         [Required]
-        public string StartLocation { get; set; }
+        public Location StartLocation { get; set; }
         [Required]
-        public string EndLocation { get; set; }
+        public Location EndLocation { get; set; }
         [Required]
         public DateTime ExpectedPickupDate { get; set; }
         [Required]
@@ -28,6 +28,10 @@ namespace Common.DTOs
         public TimeOnly? EndTimeToPickup { get; set; }
         public TimeOnly? StartTimeToDelivery { get; set; }
         public TimeOnly? EndTimeToDelivery { get; set; }
+
+        // [NEW] Lưu trữ kết quả tính toán từ Vietmap
+        public double? EstimatedDistanceKm { get; set; }
+        public double? EstimatedDurationHours { get; set; }
     }
 
     // --- DTOs/PostPackage/PostContactInputDTO.cs ---
@@ -182,10 +186,26 @@ namespace Common.DTOs
         public string Status { get; set; }
         public DateTime Created { get; set; }
 
+        public DriverSuggestionDTO? DriverSuggestion { get; set; } // Thêm dòng này
+        // [MỚI - SỬA LỖI] Thêm dòng này để fix lỗi 'does not contain definition for MyDrivers'
+        public List<OwnerDriverStatusDTO>? MyDrivers { get; set; }
+
         public ProviderInfoInPostDTO Provider { get; set; } = null!;
         public ShippingRouteInPostDTO ShippingRoute { get; set; } = null!;
         public List<PostContactReadDTO> PostContacts { get; set; } = new List<PostContactReadDTO>();
         public List<PackageForPostDTO> Packages { get; set; } = new List<PackageForPostDTO>();
+    }
+
+    // [MỚI - SỬA LỖI] Định nghĩa class này để fix lỗi 'could not be found'
+    public class OwnerDriverStatusDTO
+    {
+        public Guid DriverId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string AvatarUrl { get; set; }
+        public bool IsAvailable { get; set; }
+        public string StatusMessage { get; set; } // "Sẵn sàng" hoặc "Bận chuyến..."
+        public string Stats { get; set; } // "Hôm nay: 2h"
     }
 
 }

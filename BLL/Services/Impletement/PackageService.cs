@@ -62,116 +62,7 @@ namespace BLL.Services.Impletement
         }
         // get all packages
         // Nhớ import: using Common.DTOs;
-        public async Task<ResponseDTO> GetAllPackagesAsync(
-     int pageNumber,
-     int pageSize,
-     string search = null,
-     string sortField = null,
-     string sortDirection = "ASC")
-        {
-            try
-            {
-                // ========= 1) BASE QUERY =========
-                var query = _unitOfWork.PackageRepo.GetAllPackagesQueryable()
-                           .AsNoTracking();
 
-                // ========= 2) SEARCH =========
-                if (!string.IsNullOrWhiteSpace(search))
-                {
-                    var keyword = search.Trim().ToLower();
-
-                    query = query.Where(p =>
-                        (p.Title != null && p.Title.ToLower().Contains(keyword)) ||
-                        (p.Description != null && p.Description.ToLower().Contains(keyword)) ||
-                        (p.PackageCode != null && p.PackageCode.ToLower().Contains(keyword)) ||
-                        (p.Provider != null && p.Provider.FullName.ToLower().Contains(keyword)) ||
-                        (p.Owner != null && p.Owner.FullName.ToLower().Contains(keyword))
-                    );
-                }
-
-                // ========= 3) SORT =========
-                bool desc = sortDirection?.ToUpper() == "DESC";
-
-                query = sortField?.ToLower() switch
-                {
-                    "title" => desc ? query.OrderByDescending(p => p.Title)
-                                           : query.OrderBy(p => p.Title),
-
-                    "weight" => desc ? query.OrderByDescending(p => p.WeightKg)
-                                           : query.OrderBy(p => p.WeightKg),
-
-                    "volume" => desc ? query.OrderByDescending(p => p.VolumeM3)
-                                           : query.OrderBy(p => p.VolumeM3),
-
-                    "code" => desc ? query.OrderByDescending(p => p.PackageCode)
-                                           : query.OrderBy(p => p.PackageCode),
-
-                    "status" => desc ? query.OrderByDescending(p => p.Status)
-                                           : query.OrderBy(p => p.Status),
-
-
-                    _ => query.OrderBy(p => p.Title) // default sort
-                };
-
-                // ========= 4) PAGINATION =========
-                int totalCount = await query.CountAsync();
-
-                var data = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(p => new PackageGetAllDTO
-                    {
-                        PackageId = p.PackageId,
-                        PackageCode = p.PackageCode,
-                        Title = p.Title,
-                        Description = p.Description,
-                        Quantity = p.Quantity,
-                        Unit = p.Unit,
-                        WeightKg = p.WeightKg,
-                        VolumeM3 = p.VolumeM3,
-                        Status = p.Status,
-                        HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
-                        OtherRequirements = p.OtherRequirements,
-
-                        OwnerId = p.OwnerId,
-                        ProviderId = p.ProviderId,
-                        PostPackageId = p.PostPackageId,
-                        TripId = p.TripId,
-
-                        PackageImages = p.PackageImages.Select(img => new PackageImageReadDTO
-                        {
-                            PackageImageId = img.PackageImageId,
-                            PackageId = img.PackageId,
-                            ImageUrl = img.PackageImageURL,
-                            CreatedAt = img.CreatedAt
-                        }).ToList()
-                    })
-                    .ToListAsync();
-
-                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(
-                    data,
-                    totalCount,
-                    pageNumber,
-                    pageSize
-                );
-
-                // ========= 5) RETURN =========
-                return new ResponseDTO(
-                    "Packages retrieved successfully",
-                    StatusCodes.Status200OK,
-                    true,
-                    paginatedResult
-                );
-            }
-            catch (Exception ex)
-            {
-                return new ResponseDTO(
-                    $"Error while getting packages: {ex.Message}",
-                    StatusCodes.Status500InternalServerError,
-                    false
-                );
-            }
-        }
 
         // Get package by id
         public async Task<ResponseDTO> GetPackageByIdAsync(Guid packageId)
@@ -251,273 +142,200 @@ namespace BLL.Services.Impletement
                 };
             }
         }
-        // Get packages by user id
-        // Nhớ import: using Common.DTOs;
-        public async Task<ResponseDTO> GetPackagesByUserIdAsync(int pageNumber, int pageSize)
+        // ==================================================================================
+        // 1. GET ALL PACKAGES (ADMIN/PUBLIC) - ĐÃ SỬA LỖI
+        // ==================================================================================
+        public async Task<ResponseDTO> GetAllPackagesAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortOrder)
+        {
+            try
+            {
+                // 1. Base Query
+                IQueryable<Package> query = _unitOfWork.PackageRepo.GetAllPackagesQueryable()
+                    .Include(p => p.PackageImages) // QUAN TRỌNG: Nhớ Include ảnh để MapToDTO không bị null/rỗng
+                    .AsNoTracking();
+
+                // 2. Search
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var k = search.Trim().ToLower();
+                    query = query.Where(p =>
+                        (p.Title != null && p.Title.ToLower().Contains(k)) ||
+                        (p.Description != null && p.Description.ToLower().Contains(k)) ||
+                        (p.PackageCode != null && p.PackageCode.ToLower().Contains(k)) ||
+                        (p.Provider != null && p.Provider.FullName.ToLower().Contains(k)) ||
+                        (p.Owner != null && p.Owner.FullName.ToLower().Contains(k))
+                    );
+                }
+
+                // 3. Sort
+                query = ApplySorting(query, sortField, sortOrder);
+
+                // 4. Paging & Executing Query
+                var totalCount = await query.CountAsync();
+
+                // --- SỬA Ở ĐÂY ---
+                // Bước 4.1: Lấy dữ liệu thô từ DB về trước
+                var rawData = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(); // Ngắt kết nối với EF Core tại đây
+
+                // Bước 4.2: Map sang DTO trên RAM (Dùng C# thuần)
+                var data = rawData.Select(p => MapToDTO(p)).ToList();
+
+                return new ResponseDTO("Success", 200, true, new PaginatedDTO<PackageGetAllDTO>(data, totalCount, pageNumber, pageSize));
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO(ex.Message, 500, false);
+            }
+        }
+
+        // ==================================================================================
+        // 2. GET PACKAGES BY USER - ĐÃ SỬA LỖI
+        // ==================================================================================
+        public async Task<ResponseDTO> GetPackagesByUserIdAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortOrder)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
-                if (userId == Guid.Empty)
-                    return new ResponseDTO
-                    {
-                        Result = false,
-                        StatusCode = StatusCodes.Status401Unauthorized,
-                        Message = "Unauthorized"
-                    };
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // BƯỚC 1: LẤY IQUERYABLE TỪ REPO (QUAN TRỌNG)
-                // Phương thức này KHÔNG ĐƯỢC .ToListAsync() bên trong Repo
-                var packagesQuery = _unitOfWork.PackageRepo.GetPackagesByUserIdQueryable(userId);
+                IQueryable<Package> query = _unitOfWork.PackageRepo.GetPackagesByUserIdQueryable(userId)
+                    .Include(p => p.PackageImages) // Nhớ Include ảnh
+                    .Where(p => p.Status != PackageStatus.DELETED)
+                    .AsNoTracking();
 
-                // BƯỚC 2: ĐẾM TỔNG SỐ MỤC (Thực thi COUNT trên DB)
-                int totalCount = await packagesQuery.CountAsync();
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var k = search.Trim().ToLower();
+                    query = query.Where(p =>
+                        (p.Title != null && p.Title.ToLower().Contains(k)) ||
+                        (p.PackageCode != null && p.PackageCode.ToLower().Contains(k))
+                    );
+                }
 
-                // BƯỚC 3: LẤY DỮ LIỆU CỦA TRANG HIỆN TẠI
-                // Áp dụng .Skip().Take() trước, .Select() sau, .ToListAsync() cuối cùng
-                // để EF tối ưu hóa truy vấn SQL
-                var packageDto = await packagesQuery
+                query = ApplySorting(query, sortField, sortOrder);
+
+                var totalCount = await query.CountAsync();
+
+                // --- SỬA Ở ĐÂY ---
+                var rawData = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(p => new PackageGetAllDTO
-                    {
-                        PackageId = p.PackageId,
-                        PackageCode = p.PackageCode,
-                        Title = p.Title,
-                        Description = p.Description,
-                        Quantity = p.Quantity,
-                        Unit = p.Unit,
-                        WeightKg = p.WeightKg,
-                        VolumeM3 = p.VolumeM3,
-                        Status = p.Status,
-                        HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
-                        OtherRequirements = p.OtherRequirements,
-                        OwnerId = p.OwnerId,
-                        ProviderId = p.ProviderId,
-                        PostPackageId = p.PostPackageId,
-                        TripId = p.TripId,
-                        
-                        PackageImages = p.PackageImages.Select(pi => new PackageImageReadDTO
-                        {
-                            PackageImageId = pi.PackageImageId,
-                            PackageId = pi.PackageId,
-                            ImageUrl = pi.PackageImageURL,
-                            CreatedAt = pi.CreatedAt,
-                        }).ToList() ?? new List<PackageImageReadDTO>()
-                    })
-                    .ToListAsync(); // Thực thi truy vấn LẤY DỮ LIỆU trên DB
+                    .ToListAsync(); // Lấy dữ liệu về trước
 
-                // BƯỚC 4: TẠO KẾT QUẢ PHÂN TRANG
-                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(packageDto, totalCount, pageNumber, pageSize);
+                var data = rawData.Select(p => MapToDTO(p)).ToList(); // Map sau
 
-                // BƯỚC 5: TRẢ VỀ RESPONSE
-                return new ResponseDTO
-                {
-                    IsSuccess = true,
-                    StatusCode = StatusCodes.Status200OK,
-                    Message = "Packages retrieved successfully",
-                    Result = paginatedResult
-                };
+                return new ResponseDTO("Success", 200, true, new PaginatedDTO<PackageGetAllDTO>(data, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    Result = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = $"An error occurred: {ex.Message}"
-                };
+                return new ResponseDTO(ex.Message, 500, false);
             }
         }
 
-        // (Hàm này được thêm vào lớp PackageService của bạn)
-
-        public async Task<ResponseDTO> GetMyPendingPackagesAsync(int pageNumber, int pageSize)
+        // ==================================================================================
+        // 3. GET PENDING PACKAGES BY USER - ĐÃ SỬA LỖI
+        // ==================================================================================
+        public async Task<ResponseDTO> GetMyPendingPackagesAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortOrder)
         {
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
-                if (userId == Guid.Empty)
-                    return new ResponseDTO
-                    {
-                        Result = false,
-                        StatusCode = StatusCodes.Status401Unauthorized,
-                        Message = "Unauthorized"
-                    };
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // BƯỚC 1: LẤY IQUERYABLE TỪ REPO
-                var packagesQuery = _unitOfWork.PackageRepo.GetPackagesByUserIdQueryable(userId);
+                IQueryable<Package> query = _unitOfWork.PackageRepo.GetPackagesByUserIdQueryable(userId)
+                    .Include(p => p.PackageImages) // Nhớ Include ảnh
+                    .Where(p => p.Status == PackageStatus.PENDING)
+                    .AsNoTracking();
 
-                // ***** THAY ĐỔI QUAN TRỌNG *****
-                // Thêm bộ lọc (filter) để chỉ lấy trạng thái PENDING
-                var pendingPackagesQuery = packagesQuery.Where(p => p.Status == PackageStatus.PENDING);
-                // *******************************
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var k = search.Trim().ToLower();
+                    query = query.Where(p =>
+                        (p.Title != null && p.Title.ToLower().Contains(k)) ||
+                        (p.PackageCode != null && p.PackageCode.ToLower().Contains(k))
+                    );
+                }
 
-                // BƯỚC 2: ĐẾM TỔNG SỐ (dùng query đã lọc)
-                int totalCount = await pendingPackagesQuery.CountAsync();
+                query = ApplySorting(query, sortField, sortOrder);
 
-                // BƯỚC 3: LẤY DỮ LIỆU CỦA TRANG HIỆN TẠI (dùng query đã lọc)
-                var packageDto = await pendingPackagesQuery // <-- Dùng query đã lọc
+                var totalCount = await query.CountAsync();
+
+                // --- SỬA Ở ĐÂY ---
+                var rawData = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(p => new PackageGetAllDTO
-                    {
-                        PackageId = p.PackageId,
-                        PackageCode = p.PackageCode,
-                        Title = p.Title,
-                        Description = p.Description,
-                        Quantity = p.Quantity,
-                        Unit = p.Unit,
-                        WeightKg = p.WeightKg,
-                        VolumeM3 = p.VolumeM3,
-                        Status = p.Status, // Sẽ luôn là "PENDING"
-                        HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
-                        OtherRequirements = p.OtherRequirements,
-                        OwnerId = p.OwnerId,
-                        ProviderId = p.ProviderId,
-                        PostPackageId = p.PostPackageId,
-                        TripId = p.TripId,
-                        PackageImages = p.PackageImages.Select(pi => new PackageImageReadDTO
-                        {
-                            PackageImageId = pi.PackageImageId,
-                            PackageId = pi.PackageId,
-                            ImageUrl = pi.PackageImageURL,
-                            CreatedAt = pi.CreatedAt,
-                        }).ToList() ?? new List<PackageImageReadDTO>()
-                    })
-                    .ToListAsync();
+                    .ToListAsync(); // Lấy dữ liệu về trước
 
-                // BƯỚC 4: TẠO KẾT QUẢ PHÂN TRANG
-                var paginatedResult = new PaginatedDTO<PackageGetAllDTO>(packageDto, totalCount, pageNumber, pageSize);
+                var data = rawData.Select(p => MapToDTO(p)).ToList(); // Map sau
 
-                // BƯỚC 5: TRẢ VỀ RESPONSE
-                return new ResponseDTO
-                {
-                    IsSuccess = true,
-                    StatusCode = StatusCodes.Status200OK,
-                    Message = "Pending packages retrieved successfully", // Cập nhật message
-                    Result = paginatedResult
-                };
+                return new ResponseDTO("Success", 200, true, new PaginatedDTO<PackageGetAllDTO>(data, totalCount, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO
-                {
-                    Result = false,
-                    StatusCode = StatusCodes.Status500InternalServerError,
-                    Message = $"An error occurred: {ex.Message}"
-                };
+                return new ResponseDTO(ex.Message, 500, false);
             }
         }
 
-        // Owner create package
-        //public async Task<ResponseDTO> OwnerCreatePackageAsync(PackageCreateDTO packageDTO)
-        //{
-        //    try
-        //    {
-        //        var userId = _userUtility.GetUserIdFromToken();
-        //        if (userId == Guid.Empty)
-        //            return new ResponseDTO
-        //            {
-        //                Result = false,
-        //                StatusCode = StatusCodes.Status401Unauthorized,
-        //                Message = "Unauthorized"
-        //            };
 
-        //        var package = new Package
-        //        {
-        //            PackageId = Guid.NewGuid(),
-        //            PackageCode = packageDTO.PackageCode,
-        //            Title = packageDTO.Title,
-        //            Description = packageDTO.Description,
-        //            Quantity = packageDTO.Quantity,
-        //            Unit = packageDTO.Unit,
-        //            WeightKg = packageDTO.WeightKg,
-        //            VolumeM3 = packageDTO.VolumeM3,
-        //            HandlingAttributes = packageDTO.HandlingAttributes ?? new(),
-        //            OtherRequirements = packageDTO.OtherRequirements,
-        //            OwnerId = userId,
-        //            ItemId = packageDTO.ItemId,
-        //            PostPackageId = packageDTO.PostPackageId,              
-        //            Status = PackageStatus.PENDING,
-        //            TripId = packageDTO.TripId,
-        //        };
+        // ==================================================================================
+        // PRIVATE HELPERS
+        // ==================================================================================
 
-        //        await _unitOfWork.PackageRepo.AddAsync(package);
-        //        await _unitOfWork.SaveChangeAsync();
+        // Helper Sorting
+        private IQueryable<Package> ApplySorting(IQueryable<Package> query, string? field, string? direction)
+        {
+            bool desc = direction?.ToUpper() == "DESC";
+            return field?.ToLower() switch
+            {
+                "title" => desc ? query.OrderByDescending(p => p.Title) : query.OrderBy(p => p.Title),
+                "code" => desc ? query.OrderByDescending(p => p.PackageCode) : query.OrderBy(p => p.PackageCode),
+                "weight" => desc ? query.OrderByDescending(p => p.WeightKg) : query.OrderBy(p => p.WeightKg),
+                "volume" => desc ? query.OrderByDescending(p => p.VolumeM3) : query.OrderBy(p => p.VolumeM3),
+                "status" => desc ? query.OrderByDescending(p => p.Status) : query.OrderBy(p => p.Status),
+                _ => query.OrderByDescending(p => p.CreatedAt) // Default: Mới nhất lên đầu
+            };
+        }
 
-        //        return new ResponseDTO
-        //        {
-        //            Result = true,
-        //            StatusCode = StatusCodes.Status201Created,
-        //            Message = "Package created successfully",
+        // Helper Mapping DTO (Để tránh lặp code Select)
+        // Lưu ý: Hàm này chỉ dùng được trong Select của LINQ to Entities nếu viết dạng Expression Tree,
+        // nhưng ở đây ta viết inline trong Select nên C# Compiler sẽ tự inline code.
+        // Tuy nhiên, để an toàn với EF Core, ta nên copy logic select vào từng hàm hoặc dùng AutoMapper ProjectTo.
+        // Ở đây tôi viết thủ công lại trong từng hàm Select ở trên để đảm bảo EF Core dịch được SQL.
+        // Hàm dưới đây chỉ để tham khảo hoặc dùng khi đã ToList().
 
-        //        };
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return new ResponseDTO
-        //        {
-        //            Result = false,
-        //            StatusCode = StatusCodes.Status500InternalServerError,
-        //            Message = $"An error occurred: {ex.Message}"
-        //        };
-        //    }
-        //    }
-        //// Provider create package
-        //public async Task<ResponseDTO> ProviderCreatePackageAsync(PackageCreateDTO packageDTO)
-        //{
-        //    try
-        //    {
-        //        var userId = _userUtility.GetUserIdFromToken();
-        //        if (userId == Guid.Empty)
-        //            return new ResponseDTO
-        //            {
-        //                Result = false,
-        //                StatusCode = StatusCodes.Status401Unauthorized,
-        //                Message = "Unauthorized"
-        //            };
+        private PackageGetAllDTO MapToDTO(Package p)
+        {
+            return new PackageGetAllDTO
+            {
+                PackageId = p.PackageId,
+                PackageCode = p.PackageCode,
+                Title = p.Title,
+                Description = p.Description,
+                Quantity = p.Quantity,
+                Unit = p.Unit,
+                WeightKg = p.WeightKg,
+                VolumeM3 = p.VolumeM3,
+                Status = p.Status,
+                HandlingAttributes = p.HandlingAttributes ?? new List<string>(),
+                OtherRequirements = p.OtherRequirements,
+                OwnerId = p.OwnerId,
+                ProviderId = p.ProviderId,
+                PostPackageId = p.PostPackageId,
+                TripId = p.TripId,
+                PackageImages = p.PackageImages.Select(img => new PackageImageReadDTO
+                {
+                    PackageImageId = img.PackageImageId,
+                    PackageId = img.PackageId,
+                    ImageUrl = img.PackageImageURL,
+                    CreatedAt = img.CreatedAt
+                }).ToList()
+            };
+        }
 
-        //        var package = new Package
-        //        {
-        //            PackageId = Guid.NewGuid(),
-        //            PackageCode = packageDTO.PackageCode,
-        //            Title = packageDTO.Title,
-        //            Description = packageDTO.Description,
-        //            Quantity = packageDTO.Quantity,
-        //            Unit = packageDTO.Unit,
-        //            WeightKg = packageDTO.WeightKg,
-        //            VolumeM3 = packageDTO.VolumeM3,
-        //            HandlingAttributes = packageDTO.HandlingAttributes ?? new(),
-        //            OtherRequirements = packageDTO.OtherRequirements,
-        //            ProviderId = userId,
-        //            ItemId = packageDTO.ItemId,
-        //            PostPackageId = packageDTO.PostPackageId,
-        //            TripId = packageDTO.TripId,
-        //            Status = PackageStatus.PENDING,
-        //        };
 
-        //        await _unitOfWork.PackageRepo.AddAsync(package);
-        //        await _unitOfWork.SaveChangeAsync();
-
-        //        return new ResponseDTO
-        //        {
-        //            Result = true,
-        //            StatusCode = StatusCodes.Status201Created,
-        //            Message = "Package created successfully",
-
-        //        };
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return new ResponseDTO
-        //        {
-        //            Result = false,
-        //            StatusCode = StatusCodes.Status500InternalServerError,
-        //            Message = $"An error occurred: {ex.Message}"
-        //        };
-        //    }
-        //}
 
 
         public async Task<ResponseDTO> OwnerCreatePackageAsync(PackageCreateDTO packageDTO)

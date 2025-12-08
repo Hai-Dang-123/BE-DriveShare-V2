@@ -36,6 +36,8 @@ namespace Common.DTOs
 
         // THÊM MỚI: Thông tin chuyến đi và hàng hóa chi tiết
         public TripDetailForRecordForDriverDTO? TripDetail { get; set; }
+
+        public List<DeliveryIssueForDriverDTO> Issues { get; set; } = new List<DeliveryIssueForDriverDTO>();
     }
 
     // Các DTO phụ trợ cho Trip và Package
@@ -46,6 +48,30 @@ namespace Common.DTOs
         public string Type { get; set; }
         public List<PackageDetailForDriverDTO> Packages { get; set; } = new();
     }
+
+    public class DeliveryIssueForDriverDTO
+    {
+        public Guid TripDeliveryIssueId { get; set; }
+        public string IssueType { get; set; } // Enum string
+        public string Description { get; set; }
+        public string Status { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public List<string> ImageUrls { get; set; } = new List<string>();
+
+        // [NEW] DANH SÁCH BỒI THƯỜNG / PHẠT LIÊN QUAN ĐẾN LỖI NÀY
+        public List<IssueSurchargeForDriverDTO> Surcharges { get; set; } = new List<IssueSurchargeForDriverDTO>();
+    }
+
+    // DTO chi tiết tiền phạt
+    public class IssueSurchargeForDriverDTO
+    {
+        public Guid TripSurchargeId { get; set; }
+        public string Type { get; set; }        // Ví dụ: CARGO_DAMAGE
+        public decimal Amount { get; set; }     // Số tiền: 500.000
+        public string Description { get; set; } // "Vỡ 2 thùng"
+        public string Status { get; set; }      // PENDING, PAID
+    }
+
 
     public class PackageDetailForDriverDTO
     {

@@ -162,29 +162,7 @@ namespace BLL.Services.Impletement
             }
         }
 
-        // --- GeocodeAsync (Hàm này không cần sửa) ---
-        //public async Task<Location?> GeocodeAsync(string address, string? focusLatLon = null)
-        //{
-        //    if (string.IsNullOrWhiteSpace(address))
-        //    {
-        //        return new Location(address, 0.0, 0.0);
-        //    }
-
-        //    var searchResults = await SearchAsync(address, focusLatLon);
-        //    var bestMatch = searchResults.FirstOrDefault();
-
-        //    if (bestMatch == null || bestMatch.Coordinates == null || bestMatch.Coordinates.Count < 2)
-        //    {
-        //        return new Location(address, 0.0, 0.0);
-        //    }
-
-        //    return new Location(
-        //        bestMatch.Address,
-        //        bestMatch.Latitude,
-        //        bestMatch.Longitude
-        //    );
-        //}
-        // --- 2. GEOCODE ASYNC (THÔNG MINH - TỰ ĐỘNG TÌM KHUVỰC LÂN CẬN NẾU ĐỊA CHỈ KHÓ TÌM) ---
+       
         public async Task<Location?> GeocodeAsync(string address, string? focusLatLon = null)
         {
             // 1. Giữ lại địa chỉ gốc để nếu thất bại hoàn toàn thì vẫn trả về text gốc (với tọa độ 0,0)
@@ -317,6 +295,167 @@ namespace BLL.Services.Impletement
                 _logger.LogError(ex, "An unexpected error occurred in VietMap GetRouteAsync (V3).");
                 return null;
             }
+        }
+
+        // --- HÀM MỚI: TÍNH THỜI GIAN DI CHUYỂN DỰ KIẾN (Giờ) ---
+        public async Task<double> GetEstimatedDurationHoursAsync(Location start, Location end, string vehicle = "truck")
+        {
+            // 1. Gọi API lấy lộ trình
+            // Nếu start/end chưa có tọa độ, GetRouteAsync sẽ fail. 
+            // (Ở Controller/Service gọi hàm này cần đảm bảo Location đã có Lat/Lon hoặc Geocode trước)
+            var path = await GetRouteAsync(start, end, vehicle);
+
+            if (path == null)
+            {
+                // Nếu không tìm thấy đường, trả về 0 hoặc throw exception tùy logic.
+                // Ở đây trả về 0 để Service bên ngoài xử lý fallback.
+                return 0;
+            }
+
+            // 2. Lấy thời gian chạy xe thuần túy (Mili-giây -> Giờ)
+            double rawHours = path.Time / (1000.0 * 60 * 60);
+
+            // 3. Tính toán Buffer (Hệ số an toàn cho Logistics)
+            // Xe tải chạy thực tế luôn lâu hơn Google Maps/Vietmap dự báo lý tưởng
+            double safetyFactor = 1.15; // Cộng thêm 15% (tắc đường, đèn đỏ, đường xấu)
+            double loadingUnloadingTime = 0.5; // Cộng thêm 30 phút cho việc lấy xe/đậu xe tại bến (ước lượng trung bình)
+
+            double totalEstimatedHours = (rawHours * safetyFactor) + loadingUnloadingTime;
+
+            return Math.Round(totalEstimatedHours, 2); // Làm tròn 2 số thập phân
+        }
+
+        // =========================================================================
+        // HÀM MỚI: KIỂM TRA ĐIỂM CÓ NẰM TRÊN LỘ TRÌNH KHÔNG (Offline Calculation)
+        // =========================================================================
+        public bool IsLocationOnRoute(Location point, string encodedPolyline, double bufferKm = 5.0)
+        {
+            if (point == null || !point.Latitude.HasValue || !point.Longitude.HasValue || string.IsNullOrEmpty(encodedPolyline))
+                return false;
+
+            // 1. Giải mã Polyline thành danh sách tọa độ
+            var routePoints = DecodePolyline(encodedPolyline);
+
+            // 2. Kiểm tra khoảng cách từ điểm đến đường gấp khúc (Polyline)
+            // Nếu khoảng cách nhỏ nhất <= bufferKm thì trả về true
+            return IsPointNearPolyline(point, routePoints, bufferKm);
+        }
+
+        // --- HELPER: GIẢI MÃ POLYLINE (Google Encoded Polyline Algorithm) ---
+        private List<Location> DecodePolyline(string encodedPoints)
+        {
+            if (string.IsNullOrEmpty(encodedPoints)) return null;
+
+            var poly = new List<Location>();
+            char[] polylineChars = encodedPoints.ToCharArray();
+            int index = 0;
+
+            int currentLat = 0;
+            int currentLng = 0;
+            int next5bits;
+            int sum;
+            int shifter;
+
+            while (index < polylineChars.Length)
+            {
+                // Calculate Latitude
+                sum = 0;
+                shifter = 0;
+                do
+                {
+                    next5bits = (int)polylineChars[index++] - 63;
+                    sum |= (next5bits & 31) << shifter;
+                    shifter += 5;
+                } while (next5bits >= 32);
+
+                if (index >= polylineChars.Length) break;
+
+                currentLat += (sum & 1) == 1 ? ~(sum >> 1) : (sum >> 1);
+
+                // Calculate Longitude
+                sum = 0;
+                shifter = 0;
+                do
+                {
+                    next5bits = (int)polylineChars[index++] - 63;
+                    sum |= (next5bits & 31) << shifter;
+                    shifter += 5;
+                } while (next5bits >= 32);
+
+                currentLng += (sum & 1) == 1 ? ~(sum >> 1) : (sum >> 1);
+
+                poly.Add(new Location
+                {
+                    Latitude = Convert.ToDouble(currentLat) / 100000.0,
+                    Longitude = Convert.ToDouble(currentLng) / 100000.0
+                });
+            }
+
+            return poly;
+        }
+
+        // --- HELPER: TÍNH KHOẢNG CÁCH TỪ ĐIỂM ĐẾN ĐƯỜNG DẪN ---
+        private bool IsPointNearPolyline(Location point, List<Location> routePath, double maxDistKm)
+        {
+            if (routePath == null || routePath.Count < 2) return false;
+
+            // Duyệt qua từng đoạn thẳng (segment) của lộ trình
+            for (int i = 0; i < routePath.Count - 1; i++)
+            {
+                var p1 = routePath[i];
+                var p2 = routePath[i + 1];
+
+                // Tính khoảng cách từ point đến đoạn thẳng p1-p2
+                double dist = GetDistanceFromPointToSegment(point, p1, p2);
+
+                if (dist <= maxDistKm) return true; // Tìm thấy điểm gần -> Hợp lệ
+            }
+
+            return false;
+        }
+
+        // Công thức tính khoảng cách từ điểm C đến đoạn thẳng AB
+        private double GetDistanceFromPointToSegment(Location c, Location a, Location b)
+        {
+            // Chuyển Lat/Lon sang đơn vị mét phẳng (gần đúng) hoặc dùng Haversine
+            // Để đơn giản và nhanh, ta dùng công thức hình học phẳng trên toạ độ rồi nhân hệ số Km
+            // (Lưu ý: Đây là phép tính gần đúng, đủ dùng cho logic bán kính 5-10km)
+
+            double A = c.Latitude.Value - a.Latitude.Value;
+            double B = c.Longitude.Value - a.Longitude.Value;
+            double C = b.Latitude.Value - a.Latitude.Value;
+            double D = b.Longitude.Value - a.Longitude.Value;
+
+            double dot = A * C + B * D;
+            double len_sq = C * C + D * D;
+            double param = -1;
+            if (len_sq != 0) // avoid division by 0
+                param = dot / len_sq;
+
+            double xx, yy;
+
+            if (param < 0)
+            {
+                xx = a.Latitude.Value;
+                yy = a.Longitude.Value;
+            }
+            else if (param > 1)
+            {
+                xx = b.Latitude.Value;
+                yy = b.Longitude.Value;
+            }
+            else
+            {
+                xx = a.Latitude.Value + param * C;
+                yy = a.Longitude.Value + param * D;
+            }
+
+            double dx = c.Latitude.Value - xx;
+            double dy = c.Longitude.Value - yy;
+
+            // Convert độ sang Km (1 độ ~ 111km)
+            double distDegree = Math.Sqrt(dx * dx + dy * dy);
+            return distDegree * 111.0;
         }
     }
 }

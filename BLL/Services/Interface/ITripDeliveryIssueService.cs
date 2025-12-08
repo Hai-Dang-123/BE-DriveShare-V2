@@ -10,6 +10,7 @@ namespace BLL.Services.Interface
     public interface ITripDeliveryIssueService
     {
         Task<ResponseDTO> ReportIssueAsync(TripDeliveryIssueCreateDTO dto);
+        Task<ResponseDTO> ReportIssueForContactAsync(TripDeliveryIssueCreateDTO dto, string accessToken);
         Task<ResponseDTO> GetIssuesByTripIdAsync(Guid tripId);
         Task<ResponseDTO> GetIssueByIdAsync(Guid issueId);
         Task<ResponseDTO> UpdateIssueStatusAsync(UpdateIssueStatusDTO dto);

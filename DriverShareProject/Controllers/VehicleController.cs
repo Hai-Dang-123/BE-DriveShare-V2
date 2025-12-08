@@ -40,6 +40,14 @@ namespace DriverShareProject.Controllers
             var result = await _vehicleService.SoftDeleteAsync(id);
             return StatusCode(result.StatusCode, result);
         }
+
+        [HttpGet("{id:guid}")]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var result = await _vehicleService.GetByIdAsync(id);
+            return StatusCode(result.StatusCode, result);
+        }
+        // 1. Get All (Admin/Public)
         [HttpGet]
         public async Task<IActionResult> GetAllVehicles(
             [FromQuery] int pageNumber = 1,
@@ -49,39 +57,37 @@ namespace DriverShareProject.Controllers
             [FromQuery] string? sortOrder = "ASC"
         )
         {
-            var response = await _vehicleService.GetAllAsync(
-                pageNumber,
-                pageSize,
-                search,
-                sortBy,
-                sortOrder
-            );
-
+            var response = await _vehicleService.GetAllAsync(pageNumber, pageSize, search, sortBy, sortOrder);
             return StatusCode(response.StatusCode, response);
         }
 
-        [HttpGet("{id:guid}")]
-        public async Task<IActionResult> GetById(Guid id)
-        {
-            var result = await _vehicleService.GetByIdAsync(id);
-            return StatusCode(result.StatusCode, result);
-        }
-
+        // 2. Get My Vehicles (Owner - Tất cả xe)
         [HttpGet("get-my-vehicles")]
+        [Authorize]
         public async Task<IActionResult> GetMyVehicles(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10)
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,      // Thêm
+            [FromQuery] string? sortBy = null,      // Thêm
+            [FromQuery] string? sortOrder = "ASC"   // Thêm
+        )
         {
-            var result = await _vehicleService.GetMyVehiclesAsync(pageNumber, pageSize);
+            var result = await _vehicleService.GetMyVehiclesAsync(pageNumber, pageSize, search, sortBy, sortOrder);
             return StatusCode(result.StatusCode, result);
         }
 
+        // 3. Get My Active Vehicles (Owner - Chỉ xe Active)
         [HttpGet("get-my-active-vehicles")]
+        [Authorize]
         public async Task<IActionResult> GetMyActiveVehicles(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10)
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,      // Thêm
+            [FromQuery] string? sortBy = null,      // Thêm
+            [FromQuery] string? sortOrder = "ASC"   // Thêm
+        )
         {
-            var result = await _vehicleService.GetMyActiveVehiclesAsync(pageNumber, pageSize);
+            var result = await _vehicleService.GetMyActiveVehiclesAsync(pageNumber, pageSize, search, sortBy, sortOrder);
             return StatusCode(result.StatusCode, result);
         }
     }

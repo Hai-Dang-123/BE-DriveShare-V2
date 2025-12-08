@@ -13,6 +13,17 @@ namespace Common.DTOs
         public DateTime CreateAt { get; set; }
         public DateTime UpdateAt { get; set; }
 
+
+        // [UPDATED] Thông tin địa điểm LẤY XE (Start of Trip)
+        public string VehiclePickupAddress { get; set; }
+        public double VehiclePickupLat { get; set; }
+        public double VehiclePickupLng { get; set; }
+
+        // [UPDATED] Thông tin địa điểm TRẢ XE (End of Trip)
+        public string VehicleDropoffAddress { get; set; }
+        public double VehicleDropoffLat { get; set; }
+        public double VehicleDropoffLng { get; set; }
+
         // 🧩 Vehicle
         public VehicleSummaryDTO Vehicle { get; set; } = new();
 
