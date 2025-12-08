@@ -30,7 +30,11 @@ namespace BLL.Services.Impletement
         {
             try
             {
-                var package = await _unitOfWork.PackageRepo.GetByIdAsync(packageId);
+                var package = await _unitOfWork.PackageRepo
+                    .GetAll()
+                    .Include(p => p.Item)
+                    .FirstOrDefaultAsync(p => p.PackageId == packageId);
+
                 if (package == null)
                 {
                     return new ResponseDTO
@@ -40,14 +44,28 @@ namespace BLL.Services.Impletement
                         Message = "Package not found"
                     };
                 }
+
+                // 1. Update status của Package
                 package.Status = PackageStatus.DELETED;
+
+                // 2. Update status của Item => PENDING
+                if (package.Item != null)
+                {
+                    package.Item.Status = Common.Enums.Status.ItemStatus.PENDING;
+                    await _unitOfWork.ItemRepo.UpdateAsync(package.Item);
+                }
+
+                // 3. Update Package
                 await _unitOfWork.PackageRepo.UpdateAsync(package);
+
+                // 4. Save changes
                 await _unitOfWork.SaveChangeAsync();
+
                 return new ResponseDTO
                 {
                     Result = true,
                     StatusCode = StatusCodes.Status200OK,
-                    Message = "Package deleted successfully"
+                    Message = "Package deleted and item status updated to PENDING"
                 };
             }
             catch (Exception ex)
@@ -60,6 +78,7 @@ namespace BLL.Services.Impletement
                 };
             }
         }
+
         // get all packages
         // Nhớ import: using Common.DTOs;
 
@@ -479,6 +498,7 @@ namespace BLL.Services.Impletement
 
             return new ResponseDTO
             {
+                IsSuccess = true,
                 Result = true,
                 StatusCode = StatusCodes.Status200OK,
                 Message = "Package updated successfully",
