@@ -663,6 +663,8 @@ namespace BLL.Services.Impletement
                     CreatedAt = doc.CreatedAt,
                     LastUpdatedAt = doc.LastUpdatedAt,
 
+                    Status = doc.Status.ToString(),
+
                     // Thông tin chi tiết (Ảnh + Log)
                     FrontImageUrl = doc.FrontImageUrl,
                     BackImageUrl = doc.BackImageUrl,

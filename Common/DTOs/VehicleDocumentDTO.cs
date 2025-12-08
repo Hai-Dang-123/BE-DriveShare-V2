@@ -32,14 +32,24 @@ namespace Common.DTOs
     // 2. DTO cho chi tiết (Đầy đủ ảnh và thông tin xe để Staff đối chiếu)
     public class VehicleDocumentPendingDetailDTO : VehicleDocumentPendingSummaryDTO
     {
+        public string Status { get; set; }
+        public string? AdminNotes { get; set; }
+        public DateTime? ProcessedAt { get; set; }
+
         public string FrontDocumentUrl { get; set; }
         public string? BackDocumentUrl { get; set; }
         public DateTime? ExpirationDate { get; set; }
 
-        // Thông tin xe bổ sung để Staff kiểm tra khớp hay không
         public string VehicleModel { get; set; }
         public string VehicleBrand { get; set; }
         public string VehicleColor { get; set; }
         public string OwnerPhone { get; set; }
+    }
+
+    public class ReviewVehicleDocumentDTO
+    {
+        public Guid DocumentId { get; set; }  
+        public bool IsApproved { get; set; }
+        public string? RejectReason { get; set; }
     }
 }

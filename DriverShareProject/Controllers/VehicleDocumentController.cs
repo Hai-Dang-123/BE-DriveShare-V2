@@ -47,20 +47,20 @@ namespace DriverShareProject.Controllers
         /// </summary>
         /// <param name="request">DTO chứa ID giấy tờ và kết quả duyệt</param>
         [HttpPost("review")]
-        [Authorize(Roles = "Admin,Staff")] // Chỉ Staff/Admin mới được gọi
-        public async Task<IActionResult> ReviewDocument([FromBody] ReviewDocumentDTO request)
+        //[Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> ReviewDocument([FromBody] ReviewVehicleDocumentDTO request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            // Gọi hàm Review trong Service
             var response = await _service.ReviewVehicleDocumentAsync(
-                request.UserDocumentId, // Lưu ý: Dùng chung DTO ReviewDocumentDTO (UserDocumentId ở đây hiểu là VehicleDocumentId)
+                request.DocumentId,
                 request.IsApproved,
                 request.RejectReason
             );
 
             return StatusCode(response.StatusCode, response);
         }
+
 
         /// <summary>
         /// 1. Lấy danh sách tóm tắt các giấy tờ xe đang chờ duyệt (Phân trang)
