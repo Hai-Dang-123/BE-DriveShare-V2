@@ -252,6 +252,7 @@ namespace BLL.Services.Impletement
         {
             try
             {
+                
                 var doc = await _unitOfWork.VehicleDocumentRepo.GetAll()
                     .AsNoTracking()
                     .Include(d => d.Vehicle).ThenInclude(v => v.Owner) // Include sâu để lấy thông tin đối chiếu
@@ -263,14 +264,15 @@ namespace BLL.Services.Impletement
                 {
                     VehicleDocumentId = doc.VehicleDocumentId,
                     DocumentType = doc.DocumentType.ToString(),
+                    Status = doc.Status.ToString(),
+                    AdminNotes = doc.AdminNotes,
+                    ProcessedAt = doc.ProcessedAt,
                     CreatedAt = doc.CreatedAt,
-
-                    // Ảnh & Hạn
-                    FrontDocumentUrl = doc.FrontDocumentUrl,
-                    BackDocumentUrl = doc.BackDocumentUrl,
                     ExpirationDate = doc.ExpirationDate,
 
-                    // Thông tin đối chiếu
+                    FrontDocumentUrl = doc.FrontDocumentUrl,
+                    BackDocumentUrl = doc.BackDocumentUrl,
+
                     VehiclePlate = doc.Vehicle?.PlateNumber ?? "N/A",
                     VehicleBrand = doc.Vehicle?.Brand ?? "N/A",
                     VehicleModel = doc.Vehicle?.Model ?? "N/A",
@@ -278,6 +280,7 @@ namespace BLL.Services.Impletement
                     OwnerName = doc.Vehicle?.Owner?.FullName ?? "N/A",
                     OwnerPhone = doc.Vehicle?.Owner?.PhoneNumber ?? "N/A"
                 };
+
 
                 return new ResponseDTO("Success", 200, true, detail);
             }
