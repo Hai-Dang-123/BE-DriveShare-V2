@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace Common.DTOs
 {
@@ -67,9 +68,16 @@ namespace Common.DTOs
     // DTO input cho Staff duyệt bài
     public class ReviewDocumentDTO
     {
+        [JsonPropertyName("userDocumentId")]
         public Guid UserDocumentId { get; set; }
+
+        [JsonPropertyName("isApproved")]
         public bool IsApproved { get; set; }
-        public string? RejectReason { get; set; } // Bắt buộc nếu từ chối
+
+        // FE gửi "rejectionReason"
+        // Backend dùng RejectReason
+        [JsonPropertyName("rejectionReason")]
+        public string? RejectReason { get; set; }
     }
 
     // DTO hiển thị danh sách chờ duyệt (Output)
@@ -88,6 +96,9 @@ namespace Common.DTOs
     // DTO chi tiết cho màn hình Review (Đầy đủ thông tin)
     public class PendingReviewDetailDTO : PendingReviewSummaryDTO
     {
+
+        public string Status { get; set; } = string.Empty;
+
         public string FrontImageUrl { get; set; } = string.Empty;
         public string? BackImageUrl { get; set; }
         public string? PortraitImageUrl { get; set; }
