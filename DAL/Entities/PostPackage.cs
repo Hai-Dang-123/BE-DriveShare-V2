@@ -18,6 +18,8 @@ namespace DAL.Entities
         public decimal OfferedPrice { get; set; } // Giá cước Provider đưa ra
         public PostStatus Status { get; set; }
 
+        public string? AIAnalysisJson { get; set; }
+
         // --- GỢI Ý BẮT BUỘC (Dựa trên sơ đồ quan hệ) ---
 
         // 1. Ai là người đăng bài? (Provider - PostPackage 1-n)

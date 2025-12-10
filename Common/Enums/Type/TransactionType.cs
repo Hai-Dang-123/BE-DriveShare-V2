@@ -19,7 +19,9 @@ namespace Common.Enums.Type
         POST_TRIP_PAYMENT,           // Provider thanh toán cho Trip
         POST_PAYMENT,           // Provider thanh toán khi đăng bài post
         PLATFORM_FEE,           // Phí nền tảng
-        DRIVER_SERVICE_PAYMENT  // Owner thanh toán tiền thuê tài xế (cho nền tảng giữ)
+        DRIVER_SERVICE_PAYMENT,  // Owner thanh toán tiền thuê tài xế (cho nền tảng giữ)
+
+        PENALTY               // Phạt vi phạm
     }
 
 }

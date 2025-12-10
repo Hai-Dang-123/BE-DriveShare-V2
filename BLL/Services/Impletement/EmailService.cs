@@ -353,6 +353,31 @@ namespace BLL.Services.Impletement
         </div>";
             }
 
+            // --- BLOCK HIỂN THỊ PHẠT / BỒI THƯỜNG (Surcharges) ---
+            string surchargeHtml = "";
+            if (model.Surcharges != null && model.Surcharges.Any())
+            {
+                var rows = "";
+                foreach (var sur in model.Surcharges)
+                {
+                    // Màu sắc: Nếu là Provider nhận tiền -> Xanh. Nếu là Driver bị phạt -> Đỏ.
+                    string color = model.Role == "Provider" || model.Role == "Owner" ? "#16A34A" : "#DC2626";
+                    string sign = model.Role == "Provider" || model.Role == "Owner" ? "+" : "-"; // Nhận tiền hoặc Bị trừ
+
+                    rows += $@"
+        <div style='display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px;'>
+            <span style='color:#4B5563;'>{sur.Type}: {sur.Description}</span>
+            <span style='font-weight:600; color:{color};'>{sign}{sur.Amount:N0} ₫</span>
+        </div>";
+                }
+
+                surchargeHtml = $@"
+    <div style='background-color:#FFF7ED; border:1px dashed #F97316; padding:15px; border-radius:6px; margin-bottom:20px;'>
+        <div style='font-size:12px; font-weight:700; color:#C2410C; margin-bottom:8px; text-transform:uppercase;'>Chi tiết điều chỉnh (Phạt/Bồi thường)</div>
+        {rows}
+    </div>";
+            }
+
             // --- TEMPLATE CHUNG ---
             var body = $@"
 <!DOCTYPE html>
@@ -382,6 +407,8 @@ namespace BLL.Services.Impletement
             <p>Chuyến đi đã kết thúc lúc {model.CompletedAt}.</p>
 
             {financialHtml}
+
+{surchargeHtml}  <div class='section-title'>Thông tin vận hành</div>
 
             <div class='section-title'>Thông tin vận hành</div>
             <table class='grid'>

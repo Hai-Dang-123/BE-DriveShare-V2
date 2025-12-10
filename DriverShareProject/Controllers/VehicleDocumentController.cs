@@ -28,12 +28,12 @@ namespace DriverShareProject.Controllers
         /// <param name="vehicleId">ID của xe</param>
         /// <param name="request">Form chứa ảnh (Front/Back) và ngày hết hạn</param>
         [HttpPost("add/{vehicleId:guid}")]
-        [Authorize] // Bắt buộc đăng nhập
-        [Consumes("multipart/form-data")] // Quan trọng để nhận file upload
+        //[Authorize] // Bắt buộc đăng nhập
+
         public async Task<IActionResult> AddDocument(Guid vehicleId, [FromForm] AddVehicleDocumentDTO request)
         {
-            // Validate cơ bản
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            //// Validate cơ bản
+            //if (!ModelState.IsValid) return BadRequest(ModelState);
 
             var response = await _service.AddDocumentAsync(vehicleId, request);
             return StatusCode(response.StatusCode, response);

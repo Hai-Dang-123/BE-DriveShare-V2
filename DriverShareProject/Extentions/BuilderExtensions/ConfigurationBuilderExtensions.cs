@@ -29,6 +29,9 @@ namespace DriverShareProject.Extentions.BuilderExtensions
             // VNPT Auth
             builder.Services.Configure<VNPTAuthSettings>(builder.Configuration.GetSection("VNPTAuth"));
 
+            // OpenAI
+            builder.Services.Configure<OpenAISetting>(builder.Configuration.GetSection("OpenAI"));
+
 
 
             return builder;
