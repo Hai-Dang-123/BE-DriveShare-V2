@@ -670,9 +670,12 @@ namespace BLL.Services.Impletement
                     BackImageUrl = doc.BackImageUrl,
                     PortraitImageUrl = doc.PortraitImageUrl,
                     EkycLog = doc.EkycLog,
+                    RejectionReason = doc.RejectionReason,
 
                     // 🌟 PHÂN TÍCH EKYC LOG (Chỉ chạy khi xem detail)
                     AnalysisResult = AnalyzeEkycLog(doc.EkycLog)
+
+
                 };
 
                 return new ResponseDTO("Lấy chi tiết thành công.", 200, true, detailDto);

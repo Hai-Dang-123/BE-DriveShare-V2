@@ -104,5 +104,6 @@ namespace Common.DTOs
         public string? PortraitImageUrl { get; set; }
         public string? EkycLog { get; set; } // Log gốc (nếu cần debug)
         public EkycAnalysisResultDTO AnalysisResult { get; set; } // Kết quả phân tích chi tiết
+        public string? RejectionReason { get; set; }
     }
 }
