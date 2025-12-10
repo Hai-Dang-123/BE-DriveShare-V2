@@ -26,6 +26,9 @@ namespace BLL.Services.Implement
         // =========================================================
         // 1) CREATE CONTRACT (Owner ↔ Driver)
         // =========================================================
+        // =========================================================
+        // 1) CREATE CONTRACT (Owner ↔ Driver)
+        // =========================================================
         public async Task<ResponseDTO> CreateAsync(CreateTripDriverContractDTO dto)
         {
             try
@@ -60,12 +63,9 @@ namespace BLL.Services.Implement
                     ContractCode = $"CON-DRV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
                     TripId = trip.TripId,
                     OwnerId = ownerId,
-
-                    CounterpartyId = driver.UserId, // Driver kế thừa BaseUser → UserId
+                    CounterpartyId = driver.UserId,
                     ContractTemplateId = template.ContractTemplateId,
                     Version = template.Version,
-
-
                     Type = ContractType.DRIVER_CONTRACT,
                     Status = ContractStatus.PENDING,
                     CreateAt = DateTime.UtcNow
@@ -73,30 +73,46 @@ namespace BLL.Services.Implement
 
                 await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
 
-                // chuyển status trip
+                // Chuyển status trip
                 trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
                 trip.UpdateAt = DateTime.UtcNow;
-
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
-
 
                 await _unitOfWork.SaveChangeAsync();
 
+                // [FIX LỖI MAPPING DTO TẠI ĐÂY]
                 var dtoOut = new TripDriverContractDTO
                 {
                     ContractId = contract.ContractId,
                     ContractCode = contract.ContractCode,
                     TripId = trip.TripId,
                     TripCode = trip.TripCode,
-                    OwnerId = ownerId,
-                    OwnerName = trip.Owner?.FullName ?? string.Empty,
-                    DriverId = driver.UserId,
-                    DriverName = driver.FullName ?? string.Empty,
-                    ContractTemplateId = contract.ContractTemplateId,
+
+                    // Thay thế các trường OwnerId, OwnerName... bằng PartyA/PartyB
+                    PartyA = new ContractPartyDTO
+                    {
+                        UserId = ownerId,
+                        // Lưu ý: trip.Owner có thể null nếu chưa Include, nên check null
+                        FullName = trip.Owner != null ? trip.Owner.FullName : "Owner Info Missing",
+                        Role = "Owner"
+                        // Các trường khác như CompanyName, TaxCode có thể map nếu trip.Owner đã được include
+                    },
+
+                    PartyB = new ContractPartyDTO
+                    {
+                        UserId = driver.UserId,
+                        FullName = driver.FullName,
+                        Role = "Driver"
+                    },
+
+                    ContractTemplateId = contract.ContractTemplateId.Value,
                     TemplateName = template.ContractTemplateName,
                     Version = contract.Version,
-                    Status = contract.Status,
-                    Type = contract.Type,
+
+                    // [FIX LỖI ENUM -> STRING]
+                    Status = contract.Status.ToString(),
+                    Type = contract.Type.ToString(),
+
                     CreateAt = contract.CreateAt
                 };
 
@@ -108,13 +124,11 @@ namespace BLL.Services.Implement
             }
         }
 
-        // =========================================================
         // 2) SIGN CONTRACT (Owner hoặc Driver ký)
-        //  - Nếu 1 bên ký → vẫn PENDING
-        //  - Nếu cả 2 bên ký → COMPLETED + EffectiveDate
+        //    - Logic: Ký xong hợp đồng này -> Check xem còn hợp đồng nào khác chưa ký không?
+        //    - Nếu hết rồi -> Trip chuyển status DONE
+        //    - Nếu chưa -> Trip vẫn PENDING
         // =========================================================
-        // ... (Các using cần thiết: BCrypt.Net, Common.Enums.Type, v.v...)
-
         public async Task<ResponseDTO> SignAsync(SignContractDTO dto)
         {
             try
@@ -124,7 +138,7 @@ namespace BLL.Services.Implement
                     return new ResponseDTO("Unauthorized", 401, false);
 
                 // ========================================================================
-                // 🛡️ BƯỚC 0: XÁC THỰC OTP (QUAN TRỌNG NHẤT)
+                // 🛡️ BƯỚC 0: XÁC THỰC OTP
                 // ========================================================================
 
                 // 1. Tìm Token OTP hợp lệ
@@ -154,10 +168,10 @@ namespace BLL.Services.Implement
                 await _unitOfWork.UserTokenRepo.UpdateAsync(validToken);
 
                 // ========================================================================
-                // 📝 BƯỚC TIẾP THEO: LOGIC KÝ HỢP ĐỒNG DRIVER
+                // 📝 BƯỚC TIẾP THEO: LOGIC KÝ HỢP ĐỒNG & CẬP NHẬT TRẠNG THÁI
                 // ========================================================================
 
-                // 1. Lấy Hợp đồng (TripDriverContract)
+                // 1. Lấy Hợp đồng
                 var contract = await _unitOfWork.TripDriverContractRepo.GetByIdAsync(dto.ContractId);
                 if (contract == null)
                     return new ResponseDTO("Contract not found", 404, false);
@@ -167,9 +181,9 @@ namespace BLL.Services.Implement
                 if (trip == null)
                     return new ResponseDTO("Associated Trip not found for this contract", 404, false);
 
-                // 3. Xác thực quyền
+                // 3. Xác thực quyền (Người ký phải là Owner hoặc Driver của hợp đồng này)
                 bool isOwner = contract.OwnerId == userId;
-                bool isDriver = contract.CounterpartyId == userId; // Counterparty ở đây là Driver
+                bool isDriver = contract.CounterpartyId == userId;
 
                 if (!isOwner && !isDriver)
                     return new ResponseDTO("You are not authorized to sign this contract", 403, false);
@@ -190,30 +204,55 @@ namespace BLL.Services.Implement
                     contract.CounterpartySignAt = DateTime.UtcNow;
                 }
 
-                // 5. Cập nhật trạng thái Hợp đồng & Trip
+                // 5. Cập nhật trạng thái HỢP ĐỒNG HIỆN TẠI
+                bool isCurrentContractDone = false;
                 if (contract.OwnerSigned && contract.CounterpartySigned)
                 {
-                    // --- Cả hai đã ký ---
-                    contract.Status = ContractStatus.COMPLETED; // Hoặc ACTIVE tùy Enum của bạn
+                    // Cả 2 bên đã ký -> Hợp đồng hoàn tất
+                    contract.Status = ContractStatus.COMPLETED;
                     contract.EffectiveDate = DateTime.UtcNow;
-
-                    // Cập nhật trạng thái Trip
-                    trip.Status = TripStatus.DONE_ASSIGNING_DRIVER; // Hoàn tất gán tài xế
-                    trip.UpdateAt = DateTime.UtcNow;
+                    isCurrentContractDone = true;
                 }
                 else
                 {
-                    // --- Mới chỉ có 1 bên ký ---
-                    contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE; // Chờ bên kia ký
-
-                    // Trip vẫn ở trạng thái chờ ký
-                    // trip.Status = TripStatus.AWAITING_DRIVER_CONTRACT; // Giữ nguyên hoặc set lại cho chắc
+                    // Vẫn thiếu 1 bên -> Chờ tiếp
+                    contract.Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE;
                 }
 
-                // 6. Lưu thay đổi (Transaction: Token + Contract + Trip)
+                // 6. Cập nhật trạng thái CHUYẾN ĐI (TRIP)
+                // Logic: Chỉ khi hợp đồng này xong VÀ tất cả các hợp đồng khác trong chuyến cũng xong -> Trip mới Done
+                if (isCurrentContractDone)
+                {
+                    // Kiểm tra xem còn hợp đồng nào CỦA CHUYẾN NÀY mà chưa xong không?
+                    // Lưu ý: Loại trừ chính cái 'contract' đang xử lý (vì nó chưa save vào DB là completed)
+                    bool areOtherContractsPending = await _unitOfWork.TripDriverContractRepo.AnyAsync(
+                        c => c.TripId == trip.TripId
+                             && c.ContractId != contract.ContractId // Không tính cái đang ký
+                             && c.Status != ContractStatus.COMPLETED // Tìm cái nào chưa xong
+                    );
+
+                    if (!areOtherContractsPending)
+                    {
+                        // Không còn ai chưa ký -> Tất cả đã xong -> Chuyển trạng thái Trip
+                        // Trip chuyển sang trạng thái đã gán xong tài xế (hoặc sẵn sàng bàn giao xe)
+                        trip.Status = TripStatus.DONE_ASSIGNING_DRIVER;
+                        trip.UpdateAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        // Vẫn còn ông khác chưa ký -> Trip vẫn phải chờ
+                        trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
+                    }
+                }
+                else
+                {
+                    // Hợp đồng này chưa xong thì chắc chắn Trip chưa xong
+                    trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
+                }
+
+                // 7. Lưu thay đổi
                 await _unitOfWork.TripDriverContractRepo.UpdateAsync(contract);
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
-
                 await _unitOfWork.SaveChangeAsync();
 
                 return new ResponseDTO("Driver Contract signed successfully", 200, true, new
@@ -221,7 +260,7 @@ namespace BLL.Services.Implement
                     contract.ContractId,
                     ContractStatus = contract.Status.ToString(),
                     contract.OwnerSigned,
-                    contract.CounterpartySigned, // Driver Signed
+                    contract.CounterpartySigned,
                     TripStatus = trip.Status.ToString()
                 });
             }
@@ -230,10 +269,12 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"Error signing contract: {ex.Message}", 500, false);
             }
         }
-
         // =========================================================
         // 3) GET BY ID (Contract + Template + Terms)
         // =========================================================
+        // ============================================================
+        // 🧩 GET CONTRACT BY ID (Full Detail for UI)
+        // ============================================================
         public async Task<ResponseDTO> GetByIdAsync(Guid contractId)
         {
             try
@@ -246,30 +287,27 @@ namespace BLL.Services.Implement
                     filter: c => c.ContractId == contractId,
                     includeProperties: "Owner,Counterparty,Trip,ContractTemplate.ContractTerms"
                 );
-                var contract = contracts.FirstOrDefault();
-                if (contract == null)
-                    return new ResponseDTO("Contract not found", 404, false);
 
-                // Map hợp đồng
+                var contract = contracts.FirstOrDefault();
+                if (contract == null) return new ResponseDTO("Contract not found", 404, false);
+
+                // Cast Counterparty sang Driver để lấy bằng lái
+                var driverEntity = contract.Counterparty as DAL.Entities.Driver;
+
+                // 1. Map Contract Info
                 var contractDto = new TripDriverContractDTO
                 {
                     ContractId = contract.ContractId,
                     ContractCode = contract.ContractCode,
                     TripId = contract.TripId,
                     TripCode = contract.Trip?.TripCode ?? string.Empty,
-
-                    OwnerId = contract.OwnerId,
-                    OwnerName = contract.Owner?.FullName ?? string.Empty,
-
-                    DriverId = contract.CounterpartyId,
-                    DriverName = contract.Counterparty?.FullName ?? string.Empty,
-
-                    ContractTemplateId = contract.ContractTemplateId,
+                    ContractTemplateId = contract.ContractTemplateId.Value,
                     TemplateName = contract.ContractTemplate?.ContractTemplateName ?? string.Empty,
                     Version = contract.Version,
                     ContractValue = contract.ContractValue,
                     Currency = contract.Currency,
-                    Status = contract.Status,
+                    Status = contract.Status.ToString(),
+                    Type = contract.Type.ToString(),
 
                     OwnerSigned = contract.OwnerSigned,
                     OwnerSignAt = contract.OwnerSignAt,
@@ -281,20 +319,47 @@ namespace BLL.Services.Implement
                     EffectiveDate = contract.EffectiveDate,
                     ExpirationDate = contract.ExpirationDate,
                     Note = contract.Note,
-                    Type = contract.Type
+
+                    // [MAPPING BÊN A: OWNER]
+                    PartyA = new ContractPartyDTO
+                    {
+                        UserId = contract.OwnerId,
+                        FullName = contract.Owner?.FullName ?? "N/A",
+                        CompanyName = contract.Owner?.CompanyName ?? "",
+                        TaxCode = contract.Owner?.TaxCode ?? "",
+                        PhoneNumber = contract.Owner?.PhoneNumber ?? "",
+                        Email = contract.Owner?.Email ?? "",
+                        Address = contract.Owner?.BusinessAddress != null ? contract.Owner.BusinessAddress.Address : "N/A",
+                        Role = "Owner"
+                    },
+
+                    // [MAPPING BÊN B: DRIVER]
+                    PartyB = new ContractPartyDTO
+                    {
+                        UserId = contract.CounterpartyId,
+                        FullName = contract.Counterparty?.FullName ?? "N/A",
+                        PhoneNumber = contract.Counterparty?.PhoneNumber ?? "",
+                        Email = contract.Counterparty?.Email ?? "",
+                        // Driver dùng Address thường trú
+                        Address = contract.Counterparty?.Address != null ? contract.Counterparty.Address.Address : "N/A",
+                        // Lấy số bằng lái từ Entity Driver
+                        LicenseNumber = driverEntity?.LicenseNumber ?? "N/A",
+                        CompanyName = "", // Driver không có cty
+                        TaxCode = "",
+                        Role = "Driver"
+                    }
                 };
 
-                // Map template
+                // 2. Map Template & Terms
                 var templateDto = new ContractTemplateDTO
                 {
                     ContractTemplateId = contract.ContractTemplate?.ContractTemplateId ?? Guid.Empty,
                     ContractTemplateName = contract.ContractTemplate?.ContractTemplateName ?? string.Empty,
                     Version = contract.ContractTemplate?.Version ?? string.Empty,
                     CreatedAt = contract.ContractTemplate?.CreatedAt ?? DateTime.MinValue,
-                    Type = contract.ContractTemplate?.Type ?? ContractType.DRIVER_CONTRACT
+                    Type = contract.ContractTemplate?.Type ?? Common.Enums.Type.ContractType.DRIVER_CONTRACT
                 };
 
-                // Map terms (Content/Order đúng với DTO bạn đang dùng)
                 var termsDto = contract.ContractTemplate?.ContractTerms?
                     .Select(t => new ContractTermDTO
                     {
@@ -304,8 +369,9 @@ namespace BLL.Services.Implement
                         ContractTemplateId = t.ContractTemplateId
                     })
                     .OrderBy(t => t.Order)
-                    .ToList() ?? new();
+                    .ToList() ?? new List<ContractTermDTO>();
 
+                // 3. Return Full Detail
                 var detailDto = new TripDriverContractDetailDTO
                 {
                     Contract = contractDto,
@@ -403,67 +469,69 @@ namespace BLL.Services.Implement
             }
         }
 
+        // =========================================================
+        // 3) GET ALL CONTRACTS (PAGING)
+        // =========================================================
         public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
         {
             try
             {
-                // 1. Lấy thông tin User
                 var userId = _userUtility.GetUserIdFromToken();
-                var userRole = _userUtility.GetUserRoleFromToken(); // (Giả định bạn có hàm này)
-                if (userId == Guid.Empty)
-                    return new ResponseDTO("Unauthorized: Invalid token", 401, false);
+                var userRole = _userUtility.GetUserRoleFromToken();
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // 2. Lấy IQueryable cơ sở
-                var query = _unitOfWork.TripDriverContractRepo.GetAll()
-                                     .AsNoTracking();
+                var query = _unitOfWork.TripDriverContractRepo.GetAll().AsNoTracking();
 
-                // 3. Lọc theo Vai trò (Authorization)
-                if (userRole == "Owner")
-                {
-                    query = query.Where(c => c.OwnerId == userId);
-                }
-                else if (userRole == "Driver")
-                {
-                    query = query.Where(c => c.CounterpartyId == userId);
-                }
-                else if (userRole == "Admin")
-                {
-                    // Admin: không cần lọc, thấy tất cả
-                }
-                else
-                {
-                    // Các vai trò khác (ví dụ: Provider) không được xem
-                    return new ResponseDTO("Forbidden: You do not have permission", 403, false);
-                }
+                if (userRole == "Owner") query = query.Where(c => c.OwnerId == userId);
+                else if (userRole == "Driver") query = query.Where(c => c.CounterpartyId == userId);
+                else if (userRole != "Admin") return new ResponseDTO("Forbidden", 403, false);
 
-                // 4. Đếm tổng số lượng (sau khi lọc)
                 var totalCount = await query.CountAsync();
 
-                // 5. Lấy dữ liệu của trang và Map sang DTO
-                // (Dùng DTO tóm tắt, giống DTO trả về của hàm Create)
+                // [FIX LỖI MAPPING TRONG SELECT]
+                // EF Core không hỗ trợ tạo object phức tạp (như ContractPartyDTO) bên trong .Select() nếu logic quá phức tạp.
+                // Tuy nhiên, với cấu trúc đơn giản thì vẫn được.
+
                 var contractsDto = await query
                     .Include(c => c.Trip)
                     .Include(c => c.Owner)
-                    .Include(c => c.Counterparty) // (Driver)
+                    .Include(c => c.Counterparty)
                     .Include(c => c.ContractTemplate)
-                    .OrderByDescending(c => c.CreateAt) // Sắp xếp mới nhất trước
+                    .OrderByDescending(c => c.CreateAt)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(c => new TripDriverContractDTO // Map trên DB
+                    .Select(c => new TripDriverContractDTO
                     {
                         ContractId = c.ContractId,
                         ContractCode = c.ContractCode,
                         TripId = c.TripId,
                         TripCode = c.Trip != null ? c.Trip.TripCode : "N/A",
-                        OwnerId = c.OwnerId,
-                        OwnerName = c.Owner != null ? c.Owner.FullName : "N/A",
-                        DriverId = c.CounterpartyId,
-                        DriverName = c.Counterparty != null ? c.Counterparty.FullName : "N/A",
-                        ContractTemplateId = c.ContractTemplateId,
+
+                        // [FIX]: Map PartyA
+                        PartyA = new ContractPartyDTO
+                        {
+                            UserId = c.OwnerId,
+                            FullName = c.Owner != null ? c.Owner.FullName : "N/A",
+                            Role = "Owner"
+                        },
+
+                        // [FIX]: Map PartyB
+                        PartyB = new ContractPartyDTO
+                        {
+                            UserId = c.CounterpartyId,
+                            FullName = c.Counterparty != null ? c.Counterparty.FullName : "N/A",
+                            Role = "Driver"
+                        },
+
+                        // [FIX]: Null Check cho TemplateId (Guid? -> Guid)
+                        ContractTemplateId = c.ContractTemplateId ?? Guid.Empty,
                         TemplateName = c.ContractTemplate != null ? c.ContractTemplate.ContractTemplateName : "N/A",
                         Version = c.Version,
-                        Status = c.Status,
-                        Type = c.Type,
+
+                        // [FIX]: Enum -> String
+                        Status = c.Status.ToString(),
+                        Type = c.Type.ToString(),
+
                         CreateAt = c.CreateAt,
                         EffectiveDate = c.EffectiveDate,
                         OwnerSigned = c.OwnerSigned,
@@ -471,9 +539,7 @@ namespace BLL.Services.Implement
                     })
                     .ToListAsync();
 
-                // 6. Tạo kết quả PaginatedDTO
                 var paginatedResult = new PaginatedDTO<TripDriverContractDTO>(contractsDto, totalCount, pageNumber, pageSize);
-
                 return new ResponseDTO("Retrieved contracts successfully", 200, true, paginatedResult);
             }
             catch (Exception ex)

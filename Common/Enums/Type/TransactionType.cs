@@ -21,7 +21,18 @@ namespace Common.Enums.Type
         PLATFORM_FEE,           // Phí nền tảng
         DRIVER_SERVICE_PAYMENT,  // Owner thanh toán tiền thuê tài xế (cho nền tảng giữ)
 
-        PENALTY               // Phạt vi phạm
+        PENALTY,               // Phạt vi phạm
+        DEPOSIT,               // Tiền cọc
+
+        // tiền đang nợ nền tảng ( chưa thanh toán )
+        OUTSTANDING_PAYMENT,
+
+        // tiền thanh toán cho nền tảng
+        PLATFORM_PAYMENT,
+
+        COMPENSATION         // bồi thường
+
+
     }
 
 }

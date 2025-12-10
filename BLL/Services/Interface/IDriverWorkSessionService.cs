@@ -16,5 +16,7 @@ namespace BLL.Services.Interface
         Task<ResponseDTO> CheckDriverEligibilityAsync();
         Task<ResponseDTO> GetDriverHistoryAsync(DriverHistoryFilterDTO filter);
         Task<ResponseDTO> GetCurrentSessionInTripAsync(Guid tripId);
+        Task<ResponseDTO> ImportDriverHistoryAsync(ImportDriverHistoryDTO dto);
+        Task<DriverAvailabilityDTO> CheckDriverAvailabilityAsync(Guid driverId); // <--- Thêm hàm này
     }
 }

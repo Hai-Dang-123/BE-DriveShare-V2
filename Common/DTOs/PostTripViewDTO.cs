@@ -39,6 +39,9 @@ namespace Common.DTOs
         public string DropoffLocation { get; set; } = string.Empty;
         public bool MustPickAtGarage { get; set; }
         public bool MustDropAtGarage { get; set; }
+
+        public decimal DepositAmount { get; set; }
+
     }
 
     // --- DTOs đơn giản cho các quan hệ ---
@@ -57,7 +60,8 @@ namespace Common.DTOs
         public Guid TripId { get; set; }
         public string StartLocationName { get; set; } = string.Empty;
         public string EndLocationName { get; set; } = string.Empty;
-        public TimeOnly StartTime { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate  { get; set; }
 
         // --- THÔNG TIN BỔ SUNG "ĐỦ" CHO DRIVER ---
 

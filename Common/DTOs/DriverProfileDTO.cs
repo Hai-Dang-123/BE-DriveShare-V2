@@ -18,5 +18,11 @@ namespace Common.DTOs
         // Thông tin "Analysis"
         public int TotalTripsAssigned { get; set; }
         public int LinkedOwnersCount { get; set; }
+
+        // [MỚI] Check xem đã có GPLX được duyệt chưa
+        public bool HasVerifiedDriverLicense { get; set; }
+
+        // [MỚI] Check xem đã khai báo lịch sử chạy ban đầu chưa
+        public bool HasDeclaredInitialHistory { get; set; }
     }
 }

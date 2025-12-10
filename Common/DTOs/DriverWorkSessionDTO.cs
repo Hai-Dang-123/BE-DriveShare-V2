@@ -43,7 +43,7 @@ namespace Common.DTOs
     public class DriverSessionHistoryDTO
     {
         public Guid SessionId { get; set; }
-        public Guid TripId { get; set; }
+        public Guid? TripId { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime? EndTime { get; set; }
         public double DurationHours { get; set; } // Tổng giờ chạy của chuyến này

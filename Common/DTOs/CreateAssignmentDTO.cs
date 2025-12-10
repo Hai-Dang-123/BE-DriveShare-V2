@@ -31,6 +31,9 @@ namespace Common.DTOs
 
         [Required]
         public string EndLocation { get; set; } = null!; // Trả xe ở đâu?
+
+        // [NEW] Số tiền cọc mà Owner yêu cầu tài xế này phải đóng
+        public decimal DepositAmount { get; set; } = 0;
     }
 
     public class CreateAssignmentByPostTripDTO

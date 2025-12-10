@@ -1,4 +1,5 @@
 ﻿using Common.Enums.Type;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 
@@ -13,6 +14,8 @@ namespace Common.DTOs.TripVehicleHandoverRecord
         public bool IsEngineLightOn { get; set; }
         public string? Notes { get; set; }
 
+
+
         public List<ChecklistItemInput> ChecklistItems { get; set; } = new();
     }
 
@@ -21,7 +24,7 @@ namespace Common.DTOs.TripVehicleHandoverRecord
         public Guid TripVehicleHandoverTermResultId { get; set; }
         public bool IsPassed { get; set; }
         public string? Note { get; set; }
-        public string? EvidenceImageUrl { get; set; }
+        public IFormFile? EvidenceImage { get; set; }
     }
 
     // DTO báo cáo sự cố

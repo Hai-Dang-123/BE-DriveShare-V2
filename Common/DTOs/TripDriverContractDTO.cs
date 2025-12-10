@@ -6,42 +6,38 @@ using Common.Enums.Type;
 namespace Common.DTOs
 {
     // Hợp đồng Driver (output cơ bản)
+    // 3. Cập nhật DTO Hợp đồng Driver
     public class TripDriverContractDTO
     {
         public Guid ContractId { get; set; }
-        public string ContractCode { get; set; } = string.Empty;
+        public string ContractCode { get; set; }
 
+        // ... Các field cơ bản ...
         public Guid TripId { get; set; }
-        public string TripCode { get; set; } = string.Empty;
-
-        public Guid OwnerId { get; set; }
-        public string OwnerName { get; set; } = string.Empty;
-
-        public Guid DriverId { get; set; }
-        public string DriverName { get; set; } = string.Empty;
-
-        public Guid? ContractTemplateId { get; set; }
-        public string TemplateName { get; set; } = string.Empty;
-
-        public string Version { get; set; } = string.Empty;
-
+        public string TripCode { get; set; }
         public decimal? ContractValue { get; set; }
-        public string Currency { get; set; } = "VND";
+        public string Currency { get; set; }
+        public string Status { get; set; }
+        public string Type { get; set; }
+        public string FileURL { get; set; }
+        public string Note { get; set; }
 
-        public ContractStatus Status { get; set; }
+        public DateTime CreateAt { get; set; }
+        public DateTime? EffectiveDate { get; set; }
+        public DateTime? ExpirationDate { get; set; }
 
         public bool OwnerSigned { get; set; }
         public DateTime? OwnerSignAt { get; set; }
         public bool DriverSigned { get; set; }
         public DateTime? DriverSignAt { get; set; }
 
-        public string? FileURL { get; set; }
-        public DateTime CreateAt { get; set; }
-        public DateTime? EffectiveDate { get; set; }
-        public DateTime? ExpirationDate { get; set; }
-        public string? Note { get; set; }
+        public Guid ContractTemplateId { get; set; }
+        public string TemplateName { get; set; }
+        public string Version { get; set; }
 
-        public ContractType Type { get; set; } = ContractType.DRIVER_CONTRACT;
+        // [QUAN TRỌNG] THÔNG TIN 2 BÊN
+        public ContractPartyDTO PartyA { get; set; } // Owner
+        public ContractPartyDTO PartyB { get; set; } // Driver
     }
 
     // DTO tạo hợp đồng Driver (input)

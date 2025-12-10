@@ -25,6 +25,8 @@ namespace DAL.Repositories.Implement
                 .AsNoTracking()
                 .Include(d => d.TripDriverAssignments) // Cần cho "analysis"
                 .Include(d => d.OwnerDriverLinks)      // Cần cho "analysis"
+                .Include(d => d.DriverWorkSessions) // Cần cho "work session"
+                .Include(d => d.UserDocuments)
                 .FirstOrDefaultAsync(d => d.UserId == userId);
         }
     }

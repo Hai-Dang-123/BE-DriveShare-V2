@@ -222,7 +222,8 @@ namespace BLL.Services.Impletement
                     TripId = p.Trip.TripId,
                     StartLocationName = p.Trip.ShippingRoute?.StartLocation?.Address ?? string.Empty,
                     EndLocationName = p.Trip.ShippingRoute?.EndLocation?.Address ?? string.Empty,
-                    StartTime = p.Trip.ShippingRoute?.PickupTimeWindow?.StartTime ?? default(TimeOnly),
+                    StartDate = p.Trip.ShippingRoute?.ExpectedPickupDate ?? default(DateTime),
+                    EndDate = p.Trip.ShippingRoute?.ExpectedDeliveryDate ?? default(DateTime),
                     VehicleModel = p.Trip.Vehicle?.Model,
                     VehiclePlate = p.Trip.Vehicle?.PlateNumber,
                     VehicleType = p.Trip.Vehicle?.VehicleType?.VehicleTypeName,
@@ -237,7 +238,8 @@ namespace BLL.Services.Impletement
                     PickupLocation = d.PickupLocation,
                     DropoffLocation = d.DropoffLocation,
                     MustPickAtGarage = d.MustPickAtGarage,
-                    MustDropAtGarage = d.MustDropAtGarage
+                    MustDropAtGarage = d.MustDropAtGarage,
+                    DepositAmount = d.DepositAmount
                 }).ToList()
             };
         }

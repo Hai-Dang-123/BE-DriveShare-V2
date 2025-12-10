@@ -106,10 +106,38 @@ namespace Common.DTOs
     public class TripDriverAssignmentDTO
     {
         public Guid DriverId { get; set; }
-        public string FullName { get; set; } = "";
-        public string Type { get; set; } = "";
-        public string AssignmentStatus { get; set; } = "";
-        public string PaymentStatus { get; set; } = "";
+        public string FullName { get; set; }
+        public string Type { get; set; } // PRIMARY / ASSISTANT
+        public string AssignmentStatus { get; set; } // ACCEPTED / OFFERED...
+        public string PaymentStatus { get; set; }
+
+        // --- TIỀN NONG ---
+        public decimal BaseAmount { get; set; }
+        public decimal DepositAmount { get; set; }
+        public string DepositStatus { get; set; }
+
+        // Thêm các field này
+        public string StartAddress { get; set; }
+        public double StartLat { get; set; }
+        public double StartLng { get; set; }
+
+        public string EndAddress { get; set; }
+        public double EndLat { get; set; }
+        public double EndLng { get; set; }
+
+        // --- CHECK-IN INFO ---
+        public bool IsOnBoard { get; set; }
+        public DateTime? OnBoardTime { get; set; }
+        public string OnBoardLocation { get; set; }
+        public string OnBoardImage { get; set; }
+        public string CheckInNote { get; set; } // [NEW] Note cảnh báo lệch vị trí
+
+        // --- CHECK-OUT INFO ---
+        public bool IsFinished { get; set; }
+        public DateTime? OffBoardTime { get; set; }
+        public string OffBoardLocation { get; set; }
+        public string OffBoardImage { get; set; }
+        public string CheckOutNote { get; set; } // [NEW] Note cảnh báo lệch vị trí
     }
 
     public class TripContactDTO

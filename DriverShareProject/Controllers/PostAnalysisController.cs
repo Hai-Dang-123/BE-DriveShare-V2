@@ -20,7 +20,7 @@ namespace DriverShareProject.Controllers
             var result = await _postAnalysisService.GetOrGeneratePackageAnalysisAsync(postPackageId);
             return StatusCode(result.StatusCode, result);
         }
-        [HttpPost("analyze-post-trip /{postTripId}")]
+        [HttpPost("analyze-post-trip/{postTripId}")]
         public async Task<IActionResult> AnalyzePostTrip([FromRoute] Guid postTripId)
         {
             var result = await _postAnalysisService.GetOrGenerateTripAnalysisAsync(postTripId);

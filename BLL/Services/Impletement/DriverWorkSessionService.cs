@@ -282,5 +282,117 @@ namespace BLL.Services.Impletement
 
             return new DriverAvailabilityDTO { CanDrive = true, Message = "OK", HoursDrivenToday = hoursToday, HoursDrivenThisWeek = hoursWeek };
         }
+
+        // =========================================================================
+        // [MỚI] 6. IMPORT HISTORY (NHẬP LỊCH SỬ CHẠY THEO NGÀY)
+        // =========================================================================
+        public async Task<ResponseDTO> ImportDriverHistoryAsync(ImportDriverHistoryDTO dto)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var driverId = _userUtility.GetUserIdFromToken();
+                if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
+                // 1. Xác định giới hạn tuần hiện tại (Để chỉ cho phép nhập trong tuần này)
+                var now = DateTime.UtcNow;
+                int diff = (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7;
+                var startOfWeek = now.Date.AddDays(-1 * diff); // 00:00 Thứ 2
+                var endOfWeek = startOfWeek.AddDays(7).AddTicks(-1); // 23:59 Chủ nhật
+
+                // 2. Validate dữ liệu đầu vào
+                foreach (var log in dto.DailyLogs)
+                {
+                    // Chỉ cho nhập dữ liệu trong tuần này và không được nhập tương lai
+                    if (log.Date.Date < startOfWeek || log.Date.Date > now.Date)
+                    {
+                        return new ResponseDTO($"Ngày {log.Date:dd/MM} không thuộc tuần hiện tại hoặc ở tương lai.", 400, false);
+                    }
+                    if (log.HoursDriven < 0 || log.HoursDriven > 24)
+                    {
+                        return new ResponseDTO($"Số giờ nhập cho ngày {log.Date:dd/MM} không hợp lệ (0-24h).", 400, false);
+                    }
+                }
+
+                // 3. Xóa dữ liệu lịch sử CŨ trong tuần này (Cơ chế ghi đè - Reset history cũ)
+                // Lưu ý: Chỉ xóa những record có TripId == null (tức là record nhập tay), không xóa chuyến đi thật
+                var oldHistorySessions = await _unitOfWork.DriverWorkSessionRepo.GetAll()
+                    .Where(s => s.DriverId == driverId
+                                && s.TripId == null // Chỉ xóa session nhập tay
+                                && s.StartTime >= startOfWeek
+                                && s.StartTime <= endOfWeek)
+                    .ToListAsync();
+
+                if (oldHistorySessions.Any())
+                {
+                    // Bạn cần hàm DeleteRange trong Repository, hoặc loop delete
+                    _unitOfWork.DriverWorkSessionRepo.DeleteRange(oldHistorySessions);
+                }
+
+                // 4. Tạo Session mới từ dữ liệu nhập
+                foreach (var log in dto.DailyLogs)
+                {
+                    if (log.HoursDriven <= 0) continue;
+
+                    // QUY ƯỚC KHOA HỌC:
+                    // Luôn giả định tài xế bắt đầu chạy từ 08:00 sáng.
+                    // Điều này giúp tránh trùng lặp ngẫu nhiên và dễ tính toán.
+                    var sessionDate = log.Date.Date; // Lấy phần ngày, giờ là 00:00
+                    var simulatedStartTime = sessionDate.AddHours(8); // 08:00 AM
+                    var simulatedEndTime = simulatedStartTime.AddHours(log.HoursDriven);
+
+                    // Kiểm tra: Nếu là "Hôm nay", và giờ kết thúc vượt quá giờ hiện tại -> Điều chỉnh lại
+                    // Ví dụ: Bây giờ là 10h sáng, mà nhập đã lái 8 tiếng (lẽ ra phải xong lúc 16h) -> Vô lý
+                    // -> Lùi thời gian lại: Kết thúc lúc Now, Bắt đầu lúc Now - HoursDriven
+                    if (sessionDate == now.Date && simulatedEndTime > now)
+                    {
+                        simulatedEndTime = now;
+                        simulatedStartTime = now.AddHours(-log.HoursDriven);
+                    }
+
+                    // Trong vòng lặp foreach (var log in dto.DailyLogs)
+                    var session = new DriverWorkSession
+                    {
+                        DriverWorkSessionId = Guid.NewGuid(),
+                        DriverId = driverId,
+                        TripId = null, // TripId là null
+                        CreatedAt = DateTime.UtcNow,
+                    };
+
+                    // Gọi hàm helper của Entity để set thời gian và tự tính DurationInHours
+                    session.SetHistoryData(simulatedStartTime, simulatedEndTime);
+
+                    await _unitOfWork.DriverWorkSessionRepo.AddAsync(session);
+                }
+
+                // --- ĐOẠN MỚI: CẬP NHẬT TRẠNG THÁI DRIVER ---
+                var driver = await _unitOfWork.DriverRepo.GetByIdAsync(driverId);
+                if (driver != null && !driver.HasDeclaredInitialHistory)
+                {
+                    driver.HasDeclaredInitialHistory = true;
+                    await _unitOfWork.DriverRepo.UpdateAsync(driver);
+                }
+                // --------------------------------------------
+
+                await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
+
+                // 5. Tính toán lại xem sau khi nhập xong thì còn được lái bao nhiêu
+                var eligibility = await CalculateDriverHoursAsync(driverId);
+
+                return new ResponseDTO($"Cập nhật lịch sử thành công. Hôm nay bạn đã lái {eligibility.HoursDrivenToday:F1}h.", 200, true);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return new ResponseDTO("Lỗi: " + ex.Message, 500, false);
+            }
+        }
+
+        public async Task<DriverAvailabilityDTO> CheckDriverAvailabilityAsync(Guid driverId)
+        {
+            // Gọi lại hàm private CalculateDriverHoursAsync đã viết ở bài trước
+            return await CalculateDriverHoursAsync(driverId);
+        }
     }
 }

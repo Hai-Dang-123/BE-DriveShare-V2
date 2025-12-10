@@ -73,5 +73,19 @@ namespace DriverShareProject.Controllers
             var response = await _service.GetCurrentSessionInTripAsync(tripId);
             return StatusCode(response.StatusCode, response);
         }
+
+        /// <summary>
+        /// hàm dùng để import thời gian khởi tạo của tài xế
+        /// </summary>
+        /// 
+
+        [HttpPost("import-history")]
+        public async Task<IActionResult> ImportDriverWorkSessionHistory([FromBody] ImportDriverHistoryDTO dto)
+        {
+            var response = await _service.ImportDriverHistoryAsync(dto);
+            return StatusCode(response.StatusCode, response);
+        }
+
+
     }
 }

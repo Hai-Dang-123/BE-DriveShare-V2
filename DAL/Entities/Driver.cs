@@ -14,7 +14,9 @@ namespace DAL.Entities
         public DateTime? LicenseExpiryDate { get; set; }         
         public bool IsLicenseVerified { get; set; } = false; // Đã xác thực bằng lái?
         //public bool IsInTrip { get; set; } = false;
-        public DriverStatus DriverStatus { get; set; } 
+        public DriverStatus DriverStatus { get; set; }
+
+        public bool HasDeclaredInitialHistory { get; set; } = false;
 
         //
 

@@ -138,6 +138,7 @@ namespace BLL.Services.Impletement
                 item.Currency = itemUpdateDTO.Currency;
                 item.DeclaredValue = itemUpdateDTO.DeclaredValue;
                 item.Description = itemUpdateDTO.Description;
+                item.Quantity = itemUpdateDTO.Quantity;
 
                 await _unitOfWork.ItemRepo.UpdateAsync(item);
                 await _unitOfWork.SaveChangeAsync();

@@ -22,6 +22,9 @@ namespace DAL.Entities
         public string PickupLocation { get; set; } = string.Empty;
         public string DropoffLocation { get; set; } = string.Empty;
 
+        public decimal DepositAmount { get; set; } // [NEW]
+        public decimal? BonusAmount { get; set; } // Thưởng/Phụ phí
+
         // Quy tắc đặc thù
         public bool MustPickAtGarage { get; set; } = false;
         public bool MustDropAtGarage { get; set; } = false;

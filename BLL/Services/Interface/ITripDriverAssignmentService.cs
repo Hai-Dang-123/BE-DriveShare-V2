@@ -24,5 +24,20 @@ namespace BLL.Services.Interface
         // Task<ResponseDTO> DriverAcceptAssignmentAsync(Guid assignmentId);
         // Task<ResponseDTO> OwnerCancelAssignmentAsync(Guid assignmentId);
         // )
+
+        /// <summary>
+        /// hàm Check-In cho Tài xế khi bắt đầu chuyến đi.
+        /// </summary>
+        /// <param name="dto"></param>
+        /// <returns></returns>
+        Task<ResponseDTO> DriverCheckInAsync(DriverCheckInDTO dto);
+
+
+        /// <summary>
+        /// hàm Check-Out cho Tài xế khi kết thúc chuyến đi.
+        /// </summary>
+        /// <param name="dto"></param>
+        /// <returns></returns>
+        Task<ResponseDTO> DriverCheckOutAsync(DriverCheckOutDTO dto);
     }
 }

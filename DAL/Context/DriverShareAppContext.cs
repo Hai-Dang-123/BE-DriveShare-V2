@@ -83,6 +83,7 @@ namespace DAL.Context
         public DbSet<TripVehicleHandoverTermResult> TripVehicleHandoverTermResults { get; set; }
         public DbSet<TripVehicleHandoverIssue> TripVehicleHandoverIssues { get; set; }
         public DbSet<TripVehicleHandoverIssueImage> TripVehicleHandoverIssueImages { get; set; }
+        public DbSet<DriverWorkSession> DriverWorkSessions { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -163,6 +164,7 @@ namespace DAL.Context
             modelBuilder.Entity<TripVehicleHandoverTermResult>().HasKey(tvtr => tvtr.TripVehicleHandoverTermResultId);
             modelBuilder.Entity<TripVehicleHandoverIssue>().HasKey(tvi => tvi.TripVehicleHandoverIssueId);
             modelBuilder.Entity<TripVehicleHandoverIssueImage>().HasKey(tvii => tvii.TripVehicleHandoverIssueImageId);
+            modelBuilder.Entity<DriverWorkSession>().HasKey(dws => dws.DriverWorkSessionId);
 
         }
 

@@ -303,15 +303,16 @@ namespace BLL.Services.Impletement
         {
             var subject = $"✅ [Báo cáo hoàn thành] Chuyến đi #{model.TripCode}";
 
-            // --- KHỐI TÀI CHÍNH (DYNAMIC) ---
+            // --- XÂY DỰNG KHỐI TÀI CHÍNH (DYNAMIC) ---
             string financialHtml = "";
 
             if (model.Role == "Owner")
             {
-                // ---------------- OWNER: HIỂN THỊ QUYẾT TOÁN TỔNG HỢP ----------------
+                // ---------------- OWNER: HIỂN THỊ QUYẾT TOÁN ----------------
                 var expenseRows = "";
                 foreach (var exp in model.DriverExpenses)
                 {
+                    // Hiển thị lương trả cho từng tài xế
                     expenseRows += $@"
             <div style='display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed #E5E7EB; padding-bottom:4px;'>
                 <span style='font-size:13px; color:#4B5563;'>Trả {exp.Role} ({exp.DriverName})</span>
@@ -324,7 +325,7 @@ namespace BLL.Services.Impletement
             <div style='font-size:12px; font-weight:700; color:#6B7280; text-transform:uppercase; margin-bottom:15px;'>Bảng quyết toán chuyến đi</div>
             
             <div style='display:flex; justify-content:space-between; margin-bottom:12px;'>
-                <span style='color:#374151;'>Thu từ Provider (sau phí sàn)</span>
+                <span style='color:#374151;'>Doanh thu từ Provider (sau phí)</span>
                 <span style='color:#16A34A; font-weight:700; font-size:16px;'>+{model.TotalIncome:N0} ₫</span>
             </div>
 
@@ -333,101 +334,101 @@ namespace BLL.Services.Impletement
             <div style='border-top:2px solid #D1D5DB; margin:15px 0;'></div>
 
             <div style='display:flex; justify-content:space-between; align-items:center;'>
-                <span style='font-weight:700; color:#111827;'>LỢI NHUẬN RÒNG</span>
-                <span style='color:#2563EB; font-weight:800; font-size:24px;'>{model.NetProfit:N0} ₫</span>
+                <span style='font-weight:700; color:#111827;'>THỰC NHẬN VỀ VÍ</span>
+                <span style='color:#2563EB; font-weight:800; font-size:24px;'>{model.TotalIncome:N0} ₫</span>
             </div>
+            <div style='font-size:11px; color:#6B7280; margin-top:5px; text-align:right;'>*(Đã bao gồm các khoản bù trừ nếu có)</div>
         </div>";
             }
             else
             {
                 // ---------------- PROVIDER / DRIVER: HIỂN THỊ ĐƠN GIẢN ----------------
-                string color = model.IsIncome ? "#16A34A" : "#DC2626"; // Xanh/Đỏ
-                string sign = model.IsIncome ? "+" : "-";
+                string color = model.IsIncome ? "#16A34A" : "#DC2626"; // Xanh (Thu) / Đỏ (Nợ/Trừ)
+                string sign = model.IsIncome ? "+" : ""; // Dấu
                 string bg = model.IsIncome ? "#F0FDF4" : "#FEF2F2";
+
+                // Xử lý hiển thị số âm cho đẹp
+                decimal displayAmount = Math.Abs(model.Amount);
+                if (!model.IsIncome) sign = "-";
 
                 financialHtml = $@"
         <div style='background-color:{bg}; border-left:5px solid {color}; padding:20px; border-radius:8px; margin-bottom:30px;'>
             <div style='font-size:12px; text-transform:uppercase; color:#6B7280; font-weight:700; letter-spacing:0.5px;'>{model.FinancialDescription}</div>
-            <div style='font-size:32px; font-weight:800; color:{color}; margin:5px 0;'>{sign}{model.Amount:N0} ₫</div>
+            <div style='font-size:32px; font-weight:800; color:{color}; margin:5px 0;'>{sign}{displayAmount:N0} ₫</div>
             <div style='font-size:14px; color:#4B5563;'>Giao dịch đã được ghi nhận vào hệ thống.</div>
         </div>";
             }
 
-            // --- BLOCK HIỂN THỊ PHẠT / BỒI THƯỜNG (Surcharges) ---
+            // --- BLOCK HIỂN THỊ CHI TIẾT SỰ CỐ / PHẠT ---
             string surchargeHtml = "";
             if (model.Surcharges != null && model.Surcharges.Any())
             {
                 var rows = "";
                 foreach (var sur in model.Surcharges)
                 {
-                    // Màu sắc: Nếu là Provider nhận tiền -> Xanh. Nếu là Driver bị phạt -> Đỏ.
-                    string color = model.Role == "Provider" || model.Role == "Owner" ? "#16A34A" : "#DC2626";
-                    string sign = model.Role == "Provider" || model.Role == "Owner" ? "+" : "-"; // Nhận tiền hoặc Bị trừ
-
                     rows += $@"
-        <div style='display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px;'>
-            <span style='color:#4B5563;'>{sur.Type}: {sur.Description}</span>
-            <span style='font-weight:600; color:{color};'>{sign}{sur.Amount:N0} ₫</span>
-        </div>";
+            <div style='display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px;'>
+                <span style='color:#4B5563;'>{sur.Type}: {sur.Description}</span>
+                <span style='font-weight:600; color:#DC2626;'>-{sur.Amount:N0} ₫</span>
+            </div>";
                 }
 
                 surchargeHtml = $@"
-    <div style='background-color:#FFF7ED; border:1px dashed #F97316; padding:15px; border-radius:6px; margin-bottom:20px;'>
-        <div style='font-size:12px; font-weight:700; color:#C2410C; margin-bottom:8px; text-transform:uppercase;'>Chi tiết điều chỉnh (Phạt/Bồi thường)</div>
-        {rows}
-    </div>";
+        <div style='background-color:#FFF7ED; border:1px dashed #F97316; padding:15px; border-radius:6px; margin-bottom:20px;'>
+            <div style='font-size:12px; font-weight:700; color:#C2410C; margin-bottom:8px; text-transform:uppercase;'>Chi tiết Sự cố / Phạt</div>
+            {rows}
+        </div>";
             }
 
-            // --- TEMPLATE CHUNG ---
+            // --- TEMPLATE BODY ---
             var body = $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
-        .container {{ max-width: 600px; margin: 20px auto; background: #FFF; border-radius: 12px; overflow: hidden; }}
-        .header {{ background: #2563EB; padding: 30px; text-align: center; color: white; }}
-        .content {{ padding: 30px; color: #374151; }}
-        .section-title {{ font-size: 14px; font-weight: 700; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; }}
-        .grid {{ width: 100%; border-collapse: collapse; }}
-        .cell {{ width: 50%; padding-bottom: 15px; vertical-align: top; }}
-        .label {{ font-size: 12px; color: #6B7280; display: block; margin-bottom: 4px; }}
-        .val {{ font-size: 14px; font-weight: 600; color: #111827; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1 style='margin:0; font-size:24px;'>BÁO CÁO HOÀN THÀNH</h1>
-            <div style='background:rgba(255,255,255,0.2); padding:5px 10px; border-radius:4px; display:inline-block; margin-top:10px;'>#{model.TripCode}</div>
-        </div>
-        
-        <div class='content'>
-            <p>Xin chào <strong>{model.RecipientName}</strong>,</p>
-            <p>Chuyến đi đã kết thúc lúc {model.CompletedAt}.</p>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
+            .container {{ max-width: 600px; margin: 20px auto; background: #FFF; border-radius: 12px; overflow: hidden; }}
+            .header {{ background: #2563EB; padding: 30px; text-align: center; color: white; }}
+            .content {{ padding: 30px; color: #374151; }}
+            .section-title {{ font-size: 14px; font-weight: 700; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; }}
+            .grid {{ width: 100%; border-collapse: collapse; }}
+            .cell {{ width: 50%; padding-bottom: 15px; vertical-align: top; }}
+            .label {{ font-size: 12px; color: #6B7280; display: block; margin-bottom: 4px; }}
+            .val {{ font-size: 14px; font-weight: 600; color: #111827; }}
+        </style>
+    </head>
+    <body>
+        <div class='container'>
+            <div class='header'>
+                <h1 style='margin:0; font-size:24px;'>BÁO CÁO HOÀN THÀNH</h1>
+                <div style='background:rgba(255,255,255,0.2); padding:5px 10px; border-radius:4px; display:inline-block; margin-top:10px;'>#{model.TripCode}</div>
+            </div>
+            
+            <div class='content'>
+                <p>Xin chào <strong>{model.RecipientName}</strong>,</p>
+                <p>Chuyến đi đã kết thúc lúc {model.CompletedAt}. Dưới đây là thông tin quyết toán:</p>
 
-            {financialHtml}
+                {financialHtml}
+                {surchargeHtml}
 
-{surchargeHtml}  <div class='section-title'>Thông tin vận hành</div>
-
-            <div class='section-title'>Thông tin vận hành</div>
-            <table class='grid'>
-                <tr>
-                    <td class='cell'><span class='label'>Điểm đi</span><span class='val'>{model.StartAddress}</span></td>
-                    <td class='cell'><span class='label'>Điểm đến</span><span class='val'>{model.EndAddress}</span></td>
-                </tr>
-                <tr>
-                    <td class='cell'><span class='label'>Phương tiện</span><span class='val'>{model.VehiclePlate}</span></td>
-                    <td class='cell'><span class='label'>Quãng đường</span><span class='val'>{model.DistanceKm:N1} km</span></td>
-                </tr>
-            </table>
+                <div class='section-title'>Thông tin vận hành</div>
+                <table class='grid'>
+                    <tr>
+                        <td class='cell'><span class='label'>Điểm đi</span><span class='val'>{model.StartAddress}</span></td>
+                        <td class='cell'><span class='label'>Điểm đến</span><span class='val'>{model.EndAddress}</span></td>
+                    </tr>
+                    <tr>
+                        <td class='cell'><span class='label'>Phương tiện</span><span class='val'>{model.VehiclePlate}</span></td>
+                        <td class='cell'><span class='label'>Quãng đường</span><span class='val'>{model.DistanceKm:N1} km</span></td>
+                    </tr>
+                </table>
+            </div>
+            <div style='background:#F9FAFB; padding:20px; text-align:center; font-size:12px; color:#9CA3AF;'>
+                DriveShare Platform &copy; {DateTime.Now.Year}
+            </div>
         </div>
-        <div style='background:#F9FAFB; padding:20px; text-align:center; font-size:12px; color:#9CA3AF;'>
-            DriveShare Platform &copy; {DateTime.Now.Year}
-        </div>
-    </div>
-</body>
-</html>";
+    </body>
+    </html>";
 
             await SendEmailAsync(toEmail, subject, body);
         }

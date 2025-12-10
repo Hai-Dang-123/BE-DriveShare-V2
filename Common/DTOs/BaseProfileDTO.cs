@@ -20,6 +20,9 @@ namespace Common.DTOs
         public bool? IsPhoneVerified { get; set; }
         public Location Address { get; set; } // Giả sử Location là an toàn để expose
         public string Role { get; set; } = null!;
+
+        // [MỚI] Check xem đã có CCCD/CMND được duyệt chưa
+        public bool HasVerifiedCitizenId { get; set; }
     }
 
 
@@ -60,7 +63,7 @@ namespace Common.DTOs
     public class DriverWorkSessionInDashboardDTO
     {
         public Guid DriverWorkSessionId { get; set; }
-        public Guid TripId { get; set; }
+        public Guid? TripId { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime? EndTime { get; set; }
         public string Status { get; set; }

@@ -35,6 +35,8 @@ namespace DAL.Repositories.Implement
                 .Include(o => o.Vehicles)
                 .Include(o => o.OwnerDriverLinks)
                 .Include(o => o.Trips)
+                                .Include(d => d.UserDocuments)
+
                 .FirstOrDefaultAsync(o => o.UserId == userId);
         }
     }

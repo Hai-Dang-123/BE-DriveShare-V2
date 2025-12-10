@@ -1,4 +1,5 @@
-﻿using BLL.Services.Interface;
+﻿using BLL.Services.Impletement;
+using BLL.Services.Interface;
 using Common.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,22 @@ namespace DriverShareProject.Controllers
         {
             var response = await _assignmentService.CreateAssignmentByPostTripAsync(dto);
             return StatusCode(response.StatusCode, response);
+        }
+
+        [HttpPost("check-in")]
+        
+        public async Task<IActionResult> CheckIn([FromForm] DriverCheckInDTO dto)
+        {
+            var result = await _assignmentService.DriverCheckInAsync(dto);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpPost("check-out")]
+
+        public async Task<IActionResult> CheckOut([FromForm] DriverCheckOutDTO dto)
+        {
+            var result = await _assignmentService.DriverCheckOutAsync(dto);
+            return StatusCode(result.StatusCode, result);
         }
     }
 }

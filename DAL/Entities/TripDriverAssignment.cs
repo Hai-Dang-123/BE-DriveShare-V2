@@ -37,6 +37,38 @@ namespace DAL.Entities
         public Location StartLocation { get; set; }
         public Location EndLocation { get; set; }
 
+        
+
+        // [NEW] Số tiền cọc yêu cầu
+        public decimal DepositAmount { get; set; } = 0;
+
+        // [NEW] Trạng thái cọc
+        public DepositStatus DepositStatus { get; set; } // Pending, Deposited, Refunded, Seized (Bị tịch thu)
+
+        // [NEW] Thời điểm nộp cọc
+        public DateTime? DepositAt { get; set; }
+
+
+        // =========================================================
+        // 1. CHECK-IN (LÊN XE / BẮT ĐẦU)
+        // =========================================================
+        public bool IsOnBoard { get; set; } = false; // Đã lên xe chưa?
+        public DateTime? OnBoardTime { get; set; }     // Thời gian bấm
+        public string? OnBoardLocation { get; set; }   // Tọa độ GPS & Địa chỉ
+        public string? OnBoardImage { get; set; }      // Ảnh selfie/taplo xe
+        // [NEW] Lưu Note cảnh báo (Ví dụ: "Lệch 5km")
+        public string? CheckInNote { get; set; }
+
+        // =========================================================
+        // 2. CHECK-OUT (XUỐNG XE / KẾT THÚC)
+        // =========================================================
+        public bool IsFinished { get; set; } = false;  // Đã xong việc chưa?
+        public DateTime? OffBoardTime { get; set; }    // Thời gian bấm
+        public string? OffBoardLocation { get; set; }  // Tọa độ GPS & Địa chỉ
+        public string? OffBoardImage { get; set; }     // Ảnh xác nhận
+        // [NEW] Lưu Note cảnh báo
+        public string? CheckOutNote { get; set; }
+
         // --- Trạng thái ---
         public AssignmentStatus AssignmentStatus { get; set; } // Offered, Accepted, Rejected, Completed...
         public DriverPaymentStatus PaymentStatus { get; set; } // Unpaid, Paid

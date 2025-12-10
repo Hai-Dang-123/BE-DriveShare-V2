@@ -1,6 +1,8 @@
 ﻿using BLL.Services.Interface;
 using BLL.Utilities;
 using Common.DTOs;
+using Common.Enums.Status;
+using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
@@ -269,6 +271,22 @@ namespace BLL.Services.Impletement
             dto.IsPhoneVerified = user.IsPhoneVerified;
             dto.Address = user.Address;
             dto.Role = user.Role?.RoleName ?? "Unknown";
+
+            // --- [LOGIC MỚI] CHECK CCCD (Citizen ID) ---
+            // Kiểm tra trong danh sách UserDocuments xem có loại CCCD và Status là Verified chưa
+            if (user.UserDocuments != null)
+            {
+                // Thay DocumentType.CitizenId bằng Enum thực tế của bạn
+                var cccd = user.UserDocuments.FirstOrDefault(d => d.DocumentType == DocumentType.CCCD);
+
+                // Trả về true nếu tồn tại và đã được duyệt
+                dto.HasVerifiedCitizenId = (cccd != null && cccd.Status == VerifileStatus.ACTIVE);
+            }
+            else
+            {
+                dto.HasVerifiedCitizenId = false;
+            }
+
             return dto;
         }
 
@@ -281,6 +299,22 @@ namespace BLL.Services.Impletement
             dto.IsLicenseVerified = driver.IsLicenseVerified;
             dto.TotalTripsAssigned = driver.TripDriverAssignments?.Count ?? 0;
             dto.LinkedOwnersCount = driver.OwnerDriverLinks?.Count ?? 0;
+
+            // --- [LOGIC MỚI] CHECK GPLX (Driver License) ---
+            if (driver.UserDocuments != null)
+            {
+                var gplx = driver.UserDocuments.FirstOrDefault(d => d.DocumentType == DocumentType.DRIVER_LINCENSE);
+                dto.HasVerifiedDriverLicense = (gplx != null && gplx.Status == VerifileStatus.ACTIVE);
+            }
+            else
+            {
+                dto.HasVerifiedDriverLicense = false;
+            }
+
+            // --- [LOGIC MỚI] CHECK LỊCH SỬ CHẠY XE ---
+            // Lấy giá trị từ cột HasDeclaredInitialHistory (đã tạo ở bước trước)
+            dto.HasDeclaredInitialHistory = driver.HasDeclaredInitialHistory;
+
             return dto;
         }
 

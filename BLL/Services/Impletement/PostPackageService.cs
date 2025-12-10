@@ -769,7 +769,7 @@ namespace BLL.Services.Impletement
 
                 var minDeliveryDate = CeilToNextHour(rawMinDate);
 
-                var suggestedDate = minDeliveryDate.AddDays(1);
+                var suggestedDate = minDeliveryDate.AddDays(2);
 
                 var result = new RouteCalculationResultDTO
                 {

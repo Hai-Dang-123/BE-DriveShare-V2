@@ -18,6 +18,12 @@ namespace Common.DTOs
         [Range(0, double.MaxValue)]
         public decimal PricePerPerson { get; set; }
 
+        [Range(0, double.MaxValue)]
+        public decimal? BonusAmount { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal? DepositAmount { get; set; }
+
         public string PickupLocation { get; set; } = string.Empty;
         public string DropoffLocation { get; set; } = string.Empty;
         public bool MustPickAtGarage { get; set; } = false;

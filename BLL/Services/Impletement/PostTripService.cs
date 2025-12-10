@@ -103,6 +103,11 @@ namespace BLL.Services.Impletement
                         Type = detailDto.Type, // PRIMARY hoặc ASSISTANT
                         RequiredCount = detailDto.RequiredCount,
                         PricePerPerson = detailDto.PricePerPerson,
+
+                        // [LƯU TIỀN CỌC TỪNG VỊ TRÍ]
+                        DepositAmount = detailDto.DepositAmount ?? 0,
+                        BonusAmount = detailDto.BonusAmount ?? 0,
+
                         PickupLocation = detailDto.PickupLocation,
                         DropoffLocation = detailDto.DropoffLocation,
                         MustPickAtGarage = detailDto.MustPickAtGarage,
@@ -230,6 +235,7 @@ namespace BLL.Services.Impletement
                 .Include(p => p.PostTripDetails)
                 .Include(p => p.Trip).ThenInclude(t => t.ShippingRoute).ThenInclude(r => r.StartLocation)
                 .Include(p => p.Trip).ThenInclude(t => t.ShippingRoute).ThenInclude(r => r.EndLocation)
+
                 .Include(p => p.Trip).ThenInclude(t => t.Vehicle);
         }
 
@@ -277,6 +283,7 @@ namespace BLL.Services.Impletement
 
                 var query = _unitOfWork.PostTripRepo.GetAll()
                                          .Where(p => p.PostTripId == postTripId);
+                    
 
                 // [SỬA ĐỔI] - Gọi hàm Include đầy đủ
                 query = IncludeFullPostTripData(query);
@@ -326,6 +333,7 @@ namespace BLL.Services.Impletement
                 // [XÓA BỎ] - Type không còn
                 RequiredPayloadInKg = p.RequiredPayloadInKg,
 
+
                 // Map Owner (nếu đã Include)
                 Owner = p.Owner == null ? null : new OwnerSimpleDTO
                 {
@@ -341,7 +349,9 @@ namespace BLL.Services.Impletement
                     TripId = p.Trip.TripId,
                     StartLocationName = p.Trip.ShippingRoute?.StartLocation?.Address ?? string.Empty,
                     EndLocationName = p.Trip.ShippingRoute?.EndLocation?.Address ?? string.Empty,
-                    StartTime = p.Trip.ShippingRoute?.PickupTimeWindow?.StartTime ?? default(TimeOnly),
+
+                    StartDate = p.Trip.ShippingRoute?.ExpectedPickupDate ?? default(DateTime),
+                    EndDate = p.Trip.ShippingRoute?.ExpectedDeliveryDate ?? default(DateTime),
 
                     // --- THÔNG TIN MỚI ĐÃ INCLUDE ---
                     VehicleModel = p.Trip.Vehicle?.Model,
@@ -362,7 +372,8 @@ namespace BLL.Services.Impletement
                     PickupLocation = d.PickupLocation,
                     DropoffLocation = d.DropoffLocation,
                     MustPickAtGarage = d.MustPickAtGarage,
-                    MustDropAtGarage = d.MustDropAtGarage
+                    MustDropAtGarage = d.MustDropAtGarage,
+                    DepositAmount = d.DepositAmount
                 }).ToList()
             };
         }

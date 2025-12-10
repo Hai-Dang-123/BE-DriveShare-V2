@@ -33,31 +33,23 @@ namespace BLL.Services.Implement
         {
             try
             {
-                // 🔹 Lấy Owner hiện tại từ Token
                 var ownerId = _userUtility.GetUserIdFromToken();
                 if (ownerId == Guid.Empty)
                     return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
-                // 🔹 Lấy thông tin Trip
                 var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
-                if (trip == null)
-                    return new ResponseDTO("Trip not found", 404, false);
+                if (trip == null) return new ResponseDTO("Trip not found", 404, false);
 
-                // 🔹 Lấy thông tin Provider từ DTO
                 var provider = await _unitOfWork.ProviderRepo.GetByIdAsync(dto.ProviderId);
-                if (provider == null)
-                    return new ResponseDTO("Provider not found", 404, false);
+                if (provider == null) return new ResponseDTO("Provider not found", 404, false);
 
-                // 🔹 Lấy ContractTemplate mới nhất (Type = PROVIDER_CONTRACT)
                 var template = (await _unitOfWork.ContractTemplateRepo.GetAllAsync(
                     filter: t => t.Type == ContractType.PROVIDER_CONTRACT,
                     orderBy: q => q.OrderByDescending(t => t.Version)
                 )).FirstOrDefault();
 
-                if (template == null)
-                    return new ResponseDTO("No Provider Contract Template found", 404, false);
+                if (template == null) return new ResponseDTO("No Provider Contract Template found", 404, false);
 
-                // 🔹 Check nếu hợp đồng đã tồn tại (tránh tạo trùng)
                 var existingContract = (await _unitOfWork.TripProviderContractRepo.GetAllAsync(
                     filter: c => c.TripId == trip.TripId && c.CounterpartyId == provider.UserId
                 )).FirstOrDefault();
@@ -65,7 +57,6 @@ namespace BLL.Services.Implement
                 if (existingContract != null)
                     return new ResponseDTO("Contract already exists for this trip and provider", 400, false);
 
-                // 🔹 Tạo hợp đồng mới
                 var contract = new TripProviderContract
                 {
                     ContractId = Guid.NewGuid(),
@@ -83,17 +74,39 @@ namespace BLL.Services.Implement
                 await _unitOfWork.TripProviderContractRepo.AddAsync(contract);
                 await _unitOfWork.SaveChangeAsync();
 
-                // 🔹 Chuẩn bị DTO kết quả
+                // [FIX MAPPING DTO]
                 var result = new TripProviderContractDTO
                 {
                     ContractId = contract.ContractId,
                     ContractCode = contract.ContractCode,
                     TripId = contract.TripId,
-                    OwnerId = ownerId,
-                    ProviderId = provider.UserId,
+                    TripCode = trip.TripCode ?? "",
+
+                    // Thay thế OwnerId/ProviderId bằng PartyA/PartyB
+                    PartyA = new ContractPartyDTO
+                    {
+                        UserId = ownerId,
+                        FullName = trip.Owner != null ? trip.Owner.FullName : "Owner Info Missing",
+                        Role = "Owner"
+                    },
+
+                    PartyB = new ContractPartyDTO
+                    {
+                        UserId = provider.UserId,
+                        FullName = provider.FullName,
+                        CompanyName = provider.CompanyName, // Provider có CompanyName
+                        TaxCode = provider.TaxCode,
+                        Role = "Provider"
+                    },
+
+                    ContractTemplateId = contract.ContractTemplateId ?? Guid.Empty,
+                    TemplateName = template.ContractTemplateName,
                     Version = contract.Version,
-                    Status = contract.Status,
-                    Type = contract.Type,
+
+                    // [FIX ENUM -> STRING]
+                    Status = contract.Status.ToString(),
+                    Type = contract.Type.ToString(),
+
                     CreateAt = contract.CreateAt
                 };
 
@@ -228,78 +241,105 @@ namespace BLL.Services.Implement
         // ============================================================
         // 🧩 3️⃣ GET CONTRACT BY ID (bao gồm Template + Term)
         // ============================================================
+        // ============================================================
+        // 🧩 GET CONTRACT BY ID (Full Detail for UI)
+        // ============================================================
         public async Task<ResponseDTO> GetByIdAsync(Guid contractId)
         {
             try
             {
-                // 🧩 Lấy UserId từ Token
                 var userId = _userUtility.GetUserIdFromToken();
                 if (userId == Guid.Empty)
                     return new ResponseDTO("Unauthorized or invalid token", 401, false);
 
-                // 🧩 Truy vấn hợp đồng đầy đủ liên kết
+                // Include Owner và Counterparty (Provider)
                 var contracts = await _unitOfWork.TripProviderContractRepo.GetAllAsync(
                     filter: c => c.ContractId == contractId,
                     includeProperties: "Owner,Counterparty,Trip,ContractTemplate.ContractTerms"
                 );
 
                 var contract = contracts.FirstOrDefault();
-                if (contract == null)
-                    return new ResponseDTO("Contract not found", 404, false);
+                if (contract == null) return new ResponseDTO("Contract not found", 404, false);
 
-                // 🧩 Mapping DTO: thông tin hợp đồng chính
+                // Cast Counterparty sang Provider để lấy thông tin doanh nghiệp
+                var providerEntity = contract.Counterparty as DAL.Entities.Provider;
+
+                // 1. Map Contract Info
                 var contractDto = new TripProviderContractDTO
                 {
                     ContractId = contract.ContractId,
                     ContractCode = contract.ContractCode,
                     TripId = contract.TripId,
                     TripCode = contract.Trip?.TripCode ?? string.Empty,
-                    OwnerId = contract.OwnerId,
-                    OwnerName = contract.Owner?.FullName ?? string.Empty,
-                    ProviderId = contract.CounterpartyId,
-                    ProviderName = contract.Counterparty?.FullName ?? string.Empty,
-                    ContractTemplateId = contract.ContractTemplateId,
+                    ContractTemplateId = contract.ContractTemplateId ?? Guid.Empty,
                     TemplateName = contract.ContractTemplate?.ContractTemplateName ?? string.Empty,
                     Version = contract.Version,
                     ContractValue = contract.ContractValue,
                     Currency = contract.Currency,
-                    Status = contract.Status,
+                    Status = contract.Status.ToString(),
+                    Type = contract.Type.ToString(),
+
                     OwnerSigned = contract.OwnerSigned,
                     OwnerSignAt = contract.OwnerSignAt,
                     ProviderSigned = contract.CounterpartySigned,
                     ProviderSignAt = contract.CounterpartySignAt,
+
                     FileURL = contract.FileURL,
                     CreateAt = contract.CreateAt,
                     EffectiveDate = contract.EffectiveDate,
                     ExpirationDate = contract.ExpirationDate,
                     Note = contract.Note,
-                    Type = contract.Type
+
+                    // [MAPPING BÊN A: OWNER]
+                    PartyA = new ContractPartyDTO
+                    {
+                        UserId = contract.OwnerId,
+                        FullName = contract.Owner?.FullName ?? "N/A",
+                        CompanyName = contract.Owner?.CompanyName ?? "",
+                        TaxCode = contract.Owner?.TaxCode ?? "",
+                        PhoneNumber = contract.Owner?.PhoneNumber ?? "",
+                        Email = contract.Owner?.Email ?? "",
+                        Address = contract.Owner?.BusinessAddress != null ? contract.Owner.BusinessAddress.Address : "N/A",
+                        Role = "Owner"
+                    },
+
+                    // [MAPPING BÊN B: PROVIDER]
+                    PartyB = new ContractPartyDTO
+                    {
+                        UserId = contract.CounterpartyId,
+                        FullName = contract.Counterparty?.FullName ?? "N/A",
+                        // Lấy thông tin từ Provider Entity
+                        CompanyName = providerEntity?.CompanyName ?? "",
+                        TaxCode = providerEntity?.TaxCode ?? "",
+                        PhoneNumber = contract.Counterparty?.PhoneNumber ?? "",
+                        Email = contract.Counterparty?.Email ?? "",
+                        Address = providerEntity?.BusinessAddress != null ? providerEntity.BusinessAddress.Address : "N/A",
+                        Role = "Provider"
+                    }
                 };
 
-                // 🧩 Mapping DTO: thông tin Template
+                // 2. Map Template & Terms
                 var templateDto = new ContractTemplateDTO
                 {
                     ContractTemplateId = contract.ContractTemplate?.ContractTemplateId ?? Guid.Empty,
                     ContractTemplateName = contract.ContractTemplate?.ContractTemplateName ?? string.Empty,
                     Version = contract.ContractTemplate?.Version ?? string.Empty,
                     CreatedAt = contract.ContractTemplate?.CreatedAt ?? DateTime.MinValue,
-                    Type = contract.ContractTemplate?.Type ?? ContractType.PROVIDER_CONTRACT
+                    Type = contract.ContractTemplate?.Type ?? Common.Enums.Type.ContractType.PROVIDER_CONTRACT
                 };
 
                 var termsDto = contract.ContractTemplate?.ContractTerms?
-               .Select(t => new ContractTermDTO
-               {
-                ContractTermId = t.ContractTermId,
-                Content = t.Content,  
-                Order = t.Order,
-                ContractTemplateId = t.ContractTemplateId
-               })
-                .OrderBy(t => t.Order)
-                .ToList() ?? new List<ContractTermDTO>();
+                    .Select(t => new ContractTermDTO
+                    {
+                        ContractTermId = t.ContractTermId,
+                        Content = t.Content,
+                        Order = t.Order,
+                        ContractTemplateId = t.ContractTemplateId
+                    })
+                    .OrderBy(t => t.Order)
+                    .ToList() ?? new List<ContractTermDTO>();
 
-
-
-                // 🧩 Gộp các phần lại
+                // 3. Return Full Detail
                 var detailDto = new TripProviderContractDetailDTO
                 {
                     Contract = contractDto,
@@ -361,67 +401,71 @@ namespace BLL.Services.Implement
             await _unitOfWork.TripProviderContractRepo.AddAsync(contract);
         }
 
+        // ============================================================
+        // 🧩 3️⃣ GET ALL (Fix Mapping Select)
+        // ============================================================
         public async Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize)
         {
             try
             {
-                // 1. Lấy thông tin User
                 var userId = _userUtility.GetUserIdFromToken();
                 var userRole = _userUtility.GetUserRoleFromToken();
-                if (userId == Guid.Empty)
-                    return new ResponseDTO("Unauthorized: Invalid token", 401, false);
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // 2. Lấy IQueryable cơ sở
-                var query = _unitOfWork.TripProviderContractRepo.GetAll()
-                                     .AsNoTracking();
+                var query = _unitOfWork.TripProviderContractRepo.GetAll().AsNoTracking();
 
-                // 3. Lọc theo Vai trò (Authorization)
-                if (userRole == "Owner")
-                {
-                    query = query.Where(c => c.OwnerId == userId);
-                }
-                else if (userRole == "Provider")
-                {
-                    query = query.Where(c => c.CounterpartyId == userId);
-                }
-                else if (userRole == "Admin")
-                {
-                    // Admin: không cần lọc
-                }
-                else
-                {
-                    // Các vai trò khác (ví dụ: Driver) không được xem
-                    return new ResponseDTO("Forbidden: You do not have permission", 403, false);
-                }
+                if (userRole == "Owner") query = query.Where(c => c.OwnerId == userId);
+                else if (userRole == "Provider") query = query.Where(c => c.CounterpartyId == userId);
+                else if (userRole != "Admin") return new ResponseDTO("Forbidden", 403, false);
 
-                // 4. Đếm tổng số lượng (sau khi lọc)
                 var totalCount = await query.CountAsync();
 
-                // 5. Lấy dữ liệu của trang và Map sang DTO
-                // (Dùng DTO tóm tắt, giống DTO trả về của hàm Create/GetById)
+                // [FIX MAPPING TRONG SELECT]
                 var contractsDto = await query
                     .Include(c => c.Trip)
                     .Include(c => c.Owner)
-                    .Include(c => c.Counterparty) // (Provider)
+                    .Include(c => c.Counterparty)
                     .Include(c => c.ContractTemplate)
-                    .OrderByDescending(c => c.CreateAt) // Sắp xếp mới nhất trước
+                    .OrderByDescending(c => c.CreateAt)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(c => new TripProviderContractDTO // Map trên DB
+                    .Select(c => new TripProviderContractDTO
                     {
                         ContractId = c.ContractId,
                         ContractCode = c.ContractCode,
                         TripId = c.TripId,
                         TripCode = c.Trip != null ? c.Trip.TripCode : "N/A",
-                        OwnerId = c.OwnerId,
-                        OwnerName = c.Owner != null ? c.Owner.FullName : "N/A",
-                        ProviderId = c.CounterpartyId,
-                        ProviderName = c.Counterparty != null ? c.Counterparty.FullName : "N/A",
-                        ContractTemplateId = c.ContractTemplateId,
+
+                        // [FIX] Map PartyA (Owner)
+                        PartyA = new ContractPartyDTO
+                        {
+                            UserId = c.OwnerId,
+                            FullName = c.Owner != null ? c.Owner.FullName : "N/A",
+                            CompanyName = c.Owner != null ? c.Owner.CompanyName : "",
+                            Role = "Owner"
+                        },
+
+                        // [FIX] Map PartyB (Provider)
+                        // Lưu ý: Trong LINQ to Entities, ép kiểu (as Provider) có thể gây lỗi.
+                        // Tốt nhất là lấy các trường chung từ BaseUser (Counterparty)
+                        PartyB = new ContractPartyDTO
+                        {
+                            UserId = c.CounterpartyId,
+                            FullName = c.Counterparty != null ? c.Counterparty.FullName : "N/A",
+                            // Nếu muốn CompanyName, cần chắc chắn Counterparty là Provider
+                            // EF Core có thể không hỗ trợ 'as Provider' trong Select.
+                            // Giải pháp: Chấp nhận lấy thông tin cơ bản ở list view, hoặc dùng discriminator
+                            Role = "Provider"
+                        },
+
+                        ContractTemplateId = c.ContractTemplateId ?? Guid.Empty,
                         TemplateName = c.ContractTemplate != null ? c.ContractTemplate.ContractTemplateName : "N/A",
                         Version = c.Version,
-                        Status = c.Status,
-                        Type = c.Type,
+
+                        // [FIX] Enum -> String
+                        Status = c.Status.ToString(),
+                        Type = c.Type.ToString(),
+
                         CreateAt = c.CreateAt,
                         EffectiveDate = c.EffectiveDate,
                         OwnerSigned = c.OwnerSigned,
@@ -429,9 +473,7 @@ namespace BLL.Services.Implement
                     })
                     .ToListAsync();
 
-                // 6. Tạo kết quả PaginatedDTO
                 var paginatedResult = new PaginatedDTO<TripProviderContractDTO>(contractsDto, totalCount, pageNumber, pageSize);
-
                 return new ResponseDTO("Retrieved provider contracts successfully", 200, true, paginatedResult);
             }
             catch (Exception ex)

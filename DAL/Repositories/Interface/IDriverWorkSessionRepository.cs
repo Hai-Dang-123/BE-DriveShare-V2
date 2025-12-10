@@ -9,5 +9,6 @@ namespace DAL.Repositories.Interface
 {
     public interface IDriverWorkSessionRepository : IGenericRepository<DriverWorkSession>
     {
+        void DeleteRange(IEnumerable<DriverWorkSession> entities);
     }
 }

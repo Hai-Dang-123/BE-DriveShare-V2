@@ -35,6 +35,8 @@ namespace DAL.Repositories.Implement
                 .Include(p => p.Items)
                 .Include(p => p.Packages)
                 .Include(p => p.PostPackages)
+                                .Include(d => d.UserDocuments)
+
                 .FirstOrDefaultAsync(p => p.UserId == userId);
         }
     }

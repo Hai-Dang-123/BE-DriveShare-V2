@@ -31,12 +31,7 @@ namespace DriverShareProject.Controllers
 
             return StatusCode(response.StatusCode, response);
         }
-        [HttpGet("{contractId}")]
-        public async Task<IActionResult> GetContractById(Guid contractId)
-        {
-            var response = await _tripProviderContractService.GetByIdAsync(contractId);
-            return StatusCode(response.StatusCode, response);
-        }
+       
 
         /// <summary>
         /// [Owner/Provider] Lấy danh sách Hợp đồng Nhà cung cấp (có phân trang).

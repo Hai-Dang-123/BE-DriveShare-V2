@@ -4,6 +4,7 @@ using Common.DTOs;
 using Common.DTOs.TripVehicleHandoverRecord;
 using Common.Enums.Status;
 using Common.Enums.Type;
+using Common.Settings;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
@@ -19,12 +20,14 @@ namespace BLL.Services.Impletement
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
         private readonly IEmailService _emailService;
+        private readonly IFirebaseUploadService _firebaseUploadService;
 
-        public TripVehicleHandoverRecordService(IUnitOfWork unitOfWork, UserUtility userUtility, IEmailService emailService)
+        public TripVehicleHandoverRecordService(IUnitOfWork unitOfWork, UserUtility userUtility, IEmailService emailService, IFirebaseUploadService firebaseUploadService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _emailService = emailService;
+            _firebaseUploadService = firebaseUploadService;
         }
 
         public async Task<bool> CreateTripVehicleHandoverRecordAsync(TripVehicleHandoverRecordCreateDTO dto)
@@ -400,10 +403,14 @@ namespace BLL.Services.Impletement
         // ========================================================================
         // 4. UPDATE CHECKLIST (Lưu kết quả kiểm tra xe)
         // ========================================================================
+        // Đảm bảo đã Inject Service này vào Constructor
+        // private readonly IFirebaseUploadService _firebaseUploadService;
+
         public async Task<ResponseDTO> UpdateChecklistAsync(UpdateHandoverChecklistDTO dto)
         {
             try
             {
+                // Load record và các TermResults
                 var record = await _unitOfWork.TripVehicleHandoverRecordRepo.GetAll()
                     .Include(r => r.TermResults)
                     .FirstOrDefaultAsync(r => r.DeliveryRecordId == dto.RecordId);
@@ -422,13 +429,36 @@ namespace BLL.Services.Impletement
                 foreach (var item in dto.ChecklistItems)
                 {
                     var termResult = record.TermResults.FirstOrDefault(t => t.TripVehicleHandoverTermResultId == item.TripVehicleHandoverTermResultId);
+
                     if (termResult != null)
                     {
                         termResult.IsPassed = item.IsPassed;
                         termResult.Note = item.Note;
-                        termResult.EvidenceImageUrl = item.EvidenceImageUrl;
 
-                        // Update trạng thái Entity (nếu cần thiết với EF Core tracking)
+                        // --- LOGIC UPLOAD ẢNH ---
+                        if (item.EvidenceImage != null && item.EvidenceImage.Length > 0)
+                        {
+                            // A. Xác định UserId sở hữu file 
+                            // (Lấy từ record.DriverId hoặc ID của người đang đăng nhập thực hiện request này)
+                            // Giả sử record có DriverId, nếu null thì dùng Guid.Empty hoặc ID mặc định
+                            Guid uploadUserId = record.DriverId;
+
+                            // B. Xác định Loại file (Enum FirebaseFileType)
+                            // Bạn cần chọn Enum phù hợp trong code của bạn (ví dụ: Image, VehicleImage, Document...)
+                            FirebaseFileType fileType = FirebaseFileType.HANDOVER_EVIDENCE_IMAGES;
+
+                            // C. Gọi hàm Upload
+                            string uploadedUrl = await _firebaseUploadService.UploadFileAsync(
+                                item.EvidenceImage,
+                                uploadUserId,
+                                fileType
+                            );
+
+                            // D. Lưu URL trả về vào database
+                            termResult.EvidenceImageUrl = uploadedUrl;
+                        }
+                        // --- KẾT THÚC LOGIC UPLOAD ---
+
                         await _unitOfWork.TripVehicleHandoverTermResultRepo.UpdateAsync(termResult);
                     }
                 }

@@ -1,4 +1,5 @@
-﻿using Common.Settings;
+﻿using BLL.Hubs;
+using Common.Settings;
 using DAL.Context;
 using DriverShareProject.Extentions.BuilderExtensions;
 using DriverShareProject.Extentions.PolicyExtensions;
@@ -37,6 +38,8 @@ builder.AddAppConfiguration();
 // Add Authorization policies
 builder.Services.AddAuthorizationPolicies();
 
+builder.Services.AddSignalR();
+
 
 // ======================================================================
 // ✅ FIX 1: ĐĂNG KÝ CORS GLOBAL
@@ -73,6 +76,9 @@ app.UseApplicationMiddlewares();
 // ✅ FIX 2: BẬT CORS đúng vị trí (PHẢI TRƯỚC Authentication/Authorization)
 // ======================================================================
 app.UseCors("AllowFrontend");
+
+// Map Hub Endpoint
+app.MapHub<TripTrackingHub>("/hubs/tracking");
 
 app.UseAuthentication();
 app.UseAuthorization();

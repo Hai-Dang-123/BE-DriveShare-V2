@@ -20,6 +20,9 @@ namespace Common.Settings
         AVATAR_IMAGES,
 
         VEHICLE_DOCUMENTS,
-        USER_DOCUMENTS
+        USER_DOCUMENTS,
+
+        CHECKIN_CHECKOUT_IMAGES,
+        HANDOVER_EVIDENCE_IMAGES
     }
 }
