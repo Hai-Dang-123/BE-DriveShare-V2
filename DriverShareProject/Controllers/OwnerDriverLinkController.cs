@@ -1,4 +1,5 @@
-﻿using BLL.Services.Interface;
+﻿using BLL.Services.Impletement;
+using BLL.Services.Interface;
 using Common.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,17 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> GetMyDrivers([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             var response = await _ownerDriverLinkService.GetDriversByOwnerAsync(pageNumber, pageSize);
+            return StatusCode(response.StatusCode, response);
+        }
+
+        /// <summary>
+        /// Dành cho Tài xế: Kiểm tra xem mình đang thuộc đội xe nào.
+        /// </summary>
+        [HttpGet("my-team")]
+        //[Authorize(Roles = "Driver")] // Đảm bảo chỉ Driver gọi được (tùy config Role của bạn)
+        public async Task<IActionResult> GetMyTeamInfo()
+        {
+            var response = await _ownerDriverLinkService.GetCurrentTeamInfoAsync();
             return StatusCode(response.StatusCode, response);
         }
     }

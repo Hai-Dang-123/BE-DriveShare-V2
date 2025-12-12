@@ -5,6 +5,7 @@ using MailKit.Net.Smtp;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using System;
+using System.Text;
 using System.Threading.Tasks;
 using static BLL.Services.Implement.TripService;
 
@@ -301,65 +302,75 @@ namespace BLL.Services.Impletement
 
         public async Task SendTripCompletionEmailAsync(string toEmail, TripCompletionReportModel model)
         {
-            var subject = $"✅ [Báo cáo hoàn thành] Chuyến đi #{model.TripCode}";
+            var subject = $"✅ [Hoàn thành] Chuyến đi #{model.TripCode}";
 
-            // --- XÂY DỰNG KHỐI TÀI CHÍNH (DYNAMIC) ---
+            // --- LOGIC XỬ LÝ SỐ LIỆU & MÀU SẮC ---
             string financialHtml = "";
 
+            // Format tiền: 
+            // 1. Math.Abs để không bao giờ bị hiện "-100,000" khi đã có dấu "-" cứng
+            // 2. Nếu = 0 thì không hiện dấu + hoặc -
+            decimal absAmount = Math.Abs(model.Amount);
+            string moneyColor = model.IsIncome ? "#16A34A" : "#DC2626"; // Xanh/Đỏ
+            string sign = model.Amount == 0 ? "" : (model.IsIncome ? "+" : "-");
+            string bgBox = model.IsIncome ? "#F0FDF4" : "#FEF2F2";
+
+            // =========================================================================
+            // TRƯỜNG HỢP 1: GIAO DIỆN CHO OWNER (BẢNG QUYẾT TOÁN CHI TIẾT)
+            // =========================================================================
             if (model.Role == "Owner")
             {
-                // ---------------- OWNER: HIỂN THỊ QUYẾT TOÁN ----------------
+                // Render danh sách trả lương tài xế
                 var expenseRows = "";
                 foreach (var exp in model.DriverExpenses)
                 {
-                    // Hiển thị lương trả cho từng tài xế
                     expenseRows += $@"
             <div style='display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed #E5E7EB; padding-bottom:4px;'>
-                <span style='font-size:13px; color:#4B5563;'>Trả {exp.Role} ({exp.DriverName})</span>
+                <span style='font-size:13px; color:#4B5563;'>Chi lương {exp.DriverName} ({exp.Role})</span>
                 <span style='font-size:13px; color:#DC2626; font-weight:600;'>-{exp.Amount:N0} ₫</span>
             </div>";
                 }
 
                 financialHtml = $@"
-        <div style='background-color:#F3F4F6; border-radius:8px; padding:20px; margin-bottom:30px;'>
-            <div style='font-size:12px; font-weight:700; color:#6B7280; text-transform:uppercase; margin-bottom:15px;'>Bảng quyết toán chuyến đi</div>
+        <div style='background-color:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px; padding:20px; margin-bottom:30px;'>
+            <div style='font-size:14px; font-weight:700; color:#374151; margin-bottom:15px; text-transform:uppercase; text-align:center;'>BẢNG QUYẾT TOÁN CHI TIẾT</div>
             
             <div style='display:flex; justify-content:space-between; margin-bottom:12px;'>
-                <span style='color:#374151;'>Doanh thu từ Provider (sau phí)</span>
-                <span style='color:#16A34A; font-weight:700; font-size:16px;'>+{model.TotalIncome:N0} ₫</span>
+                <span style='color:#374151; font-weight:600;'>Doanh thu chuyến (Sau phí sàn)</span>
+                <span style='color:#16A34A; font-weight:700; font-size:15px;'>+{model.OwnerGrossRevenue:N0} ₫</span>
             </div>
 
-            {expenseRows}
+            <div style='margin-bottom:12px;'>
+                <div style='font-size:11px; color:#9CA3AF; margin-bottom:4px;'>CHI PHÍ NHÂN SỰ</div>
+                {expenseRows}
+            </div>
 
             <div style='border-top:2px solid #D1D5DB; margin:15px 0;'></div>
 
             <div style='display:flex; justify-content:space-between; align-items:center;'>
-                <span style='font-weight:700; color:#111827;'>THỰC NHẬN VỀ VÍ</span>
-                <span style='color:#2563EB; font-weight:800; font-size:24px;'>{model.TotalIncome:N0} ₫</span>
+                <span style='font-weight:700; color:#111827; font-size:16px;'>THỰC NHẬN VỀ VÍ</span>
+                <span style='color:#2563EB; font-weight:800; font-size:24px;'>{sign}{absAmount:N0} ₫</span>
             </div>
-            <div style='font-size:11px; color:#6B7280; margin-top:5px; text-align:right;'>*(Đã bao gồm các khoản bù trừ nếu có)</div>
+            <div style='font-size:11px; color:#6B7280; margin-top:5px; text-align:right;'>*(Đã trừ lương tài xế và các khoản phạt/bù lỗ nếu có)</div>
         </div>";
             }
+            // =========================================================================
+            // TRƯỜNG HỢP 2: GIAO DIỆN CHO PROVIDER / DRIVER (ĐƠN GIẢN)
+            // =========================================================================
             else
             {
-                // ---------------- PROVIDER / DRIVER: HIỂN THỊ ĐƠN GIẢN ----------------
-                string color = model.IsIncome ? "#16A34A" : "#DC2626"; // Xanh (Thu) / Đỏ (Nợ/Trừ)
-                string sign = model.IsIncome ? "+" : ""; // Dấu
-                string bg = model.IsIncome ? "#F0FDF4" : "#FEF2F2";
-
-                // Xử lý hiển thị số âm cho đẹp
-                decimal displayAmount = Math.Abs(model.Amount);
-                if (!model.IsIncome) sign = "-";
+                // Fix lỗi hiển thị: Nếu là Provider (IsIncome = false), ta hiện số tiền họ ĐÃ TRẢ
+                // Dấu "-" màu đỏ, hoặc "+" màu xanh
 
                 financialHtml = $@"
-        <div style='background-color:{bg}; border-left:5px solid {color}; padding:20px; border-radius:8px; margin-bottom:30px;'>
+        <div style='background-color:{bgBox}; border-left:5px solid {moneyColor}; padding:20px; border-radius:8px; margin-bottom:30px;'>
             <div style='font-size:12px; text-transform:uppercase; color:#6B7280; font-weight:700; letter-spacing:0.5px;'>{model.FinancialDescription}</div>
-            <div style='font-size:32px; font-weight:800; color:{color}; margin:5px 0;'>{sign}{displayAmount:N0} ₫</div>
+            <div style='font-size:32px; font-weight:800; color:{moneyColor}; margin:5px 0;'>{sign}{absAmount:N0} ₫</div>
             <div style='font-size:14px; color:#4B5563;'>Giao dịch đã được ghi nhận vào hệ thống.</div>
         </div>";
             }
 
-            // --- BLOCK HIỂN THỊ CHI TIẾT SỰ CỐ / PHẠT ---
+            // --- HIỂN THỊ PHẠT / SỰ CỐ (NẾU CÓ) ---
             string surchargeHtml = "";
             if (model.Surcharges != null && model.Surcharges.Any())
             {
@@ -368,7 +379,7 @@ namespace BLL.Services.Impletement
                 {
                     rows += $@"
             <div style='display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px;'>
-                <span style='color:#4B5563;'>{sur.Type}: {sur.Description}</span>
+                <span style='color:#4B5563;'>⚠️ {sur.Type}: {sur.Description}</span>
                 <span style='font-weight:600; color:#DC2626;'>-{sur.Amount:N0} ₫</span>
             </div>";
                 }
@@ -377,17 +388,18 @@ namespace BLL.Services.Impletement
         <div style='background-color:#FFF7ED; border:1px dashed #F97316; padding:15px; border-radius:6px; margin-bottom:20px;'>
             <div style='font-size:12px; font-weight:700; color:#C2410C; margin-bottom:8px; text-transform:uppercase;'>Chi tiết Sự cố / Phạt</div>
             {rows}
+            <div style='font-size:11px; font-style:italic; color:#7C2D12; margin-top:5px;'>Khoản phạt này được trừ trực tiếp vào đối tượng chịu trách nhiệm.</div>
         </div>";
             }
 
-            // --- TEMPLATE BODY ---
+            // --- GHÉP VÀO BODY ---
             var body = $@"
     <!DOCTYPE html>
     <html>
     <head>
         <style>
             body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
-            .container {{ max-width: 600px; margin: 20px auto; background: #FFF; border-radius: 12px; overflow: hidden; }}
+            .container {{ max-width: 600px; margin: 20px auto; background: #FFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
             .header {{ background: #2563EB; padding: 30px; text-align: center; color: white; }}
             .content {{ padding: 30px; color: #374151; }}
             .section-title {{ font-size: 14px; font-weight: 700; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; }}
@@ -400,13 +412,13 @@ namespace BLL.Services.Impletement
     <body>
         <div class='container'>
             <div class='header'>
-                <h1 style='margin:0; font-size:24px;'>BÁO CÁO HOÀN THÀNH</h1>
-                <div style='background:rgba(255,255,255,0.2); padding:5px 10px; border-radius:4px; display:inline-block; margin-top:10px;'>#{model.TripCode}</div>
+                <h1 style='margin:0; font-size:22px; font-weight:600;'>BÁO CÁO HOÀN THÀNH</h1>
+                <div style='background:rgba(255,255,255,0.2); padding:5px 10px; border-radius:4px; display:inline-block; margin-top:10px; font-size:14px;'>Mã chuyến: {model.TripCode}</div>
             </div>
             
             <div class='content'>
                 <p>Xin chào <strong>{model.RecipientName}</strong>,</p>
-                <p>Chuyến đi đã kết thúc lúc {model.CompletedAt}. Dưới đây là thông tin quyết toán:</p>
+                <p>Chuyến đi của bạn đã hoàn tất vào lúc {model.CompletedAt}. Dưới đây là thông tin tài chính chi tiết:</p>
 
                 {financialHtml}
                 {surchargeHtml}
@@ -423,14 +435,101 @@ namespace BLL.Services.Impletement
                     </tr>
                 </table>
             </div>
-            <div style='background:#F9FAFB; padding:20px; text-align:center; font-size:12px; color:#9CA3AF;'>
-                DriveShare Platform &copy; {DateTime.Now.Year}
+            <div style='background:#F9FAFB; padding:20px; text-align:center; font-size:12px; color:#9CA3AF; border-top:1px solid #E5E7EB;'>
+                Hệ thống Quản lý Vận tải &copy; {DateTime.Now.Year}
             </div>
         </div>
     </body>
     </html>";
 
             await SendEmailAsync(toEmail, subject, body);
+        }
+
+        // Hàm Render Template
+        public async Task SendTripLiquidationEmailAsync(ParticipantFinancialReport report, string tripCode)
+        {
+            if (string.IsNullOrEmpty(report.Email)) return;
+
+            string subject = $"✅ [Quyết toán] Chuyến đi #{tripCode} - {report.Role}";
+
+            // Màu sắc tổng tiền
+            string color = report.FinalWalletChange >= 0 ? "#16A34A" : "#DC2626"; // Xanh lá / Đỏ
+            string sign = report.FinalWalletChange > 0 ? "+" : "";
+            string bgTotal = report.FinalWalletChange >= 0 ? "#F0FDF4" : "#FEF2F2";
+
+            // 1. Render các dòng chi tiết (Table Rows)
+            StringBuilder rowsHtml = new StringBuilder();
+            foreach (var item in report.Items)
+            {
+                string itemColor = item.IsNegative ? "#DC2626" : "#16A34A"; // Đỏ nếu trừ, Xanh nếu cộng
+                string itemSign = item.IsNegative ? "-" : "+";
+
+                rowsHtml.Append($@"
+            <tr style='border-bottom: 1px dashed #E5E7EB;'>
+                <td style='padding: 12px 8px; color: #4B5563; font-size: 14px;'>{item.Description}</td>
+                <td style='padding: 12px 8px; text-align: right; color: {itemColor}; font-weight: 600; font-size: 14px; white-space: nowrap;'>
+                    {itemSign}{item.Amount:N0} ₫
+                </td>
+            </tr>");
+            }
+
+            // 2. HTML Body
+            string body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
+        .container {{ max-width: 600px; margin: 20px auto; background: #FFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .header {{ background: #2563EB; padding: 25px; text-align: center; color: white; }}
+        .content {{ padding: 30px; }}
+        .table-wrapper {{ margin-top: 20px; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }}
+        .total-box {{ background-color: {bgTotal}; padding: 20px; margin-top: 0; text-align: center; border-top: 2px solid #E5E7EB; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h2 style='margin:0; font-size: 22px; font-weight: 600;'>BÁO CÁO TÀI CHÍNH</h2>
+            <div style='margin-top:5px; opacity:0.9; font-size: 14px;'>Mã chuyến: #{tripCode}</div>
+            <div style='margin-top:5px; font-size: 13px; background: rgba(255,255,255,0.2); display: inline-block; padding: 2px 8px; border-radius: 4px;'>Vai trò: {report.Role}</div>
+        </div>
+        
+        <div class='content'>
+            <p>Xin chào <strong>{report.FullName}</strong>,</p>
+            <p>Chuyến đi đã hoàn tất. Dưới đây là bảng chi tiết các khoản thu/chi của bạn:</p>
+
+            <div class='table-wrapper'>
+                <table style='width: 100%; border-collapse: collapse;'>
+                    <thead style='background-color: #F9FAFB;'>
+                        <tr>
+                            <th style='padding: 12px 8px; text-align: left; color: #6B7280; font-size: 11px; text-transform: uppercase; font-weight: 700;'>Hạng mục</th>
+                            <th style='padding: 12px 8px; text-align: right; color: #6B7280; font-size: 11px; text-transform: uppercase; font-weight: 700;'>Số tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rowsHtml}
+                    </tbody>
+                </table>
+                
+                <div class='total-box'>
+                    <div style='font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>TỔNG BIẾN ĐỘNG VÍ</div>
+                    <div style='font-size: 28px; font-weight: 800; color: {color}; margin-top: 5px;'>
+                        {sign}{report.FinalWalletChange:N0} ₫
+                    </div>
+                    <div style='font-size: 12px; color: #9CA3AF; margin-top: 5px;'>*(Số tiền đã được ghi nhận vào hệ thống)</div>
+                </div>
+            </div>
+
+            <p style='font-size: 12px; color: #9CA3AF; text-align: center; margin-top: 30px;'>
+                DriveShare Platform &copy; {DateTime.Now.Year}
+            </p>
+        </div>
+    </div>
+</body>
+</html>";
+
+            await SendEmailAsync(report.Email, subject, body);
         }
 
         // BLL/Services/Impletement/EmailService.cs

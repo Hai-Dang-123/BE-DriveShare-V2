@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DriverShareProject.Controllers
 {
     [Route("api/[controller]")]
+    [ApiController]
     public class TransactionController : ControllerBase
     {
         private readonly ITransactionService _transactionService;

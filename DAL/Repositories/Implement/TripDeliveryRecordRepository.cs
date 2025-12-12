@@ -41,6 +41,8 @@ namespace DAL.Repositories.Implement
         public async Task<TripDeliveryRecord?> GetByIdWithDetailsForDriverAsync(Guid id)
         {
             return await _context.TripDeliveryRecords
+                .AsNoTracking() // Tăng tốc độ đọc, không cần theo dõi thay đổi
+        .AsSplitQuery() // <--- CHÌA KHÓA: Tách query để tránh Timeout
                 .Include(r => r.TripContact) // Include người ký
                 .Include(tdr => tdr.Driver)
                 .Include(r => r.DeliveryRecordTemplate) // Include template

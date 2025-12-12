@@ -15,5 +15,7 @@ namespace Common.DTOs
         public int AssistantCount { get; set; }
         public int RemainingSlots { get; set; }             // Còn thiếu
         public string Recommendation { get; set; }          // Lời khuyên
+
+        public double DrivingHoursRequired { get; set; }
     }
 }

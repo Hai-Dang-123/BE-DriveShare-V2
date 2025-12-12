@@ -24,6 +24,7 @@ namespace BLL.Services.Impletement
         private readonly ITripVehicleHandoverRecordService _vehicleHandoverService;
         private readonly IFirebaseUploadService _fileService;
         private readonly IDriverWorkSessionService _driverWorkSessionService;
+        private readonly IUserDocumentService _userDocumentService;
 
         public TripDriverAssignmentService(
             IUnitOfWork unitOfWork,
@@ -34,7 +35,8 @@ namespace BLL.Services.Impletement
             IVietMapService vietMapService,
             ITripVehicleHandoverRecordService vehicleHandoverService,
             IFirebaseUploadService fileService,
-            IDriverWorkSessionService driverWorkSessionService)
+            IDriverWorkSessionService driverWorkSessionService,
+            IUserDocumentService userDocumentService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -45,6 +47,7 @@ namespace BLL.Services.Impletement
             _vehicleHandoverService = vehicleHandoverService;
             _fileService = fileService;
             _driverWorkSessionService = driverWorkSessionService;
+            _userDocumentService = userDocumentService;
         }
 
         // =========================================================================================================
@@ -173,44 +176,38 @@ namespace BLL.Services.Impletement
             }
         }
 
-        // =========================================================================================================
-        // 2. TÀI XẾ ỨNG TUYỂN (APPLY POST TRIP) - [UPDATED: Trừ Tiền Cọc]
-        // =========================================================================================================
         public async Task<ResponseDTO> CreateAssignmentByPostTripAsync(CreateAssignmentByPostTripDTO dto)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 1. Validate Driver
+                // =========================================================================
+                // 1. VALIDATE DRIVER & QUOTA
+                // =========================================================================
                 var driverId = _userUtility.GetUserIdFromToken();
                 if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
                 var driver = await _unitOfWork.DriverRepo.GetByIdAsync(driverId);
                 if (driver == null) return new ResponseDTO("Driver not found.", 404, false);
+
+                //// --- BƯỚC 0: CHECK GIẤY TỜ ---
+                var verifyCheck = await _userDocumentService.ValidateUserDocumentsAsync(driverId);
+                if (!verifyCheck.IsValid) return new ResponseDTO(verifyCheck.Message, 403, false);
+
                 if (!driver.HasDeclaredInitialHistory)
                 {
-                    // Trả về mã lỗi đặc biệt (VD: 428 Precondition Required) để Frontend biết đường hiển thị Popup
-                    return new ResponseDTO(
-                        "Bạn cần cập nhật lịch sử lái xe trong tuần hiện tại trước khi nhận chuyến đi đầu tiên.",
-                        428,
-                        false
-                    );
+                    return new ResponseDTO("Bạn cần cập nhật lịch sử lái xe trong tuần hiện tại trước khi nhận chuyến đi đầu tiên.", 428, false);
                 }
-                // ----------------------------------------
 
-                // --- [MỚI] CHECK 2: QUY ĐỊNH 10H/48H ---
                 var availability = await _driverWorkSessionService.CheckDriverAvailabilityAsync(driverId);
                 if (!availability.CanDrive)
                 {
-                    return new ResponseDTO(
-                        $"Bạn không thể nhận chuyến do đã quá giờ lái quy định. {availability.Message}",
-                        400,
-                        false
-                    );
+                    return new ResponseDTO($"Bạn không thể nhận chuyến do đã quá giờ lái quy định. {availability.Message}", 400, false);
                 }
-                // ----------------------------------------
 
-                // 2. Lấy PostTrip
+                // =========================================================================
+                // 2. GET & VALIDATE TRIP/POST DATA
+                // =========================================================================
                 var postTrip = await _unitOfWork.PostTripRepo.GetAll()
                     .Include(p => p.PostTripDetails)
                     .FirstOrDefaultAsync(p => p.PostTripId == dto.PostTripId);
@@ -218,12 +215,10 @@ namespace BLL.Services.Impletement
                 if (postTrip == null) return new ResponseDTO("PostTrip not found.", 404, false);
                 if (postTrip.Status != PostStatus.OPEN) return new ResponseDTO("Bài đăng này đã đóng.", 400, false);
 
-                // 3. Validate Slot
                 var postDetail = postTrip.PostTripDetails.FirstOrDefault(d => d.PostTripDetailId == dto.PostTripDetailId);
                 if (postDetail == null) return new ResponseDTO("Slot details not found.", 404, false);
                 if (postDetail.RequiredCount <= 0) return new ResponseDTO("Vị trí này đã đủ người.", 400, false);
 
-                // 4. Lấy Trip
                 var trip = await _unitOfWork.TripRepo.GetAll()
                     .Include(t => t.TripRoute)
                     .Include(t => t.ShippingRoute).ThenInclude(r => r.StartLocation)
@@ -232,13 +227,13 @@ namespace BLL.Services.Impletement
 
                 if (trip == null) return new ResponseDTO("Trip not found.", 404, false);
 
-                // 5. Check Duplicate Application
+                // Check Duplicate
                 bool alreadyApplied = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
                     a => a.TripId == postTrip.TripId && a.DriverId == driverId
                 );
                 if (alreadyApplied) return new ResponseDTO("Bạn đã ứng tuyển chuyến này rồi.", 409, false);
 
-                // 6. Check Main Driver Constraint
+                // Check Main Driver
                 bool isMainDriver = (postDetail.Type == DriverType.PRIMARY);
                 if (isMainDriver)
                 {
@@ -249,76 +244,151 @@ namespace BLL.Services.Impletement
                 }
 
                 // =========================================================================
-                // [NEW] XỬ LÝ TIỀN CỌC (QUAN TRỌNG)
+                // 3. XỬ LÝ TIỀN CỌC
                 // =========================================================================
                 decimal depositAmount = postDetail.DepositAmount;
                 DepositStatus depositStatus = DepositStatus.NOT_REQUIRED;
 
                 if (depositAmount > 0)
                 {
-                    // A. Lấy ví Driver
                     var driverWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == driverId);
                     if (driverWallet == null) return new ResponseDTO("Ví tài xế không tồn tại.", 400, false);
 
-                    // B. Kiểm tra số dư
                     if (driverWallet.Balance < depositAmount)
                     {
-                        // [FAIL FAST] Không đủ tiền -> Báo lỗi luôn, không cho nợ
                         return new ResponseDTO($"Số dư ví không đủ để đặt cọc ({depositAmount:N0}đ). Vui lòng nạp thêm tiền.", 402, false);
                     }
 
-                    // C. Trừ tiền Driver (Logic tiền trao cháo múc)
                     driverWallet.Balance -= depositAmount;
                     driverWallet.LastUpdatedAt = DateTime.UtcNow;
                     await _unitOfWork.WalletRepo.UpdateAsync(driverWallet);
 
-                    // D. Log Giao Dịch
                     await _unitOfWork.TransactionRepo.AddAsync(new Transaction
                     {
                         TransactionId = Guid.NewGuid(),
                         WalletId = driverWallet.WalletId,
                         TripId = trip.TripId,
-                        Amount = -depositAmount, // Số âm thể hiện trừ tiền
-                        Type = TransactionType.DEPOSIT, // Cần thêm enum này
+                        Amount = -depositAmount,
+                        Type = TransactionType.DEPOSIT,
                         Status = TransactionStatus.SUCCEEDED,
                         Description = $"Đặt cọc cho chuyến đi {trip.TripCode}",
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        BalanceBefore = driverWallet.Balance + depositAmount,
+                        BalanceAfter = driverWallet.Balance,
+                        CompletedAt = DateTime.UtcNow
                     });
 
                     depositStatus = DepositStatus.DEPOSITED;
                 }
-                // =========================================================================
 
-                // 7. Xử lý địa điểm (Logic cũ)
+                // =========================================================================
+                // [UPDATED] 4. XỬ LÝ ĐỊA ĐIỂM & VALIDATE KHOẢNG CÁCH
+                // =========================================================================
                 var tripStart = trip.ShippingRoute.StartLocation;
                 var tripEnd = trip.ShippingRoute.EndLocation;
+
                 Common.ValueObjects.Location finalStartLoc;
                 Common.ValueObjects.Location finalEndLoc;
 
                 if (isMainDriver)
                 {
+                    // --- CASE: TÀI XẾ CHÍNH (Giữ nguyên logic cũ) ---
                     string pickupAddr = !string.IsNullOrWhiteSpace(postDetail.PickupLocation) ? postDetail.PickupLocation : tripStart.Address;
                     string dropAddr = !string.IsNullOrWhiteSpace(postDetail.DropoffLocation) ? postDetail.DropoffLocation : tripEnd.Address;
+
                     var geoStart = await _vietMapService.GeocodeAsync(pickupAddr);
                     var geoEnd = await _vietMapService.GeocodeAsync(dropAddr);
+
                     finalStartLoc = new Common.ValueObjects.Location(pickupAddr, geoStart?.Latitude ?? 0, geoStart?.Longitude ?? 0);
                     finalEndLoc = new Common.ValueObjects.Location(dropAddr, geoEnd?.Latitude ?? 0, geoEnd?.Longitude ?? 0);
                 }
                 else
                 {
-                    // Logic Tài phụ: Ưu tiên input của Driver -> Default theo Post -> Default theo Trip
-                    string pAddr = !string.IsNullOrWhiteSpace(dto.StartLocation) ? dto.StartLocation : (postDetail.PickupLocation ?? tripStart.Address);
-                    var geoS = await _vietMapService.GeocodeAsync(pAddr);
-                    if (geoS == null) return new ResponseDTO("Địa chỉ đón không hợp lệ.", 400, false);
-                    finalStartLoc = new Common.ValueObjects.Location(pAddr, geoS.Latitude ?? 0, geoS.Longitude ?? 0);
+                    // --- CASE: TÀI XẾ PHỤ (Logic mới) ---
+                    bool needValidateStart = false;
+                    bool needValidateEnd = false;
 
-                    string dAddr = !string.IsNullOrWhiteSpace(dto.EndLocation) ? dto.EndLocation : (postDetail.DropoffLocation ?? tripEnd.Address);
-                    var geoE = await _vietMapService.GeocodeAsync(dAddr);
-                    if (geoE == null) return new ResponseDTO("Địa chỉ trả không hợp lệ.", 400, false);
-                    finalEndLoc = new Common.ValueObjects.Location(dAddr, geoE.Latitude ?? 0, geoE.Longitude ?? 0);
+                    // A. Xử lý ĐIỂM ĐÓN (Start)
+                    if (!string.IsNullOrWhiteSpace(dto.StartLocation))
+                    {
+                        // Có nhập -> Lấy theo User nhập -> Đánh dấu cần Validate
+                        var geoS = await _vietMapService.GeocodeAsync(dto.StartLocation);
+                        if (geoS == null || geoS.Latitude == 0) return new ResponseDTO("Địa chỉ đón nhập vào không hợp lệ.", 400, false);
+
+                        finalStartLoc = new Common.ValueObjects.Location(dto.StartLocation, geoS.Latitude ?? 0, geoS.Longitude ?? 0);
+                        needValidateStart = true;
+                    }
+                    else
+                    {
+                        // Không nhập (Null/Empty) -> Lấy theo Post Detail hoặc Trip -> KHÔNG validate
+                        string defStart = !string.IsNullOrWhiteSpace(postDetail.PickupLocation) ? postDetail.PickupLocation : tripStart.Address;
+                        var geoS = await _vietMapService.GeocodeAsync(defStart); // Vẫn cần geocode để lưu tọa độ
+
+                        finalStartLoc = new Common.ValueObjects.Location(defStart, geoS?.Latitude ?? 0, geoS?.Longitude ?? 0);
+                        needValidateStart = false;
+                    }
+
+                    // B. Xử lý ĐIỂM TRẢ (End)
+                    if (!string.IsNullOrWhiteSpace(dto.EndLocation))
+                    {
+                        // Có nhập -> Lấy theo User nhập -> Đánh dấu cần Validate
+                        var geoE = await _vietMapService.GeocodeAsync(dto.EndLocation);
+                        if (geoE == null || geoE.Latitude == 0) return new ResponseDTO("Địa chỉ trả nhập vào không hợp lệ.", 400, false);
+
+                        finalEndLoc = new Common.ValueObjects.Location(dto.EndLocation, geoE.Latitude ?? 0, geoE.Longitude ?? 0);
+                        needValidateEnd = true;
+                    }
+                    else
+                    {
+                        // Không nhập -> Lấy theo Post Detail hoặc Trip -> KHÔNG validate
+                        string defEnd = !string.IsNullOrWhiteSpace(postDetail.DropoffLocation) ? postDetail.DropoffLocation : tripEnd.Address;
+                        var geoE = await _vietMapService.GeocodeAsync(defEnd);
+
+                        finalEndLoc = new Common.ValueObjects.Location(defEnd, geoE?.Latitude ?? 0, geoE?.Longitude ?? 0);
+                        needValidateEnd = false;
+                    }
+
+                    // C. Thực hiện Validate (Nếu cần)
+                    if (needValidateStart || needValidateEnd)
+                    {
+                        // Chỉ lấy Polyline khi thực sự cần check để tối ưu hiệu năng
+                        string encodedPolyline = trip.TripRoute.RouteData;
+                        if (string.IsNullOrEmpty(encodedPolyline))
+                        {
+                            var routePath = await _vietMapService.GetRouteAsync(tripStart, tripEnd, "truck");
+                            if (routePath != null)
+                            {
+                                encodedPolyline = routePath.Points;
+                                // Cache lại vào DB nếu muốn
+                                // trip.TripRoute.RouteData = encodedPolyline; 
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(encodedPolyline))
+                        {
+                            // Nếu không lấy được lộ trình mà bắt buộc phải validate -> Lỗi
+                            return new ResponseDTO("Hệ thống không xác định được lộ trình để kiểm tra vị trí đón/trả.", 500, false);
+                        }
+
+                        // Check Start
+                        if (needValidateStart)
+                        {
+                            bool isPickupValid = _vietMapService.IsLocationOnRoute(finalStartLoc, encodedPolyline, 5.0); // Buffer 5km
+                            if (!isPickupValid) return new ResponseDTO($"Điểm đón '{finalStartLoc.Address}' nằm quá xa lộ trình (>5km).", 400, false);
+                        }
+
+                        // Check End
+                        if (needValidateEnd)
+                        {
+                            bool isDropoffValid = _vietMapService.IsLocationOnRoute(finalEndLoc, encodedPolyline, 5.0);
+                            if (!isDropoffValid) return new ResponseDTO($"Điểm trả '{finalEndLoc.Address}' nằm quá xa lộ trình (>5km).", 400, false);
+                        }
+                    }
                 }
 
-                // 8. Tạo Assignment
+                // =========================================================================
+                // 5. TẠO ASSIGNMENT & KẾT THÚC
+                // =========================================================================
                 var newAssignment = new TripDriverAssignment
                 {
                     TripDriverAssignmentId = Guid.NewGuid(),
@@ -328,8 +398,8 @@ namespace BLL.Services.Impletement
                     CreateAt = DateTime.UtcNow,
                     UpdateAt = DateTime.UtcNow,
                     BaseAmount = postDetail.PricePerPerson,
+                    BonusAmount = postDetail.BonusAmount,
 
-                    // [CẬP NHẬT] Thông tin cọc đã xử lý ở trên
                     DepositAmount = depositAmount,
                     DepositStatus = depositStatus,
                     DepositAt = (depositStatus == DepositStatus.DEPOSITED) ? DateTime.UtcNow : null,
@@ -337,33 +407,30 @@ namespace BLL.Services.Impletement
                     StartLocation = finalStartLoc,
                     EndLocation = finalEndLoc,
 
-                    // [NEW] KHỞI TẠO CÁC TRƯỜNG CHECK-IN / CHECK-OUT (Mặc định chưa làm gì cả)
                     IsOnBoard = false,
                     OnBoardTime = null,
                     OnBoardLocation = null,
                     OnBoardImage = null,
                     CheckInNote = null,
-
                     IsFinished = false,
                     OffBoardTime = null,
                     OffBoardLocation = null,
                     OffBoardImage = null,
                     CheckOutNote = null,
 
-                    // Vì Driver chủ động apply và đã đóng cọc -> ACCEPTED luôn
                     AssignmentStatus = AssignmentStatus.ACCEPTED,
                     PaymentStatus = DriverPaymentStatus.UN_PAID
                 };
                 await _unitOfWork.TripDriverAssignmentRepo.AddAsync(newAssignment);
 
-                // 9. Contract Logic (Internal Driver check)
+                // Contract Logic
                 bool isInternalDriver = await _unitOfWork.OwnerDriverLinkRepo.CheckLinkExistsAsync(trip.OwnerId, driverId, FleetJoinStatus.APPROVED);
                 if (!isInternalDriver)
                 {
                     await _tripDriverContractService.CreateContractInternalAsync(trip.TripId, trip.OwnerId, driverId, postDetail.PricePerPerson);
                 }
 
-                // 10. Main Driver Logic
+                // Main Driver Records Logic
                 if (isMainDriver)
                 {
                     trip.UpdateAt = DateTime.UtcNow;
@@ -371,7 +438,7 @@ namespace BLL.Services.Impletement
                     await CreateRecordsForMainDriver(trip.TripId, driverId, trip.OwnerId);
                 }
 
-                // 11. Update Count & Status
+                // Update Slot Counts
                 postDetail.RequiredCount -= 1;
                 bool isAllSlotsFilled = postTrip.PostTripDetails.All(d => d.RequiredCount <= 0);
                 if (isAllSlotsFilled) postTrip.Status = PostStatus.DONE;
@@ -379,16 +446,15 @@ namespace BLL.Services.Impletement
                 postTrip.UpdateAt = DateTime.UtcNow;
                 await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
 
-                // 12. Commit
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
-                return new ResponseDTO("Ứng tuyển thành công (Đã thanh toán cọc).", 201, true, new { assignmentId = newAssignment.TripDriverAssignmentId });
+                return new ResponseDTO("Ứng tuyển thành công.", 201, true, new { assignmentId = newAssignment.TripDriverAssignmentId });
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return new ResponseDTO($"Error: {ex.Message}", 500, false);
+                return new ResponseDTO($"System Error: {ex.Message}", 500, false);
             }
         }
 

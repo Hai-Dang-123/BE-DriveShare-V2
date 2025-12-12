@@ -38,6 +38,18 @@ namespace Common.DTOs
         // Checklist & Issues
         public List<HandoverTermResultDTO> TermResults { get; set; } = new();
         public List<HandoverIssueDTO> Issues { get; set; } = new();
+
+        public List<HandoverSurchargeDTO> Surcharges { get; set; } = new List<HandoverSurchargeDTO>();
+    }
+
+    // DTO con cho khoản phạt
+    public class HandoverSurchargeDTO
+    {
+        public Guid TripSurchargeId { get; set; }
+        public string Type { get; set; }        // Loại (Trầy xước, Dơ bẩn...)
+        public decimal Amount { get; set; }     // Số tiền
+        public string Description { get; set; } // Mô tả
+        public string Status { get; set; }      // Trạng thái (PENDING/PAID)
     }
 
     public class HandoverTermResultDTO

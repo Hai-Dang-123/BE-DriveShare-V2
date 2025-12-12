@@ -16,5 +16,7 @@ namespace BLL.Services.Interface
         Task SendTripCompletionEmailAsync(string toEmail, TripCompletionReportModel model);
         Task SendEmailVerificationLinkAsync(string email, string fullName, string verificationLink);
 
+        Task SendTripLiquidationEmailAsync(ParticipantFinancialReport report, string tripCode);
+
     }
 }

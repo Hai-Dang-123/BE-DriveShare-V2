@@ -67,7 +67,7 @@ namespace DriverShareProject.Controllers
         // 5. UPDATE CHECKLIST
         // ============================================================================
         [HttpPut("update-checklist")]
-        public async Task<IActionResult> UpdateChecklist([FromBody] UpdateHandoverChecklistDTO dto)
+        public async Task<IActionResult> UpdateChecklist([FromForm] UpdateHandoverChecklistDTO dto)
         {
             var response = await _handoverService.UpdateChecklistAsync(dto);
             return StatusCode(response.StatusCode, response);
@@ -77,7 +77,7 @@ namespace DriverShareProject.Controllers
         // 6. REPORT ISSUE
         // ============================================================================
         [HttpPost("report-issue")]
-        public async Task<IActionResult> ReportIssue([FromBody] ReportHandoverIssueDTO dto)
+        public async Task<IActionResult> ReportIssue([FromForm] ReportHandoverIssueDTO dto)
         {
             var response = await _handoverService.ReportIssueAsync(dto);
             return StatusCode(response.StatusCode, response);

@@ -22,6 +22,8 @@ namespace DAL.Repositories.Implement
             _context = context;
             _dbSet = _context.Set<T>();
         }
+
+
         public async Task<T> AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);

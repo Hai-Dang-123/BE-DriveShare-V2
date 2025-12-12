@@ -6,33 +6,28 @@ using System.Threading.Tasks;
 
 namespace Common.DTOs
 {
+    // Model dùng để render Email HTML
     public class TripCompletionReportModel
     {
-        // ... Các field cũ giữ nguyên ...
         public string TripCode { get; set; }
         public string CompletedAt { get; set; }
         public string StartAddress { get; set; }
         public string EndAddress { get; set; }
-        public double DistanceKm { get; set; }
+        public decimal DistanceKm { get; set; }
         public string VehiclePlate { get; set; }
-        public string VehicleType { get; set; }
-        public int PackageCount { get; set; }
-        public decimal TotalPayload { get; set; }
         public string RecipientName { get; set; }
-        public string Role { get; set; }
+        public string Role { get; set; } // "Owner", "Provider", "Driver"
 
-        // --- FIELD CHO PROVIDER / DRIVER (Đơn giản) ---
-        public decimal Amount { get; set; }
-        public bool IsIncome { get; set; }
+        // --- TÀI CHÍNH ---
+        public decimal Amount { get; set; } // Số tiền chốt (Dương là nhận, Âm là trả/nợ)
+        public bool IsIncome { get; set; }  // True: Tiền về ví, False: Tiền trừ ví
         public string FinancialDescription { get; set; }
 
-        // [NEW] Danh sách phạt (nếu có)
-        public List<SurchargeDetail> Surcharges { get; set; } = new List<SurchargeDetail>();
+        // --- DÀNH RIÊNG CHO OWNER (Quyết toán) ---
+        public decimal OwnerGrossRevenue { get; set; } // Doanh thu
+        public decimal OwnerTotalDriverPay { get; set; } // Chi phí tài xế
 
-        // --- [NEW] FIELD DÀNH RIÊNG CHO OWNER (Quyết toán tổng hợp) ---
-        public decimal TotalIncome { get; set; }      // Tiền nhận từ Provider (sau phí sàn)
-        public decimal TotalExpense { get; set; }     // Tổng tiền trả cho Drivers
-        public decimal NetProfit => TotalIncome - TotalExpense; // Lợi nhuận thực
+        public List<SurchargeDetail> Surcharges { get; set; } = new List<SurchargeDetail>();
         public List<ExpenseDetail> DriverExpenses { get; set; } = new List<ExpenseDetail>();
 
         public TripCompletionReportModel Clone() => (TripCompletionReportModel)MemberwiseClone();
@@ -40,7 +35,7 @@ namespace Common.DTOs
 
     public class SurchargeDetail
     {
-        public string Type { get; set; } // "Hư Hàng", "Hư Xe"
+        public string Type { get; set; }
         public decimal Amount { get; set; }
         public string Description { get; set; }
     }
@@ -48,7 +43,7 @@ namespace Common.DTOs
     public class ExpenseDetail
     {
         public string DriverName { get; set; }
-        public string Role { get; set; } // Tài chính/Tài phụ
+        public string Role { get; set; }
         public decimal Amount { get; set; }
     }
 }

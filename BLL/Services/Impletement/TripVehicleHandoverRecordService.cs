@@ -143,6 +143,25 @@ namespace BLL.Services.Impletement
                 if (record == null)
                     return new ResponseDTO("Không tìm thấy biên bản giao nhận xe.", 404, false);
 
+                // 2. [NEW] Load các khoản Bồi thường/Phạt liên quan đến xe của chuyến này
+                // Logic: Lấy Surcharge cùng TripId VÀ có Type thuộc nhóm Hư hỏng/Vệ sinh xe
+                var vehicleSurcharges = await _unitOfWork.TripSurchargeRepo.GetAll()
+                    .Where(s => s.TripId == record.TripId && (
+                        s.Type == SurchargeType.VEHICLE_DAMAGE ||
+                        s.Type == SurchargeType.VEHICLE_DIRTY ||
+                        s.Type == SurchargeType.SCRATCH ||
+                        s.Type == SurchargeType.DENT ||
+                        s.Type == SurchargeType.CRACK ||
+                        s.Type == SurchargeType.PAINT_PEELING ||
+                        s.Type == SurchargeType.DIRTY ||
+                        s.Type == SurchargeType.ODOR ||
+                        s.Type == SurchargeType.MECHANICAL ||
+                        s.Type == SurchargeType.ELECTRICAL ||
+                        s.Type == SurchargeType.TIRE ||
+                        s.Type == SurchargeType.MISSING_ITEM
+                    ))
+                    .ToListAsync();
+
                 // Map sang DTO
                 var dto = new TripVehicleHandoverReadDTO
                 {
@@ -189,6 +208,15 @@ namespace BLL.Services.Impletement
                         Status = i.Status.ToString(),
                         EstimatedCompensationAmount = i.EstimatedCompensationAmount,
                         ImageUrls = i.Images.Select(img => img.ImageUrl).ToList()
+                    }).ToList(),
+                    // [NEW] Map Surcharges (Khoản phạt chính thức đã tạo)
+                    Surcharges = vehicleSurcharges.Select(s => new HandoverSurchargeDTO
+                    {
+                        TripSurchargeId = s.TripSurchargeId,
+                        Type = s.Type.ToString(), // VD: SCRATCH, DENT
+                        Amount = s.Amount,
+                        Description = s.Description,
+                        Status = s.Status.ToString() // PENDING / PAID
                     }).ToList()
                 };
 
@@ -477,14 +505,18 @@ namespace BLL.Services.Impletement
         // ========================================================================
         // 5. REPORT ISSUE (Báo cáo sự cố mới)
         // ========================================================================
+        // ========================================================================
+        // 5. REPORT ISSUE (Báo cáo sự cố mới)
+        // ========================================================================
         public async Task<ResponseDTO> ReportIssueAsync(ReportHandoverIssueDTO dto)
         {
             try
             {
+                // 1. Kiểm tra biên bản tồn tại
                 var record = await _unitOfWork.TripVehicleHandoverRecordRepo.GetByIdAsync(dto.RecordId);
                 if (record == null) return new ResponseDTO("Biên bản không tồn tại.", 404, false);
 
-                // Tạo Issue
+                // 2. Khởi tạo đối tượng Issue
                 var newIssue = new TripVehicleHandoverIssue
                 {
                     TripVehicleHandoverIssueId = Guid.NewGuid(),
@@ -496,21 +528,35 @@ namespace BLL.Services.Impletement
                     Images = new List<TripVehicleHandoverIssueImage>()
                 };
 
-                // Thêm ảnh
-                if (dto.ImageUrls != null && dto.ImageUrls.Any())
+                // 3. Xử lý Upload ảnh (Dùng Firebase Service)
+                if (dto.Image != null && dto.Image.Length > 0)
                 {
-                    foreach (var url in dto.ImageUrls)
+                    // Lấy UserId người đang thao tác để gom thư mục trên Firebase (nếu cần logic đó)
+                    var userId = _userUtility.GetUserIdFromToken();
+                    if (userId == Guid.Empty) userId = dto.RecordId; // Fallback nếu không lấy được User
+
+                    // Gọi Service Upload
+                    // Lưu ý: Hãy đảm bảo Enum FirebaseFileType.VEHICLE_ISSUE_IMAGE đã có, hoặc dùng loại tương đương
+                    string uploadedUrl = await _firebaseUploadService.UploadFileAsync(dto.Image, userId, FirebaseFileType.HANDOVER_EVIDENCE_IMAGES);
+
+                    if (!string.IsNullOrEmpty(uploadedUrl))
                     {
+                        // Lưu URL vào danh sách ảnh của Issue
                         newIssue.Images.Add(new TripVehicleHandoverIssueImage
                         {
                             TripVehicleHandoverIssueImageId = Guid.NewGuid(),
                             TripVehicleHandoverIssueId = newIssue.TripVehicleHandoverIssueId,
-                            ImageUrl = url,
-                            Caption = dto.IssueType.ToString()
+                            ImageUrl = uploadedUrl,
+                            Caption = dto.IssueType.ToString() // Caption mặc định là loại sự cố
                         });
+                    }
+                    else
+                    {
+                        return new ResponseDTO("Lỗi khi upload ảnh lên hệ thống.", 500, false);
                     }
                 }
 
+                // 4. Lưu xuống Database
                 await _unitOfWork.TripVehicleHandoverIssueRepo.AddAsync(newIssue);
                 await _unitOfWork.SaveChangeAsync();
 

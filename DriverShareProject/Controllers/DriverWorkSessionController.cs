@@ -1,4 +1,5 @@
-﻿using BLL.Services.Interface;
+﻿using BLL.Services.Impletement;
+using BLL.Services.Interface;
 using Common.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -83,6 +84,34 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> ImportDriverWorkSessionHistory([FromBody] ImportDriverHistoryDTO dto)
         {
             var response = await _service.ImportDriverHistoryAsync(dto);
+            return StatusCode(response.StatusCode, response);
+        }
+
+
+        // =========================================================================
+        // 1. GET: LẤY QUỸ THỜI GIAN HIỆN TẠI CỦA TÀI XẾ
+        // =========================================================================
+        // URL: GET api/DriverWorkSession/my-availability
+        // Dùng khi: Tài xế vào màn hình trang chủ hoặc trước khi xem danh sách chuyến
+        [HttpGet("my-availability")]
+        public async Task<IActionResult> GetMyAvailability()
+        {
+            var response = await _service.GetDriverCurrentAvailabilityAsync();
+
+           return StatusCode(response.StatusCode, response);
+        }
+
+        // =========================================================================
+        // 2. GET: CHECK TÀI XẾ CÓ PHÙ HỢP VỚI CHUYẾN ĐI CỤ THỂ KHÔNG
+        // =========================================================================
+        // URL: GET api/DriverWorkSession/check-suitability/{tripId}
+        // Dùng khi: Tài xế bấm vào xem chi tiết một PostTrip. 
+        // Frontend gọi API này để quyết định có cho hiện nút "Ứng tuyển" hay không.
+        [HttpGet("check-suitability/{tripId}")]
+        public async Task<IActionResult> CheckSuitabilityForTrip(Guid tripId)
+        {
+            var response = await _service.ValidateDriverForTripAsync(tripId);
+
             return StatusCode(response.StatusCode, response);
         }
 

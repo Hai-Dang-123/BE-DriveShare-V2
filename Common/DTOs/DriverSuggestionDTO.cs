@@ -21,13 +21,15 @@ namespace Common.DTOs
         public DriverScenarioDTO ExpressScenario { get; set; } = new();
 
         public string SystemRecommendation { get; set; } = string.Empty; // Lời khuyên tổng thể
+
+        public double RequiredHoursFromQuota { get; set; }
     }
 
     public class DriverScenarioDTO
     {
         public bool IsPossible { get; set; } // Có kịp deadline của Provider không?
-        public double TotalHoursNeeded { get; set; } // Tổng thời gian hoàn thành chuyến (bao gồm nghỉ)
-        public double WorkHoursPerDriver { get; set; } // Giờ làm việc trung bình mỗi tài (để tính lương)
+        public double TotalElapsedHours { get; set; }  // Tổng thời gian trôi qua (Lái + Nghỉ) -> Dùng để check deadline giao hàng
+        public double DrivingHoursPerDriver { get; set; } // Giờ lái thực tế/người -> Dùng để check luật 48h
         public string Message { get; set; } = string.Empty; // Mô tả (VD: "Chạy 10h/ngày, nghỉ đêm")
         public string Note { get; set; } = string.Empty; // Cảnh báo (VD: "Trễ 10 tiếng")
     }

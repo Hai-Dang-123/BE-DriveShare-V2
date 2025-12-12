@@ -33,6 +33,6 @@ namespace Common.DTOs.TripVehicleHandoverRecord
         public Guid RecordId { get; set; }
         public VehicleIssueType IssueType { get; set; }
         public string Description { get; set; }
-        public List<string> ImageUrls { get; set; } = new();
+        public IFormFile Image { get; set; } 
     }
 }

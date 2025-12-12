@@ -3,6 +3,7 @@ using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
 using Common.Enums.Type;
+using Common.Helpers;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
@@ -391,8 +392,298 @@ namespace BLL.Services.Impletement
 
         public async Task<DriverAvailabilityDTO> CheckDriverAvailabilityAsync(Guid driverId)
         {
-            // Gọi lại hàm private CalculateDriverHoursAsync đã viết ở bài trước
-            return await CalculateDriverHoursAsync(driverId);
+            return await CalculateDriverHoursForAssignAsync(driverId);
+        }
+
+        private async Task<DriverAvailabilityDTO> CalculateDriverHoursForAssignAsync(Guid driverId)
+        {
+            // 1. Dùng thống nhất múi giờ (Ví dụ: UTC).
+            // Nếu DB lưu Local Time, bạn phải đổi now sang Local Time tại đây.
+            var now = DateTime.UtcNow;
+
+            // Xác định khung giờ Ngày
+            var startOfDay = now.Date; // 00:00:00 hôm nay
+            var endOfDay = startOfDay.AddDays(1); // 00:00:00 ngày mai (để so sánh <)
+
+            // Xác định khung giờ Tuần (Bắt đầu từ Thứ 2)
+            // Code cũ của bạn: (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7 là ĐÚNG để tìm thứ 2
+            int diff = (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7;
+            var startOfWeek = startOfDay.AddDays(-1 * diff);
+            var endOfWeek = startOfWeek.AddDays(7);
+
+            // 2. Query tối ưu
+            // Lưu ý: Đảm bảo _unitOfWork trả về IQueryable để gen SQL
+            var query = _unitOfWork.DriverWorkSessionRepo.GetAll();
+
+            // Lọc dữ liệu trong SQL trước khi lôi về (Server-side evaluation)
+            // Logic: Lấy các session có dính dáng đến tuần này (StartTime < Cuối tuần VÀ (Chưa kết thúc HOẶC Kết thúc sau đầu tuần))
+            var sessions = await query
+                .Where(s => s.DriverId == driverId
+                            && s.StartTime < endOfWeek
+                            && (s.EndTime == null || s.EndTime > startOfWeek))
+                .ToListAsync();
+
+            double hoursToday = 0;
+            double hoursWeek = 0;
+
+            // 3. Tính toán trong bộ nhớ (Client-side evaluation)
+            foreach (var s in sessions)
+            {
+                // Nếu EndTime null (đang chạy), coi như kết thúc tại thời điểm hiện tại (now)
+                var actualEndTime = s.EndTime ?? now;
+
+                // --- TÍNH GIỜ TRONG NGÀY ---
+                // Giao nhau giữa [s.Start, s.End] và [startOfDay, endOfDay]
+                // Công thức giao nhau: Max(Start1, Start2) -> Min(End1, End2)
+                var overlapStartDay = s.StartTime > startOfDay ? s.StartTime : startOfDay;
+                var overlapEndDay = actualEndTime < endOfDay ? actualEndTime : endOfDay; // Dùng actualEndTime
+
+                if (overlapEndDay > overlapStartDay)
+                {
+                    hoursToday += (overlapEndDay - overlapStartDay).TotalHours;
+                }
+
+                // --- TÍNH GIỜ TRONG TUẦN ---
+                // Giao nhau giữa [s.Start, s.End] và [startOfWeek, endOfWeek]
+                var overlapStartWeek = s.StartTime > startOfWeek ? s.StartTime : startOfWeek;
+                var overlapEndWeek = actualEndTime < endOfWeek ? actualEndTime : endOfWeek;
+
+                if (overlapEndWeek > overlapStartWeek)
+                {
+                    hoursWeek += (overlapEndWeek - overlapStartWeek).TotalHours;
+                }
+            }
+
+            // 4. Kiểm tra giới hạn
+            if (hoursToday >= 10)
+                return new DriverAvailabilityDTO
+                {
+                    CanDrive = false,
+                    Message = $"Over daily limit ({hoursToday:F1}/10h)",
+                    HoursDrivenToday = hoursToday,
+                    HoursDrivenThisWeek = hoursWeek
+                };
+
+            if (hoursWeek >= 48)
+                return new DriverAvailabilityDTO
+                {
+                    CanDrive = false,
+                    Message = $"Over weekly limit ({hoursWeek:F1}/48h)",
+                    HoursDrivenToday = hoursToday,
+                    HoursDrivenThisWeek = hoursWeek
+                };
+
+            return new DriverAvailabilityDTO
+            {
+                CanDrive = true,
+                Message = "OK",
+                HoursDrivenToday = hoursToday,
+                HoursDrivenThisWeek = hoursWeek
+            };
+        }
+
+
+
+
+        // =========================================================================
+        // 1. PUBLIC API: LẤY THỜI GIAN AVAILABLE (Dùng cho App Tài xế xem Dashboard)
+        // =========================================================================
+        public async Task<ResponseDTO> GetDriverCurrentAvailabilityAsync()
+        {
+            try
+            {
+                var driverId = _userUtility.GetUserIdFromToken();
+                if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
+                // Gọi hàm tính toán nội bộ
+                var result = await CalculateDriverAvailabilityInternalAsync(driverId);
+
+                return new ResponseDTO("Success", 200, true, result);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO(ex.Message, 500, false);
+            }
+        }
+
+        // =========================================================================
+        // 2. PUBLIC API: VALIDATE TÀI XẾ VỚI 1 TRIP CỤ THỂ (Dùng khi xem chi tiết Trip)
+        // =========================================================================
+        public async Task<ResponseDTO> ValidateDriverForTripAsync(Guid tripId)
+        {
+            try
+            {
+                var driverId = _userUtility.GetUserIdFromToken();
+                if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
+                // Gọi hàm check nội bộ
+                var checkResult = await CheckDriverCapabilityInternalAsync(driverId, tripId);
+
+                if (!checkResult.IsSuitable)
+                {
+                    // Trả về 200 nhưng data báo false để Frontend hiện lý do (hoặc 400 tùy quy định)
+                    return new ResponseDTO(checkResult.Reason, 400, false, checkResult);
+                }
+
+                return new ResponseDTO("Tài xế phù hợp với chuyến đi.", 200, true, checkResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO(ex.Message, 500, false);
+            }
+        }
+
+        // =========================================================================
+        // 3. INTERNAL CHECK: DÙNG CHO CẢ VALIDATE VÀ LÚC TẠO ASSIGNMENT
+        // =========================================================================
+        public async Task<DriverSuitabilityDTO> CheckDriverCapabilityInternalAsync(Guid driverId, Guid tripId)
+        {
+            // A. Lấy thông tin Trip & Route
+            var trip = await _unitOfWork.TripRepo.GetAll()
+                .Include(t => t.ShippingRoute)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TripId == tripId);
+
+            if (trip == null) return new DriverSuitabilityDTO { IsSuitable = false, Reason = "Trip not found." };
+
+            // B. Tính toán nhu cầu chuyến đi
+            // [Fix]: Null safety cho ActualDistanceKm
+            double distance = (double)(trip.ActualDistanceKm);
+            double tripDuration = trip.ActualDuration.TotalHours;
+
+            // Fallback nếu chưa có Duration thực tế
+            if (tripDuration <= 0 && distance > 0) tripDuration = distance / 50.0;
+
+            // Dùng Helper tính toán kịch bản (Solo/Team)
+            var suggestion = TripCalculationHelper.CalculateScenarios(
+                distance,
+                tripDuration,
+                trip.ShippingRoute.ExpectedPickupDate,
+                trip.ShippingRoute.ExpectedDeliveryDate
+            );
+
+            // Xác định số giờ YÊU CẦU
+            double requiredHours = 0;
+            string mode = suggestion.SystemRecommendation;
+
+            if (mode == "SOLO") requiredHours = suggestion.SoloScenario.DrivingHoursPerDriver;
+            else if (mode == "TEAM") requiredHours = suggestion.TeamScenario.DrivingHoursPerDriver;
+            else requiredHours = suggestion.TeamScenario.DrivingHoursPerDriver; // Fallback
+
+            // C. Lấy Quota hiện tại (GỌI HÀM RIÊNG ĐÃ TÁCH - FIX LỖI 1 ARGUMENT)
+            var availability = await CalculateDriverAvailabilityInternalAsync(driverId);
+
+            // D. CHECK 1: Quỹ thời gian
+            if (availability.IsBanned)
+            {
+                return new DriverSuitabilityDTO
+                {
+                    IsSuitable = false,
+                    Reason = "Tài xế đang bị cấm lái do vượt quá giới hạn tuần.",
+                    RequiredHours = requiredHours,
+                    DriverRemainingHours = availability.RemainingHoursThisWeek
+                };
+            }
+
+            if (availability.RemainingHoursThisWeek < requiredHours)
+            {
+                return new DriverSuitabilityDTO
+                {
+                    IsSuitable = false,
+                    Reason = $"Thiếu giờ lái. Cần {requiredHours:F1}h, chỉ còn {availability.RemainingHoursThisWeek:F1}h.",
+                    RequiredHours = requiredHours,
+                    DriverRemainingHours = availability.RemainingHoursThisWeek
+                };
+            }
+
+            // E. CHECK 2: Trùng lịch (Schedule Conflict)
+            var startTrip = trip.ShippingRoute.ExpectedPickupDate;
+            var endTrip = trip.ShippingRoute.ExpectedDeliveryDate;
+
+            bool isConflict = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                .Include(a => a.Trip).ThenInclude(t => t.ShippingRoute)
+                .AsNoTracking() // Tối ưu
+                .AnyAsync(a =>
+                    a.DriverId == driverId &&
+                    (a.AssignmentStatus == AssignmentStatus.ACCEPTED || a.AssignmentStatus == AssignmentStatus.ACCEPTED) &&
+                    a.TripId != tripId && // Bỏ qua chính nó
+                    a.Trip.ShippingRoute.ExpectedPickupDate < endTrip &&
+                    a.Trip.ShippingRoute.ExpectedDeliveryDate > startTrip // Logic giao nhau
+                );
+
+            if (isConflict)
+            {
+                return new DriverSuitabilityDTO
+                {
+                    IsSuitable = false,
+                    Reason = "Tài xế bị trùng lịch với chuyến đi khác.",
+                    RequiredHours = requiredHours,
+                    DriverRemainingHours = availability.RemainingHoursThisWeek
+                };
+            }
+
+            // F. Success
+            return new DriverSuitabilityDTO
+            {
+                IsSuitable = true,
+                Reason = "Success",
+                RequiredHours = requiredHours,
+                DriverRemainingHours = availability.RemainingHoursThisWeek
+            };
+        }
+
+        // =========================================================================
+        // 4. PRIVATE HELPER: TÍNH TOÁN GIỜ LÁI (CORE LOGIC)
+        // =========================================================================
+        // Hàm này tách ra để cả API Public và Internal Check đều gọi được
+        private async Task<DriverAvailabilityInPostTripDTO> CalculateDriverAvailabilityInternalAsync(Guid driverId)
+        {
+            var now = DateTime.UtcNow;
+            var startOfDay = now.Date;
+            var endOfDay = startOfDay.AddDays(1);
+
+            // Tính đầu tuần (Thứ 2)
+            int diff = (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7;
+            var startOfWeek = startOfDay.AddDays(-1 * diff);
+            var endOfWeek = startOfWeek.AddDays(7);
+
+            var sessions = await _unitOfWork.DriverWorkSessionRepo.GetAll()
+                .AsNoTracking()
+                .Where(s => s.DriverId == driverId
+                            && s.StartTime < endOfWeek
+                            && (s.EndTime == null || s.EndTime > startOfWeek))
+                .ToListAsync();
+
+            double hoursToday = 0;
+            double hoursWeek = 0;
+
+            foreach (var s in sessions)
+            {
+                var sEnd = s.EndTime ?? now;
+
+                // Tính giao nhau trong Ngày
+                var overlapStartDay = s.StartTime > startOfDay ? s.StartTime : startOfDay;
+                var overlapEndDay = sEnd < endOfDay ? sEnd : endOfDay;
+                if (overlapEndDay > overlapStartDay)
+                    hoursToday += (overlapEndDay - overlapStartDay).TotalHours;
+
+                // Tính giao nhau trong Tuần
+                var overlapStartWeek = s.StartTime > startOfWeek ? s.StartTime : startOfWeek;
+                var overlapEndWeek = sEnd < endOfWeek ? sEnd : endOfWeek;
+                if (overlapEndWeek > overlapStartWeek)
+                    hoursWeek += (overlapEndWeek - overlapStartWeek).TotalHours;
+            }
+
+            return new DriverAvailabilityInPostTripDTO
+            {
+                DriverId = driverId,
+                DrivenHoursToday = Math.Round(hoursToday, 1),
+                RemainingHoursToday = Math.Max(0, 10.0 - hoursToday),
+                DrivenHoursThisWeek = Math.Round(hoursWeek, 1),
+                RemainingHoursThisWeek = Math.Max(0, 48.0 - hoursWeek),
+                IsBanned = (hoursToday > 10 || hoursWeek > 48),
+                Message = (hoursToday > 10 || hoursWeek > 48) ? "Đã vượt quá giới hạn." : "Đủ điều kiện."
+            };
         }
     }
 }

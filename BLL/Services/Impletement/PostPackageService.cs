@@ -451,148 +451,192 @@ namespace BLL.Services.Impletement
         {
             try
             {
+                // =================================================================
+                // 1. GET PACKAGE DETAILS
+                // =================================================================
                 var postPackage = await _unitOfWork.PostPackageRepo.GetDetailsByIdAsync(postPackageId);
-                if (postPackage == null) return new ResponseDTO("Not found.", 404, false);
+                if (postPackage == null) return new ResponseDTO("Bài đăng không tồn tại.", 404, false);
 
                 await CheckAndExpirePostsAsync(new List<PostPackage> { postPackage });
 
                 var dto = MapToDetailDTO(postPackage);
+                dto.MyDrivers = new List<OwnerDriverStatusDTO>();
 
                 // =================================================================
-                // 1. LOGIC GỢI Ý TÀI XẾ (DRIVER SUGGESTION)
+                // 2. TÍNH TOÁN GỢI Ý (DRIVER SUGGESTION)
                 // =================================================================
+                double dist = 0;
+                double durationHours = 0;
+
                 if (postPackage.ShippingRoute != null)
                 {
-                    double dist = postPackage.ShippingRoute.EstimatedDistanceKm;
-                    double dur = postPackage.ShippingRoute.EstimatedDurationHours;
+                    dist = postPackage.ShippingRoute.EstimatedDistanceKm;
+                    durationHours = postPackage.ShippingRoute.EstimatedDurationHours;
 
-                    // FALLBACK: Nếu DB chưa có (do bài đăng cũ), gọi API tính lại
-                    if (dist == 0 || dur == 0)
+                    // FALLBACK API NẾU DB = 0
+                    if (dist == 0 || durationHours == 0)
                     {
-                        var start = postPackage.ShippingRoute.StartLocation;
-                        var end = postPackage.ShippingRoute.EndLocation;
+                        var startNode = postPackage.ShippingRoute.StartLocation;
+                        var endNode = postPackage.ShippingRoute.EndLocation;
 
-                        // Helper IsLocationMissingCoordinates đã có trong class
-                        if (!IsLocationMissingCoordinates(start) && !IsLocationMissingCoordinates(end))
+                        if (!IsLocationMissingCoordinates(startNode) && !IsLocationMissingCoordinates(endNode))
                         {
-                            var path = await _vietMapService.GetRouteAsync(start, end, "truck");
+                            var path = await _vietMapService.GetRouteAsync(startNode, endNode, "truck");
                             if (path != null)
                             {
-                                dur = Math.Round((path.Time / (1000.0 * 60 * 60) * 1.15) + 0.5, 1);
+                                durationHours = Math.Round((path.Time / (1000.0 * 60 * 60) * 1.15) + 0.5, 1);
                                 dist = Math.Round(path.Distance / 1000.0, 2);
-
-                                // (Optional) Update lại vào DB để lần sau ko phải tính
-                                // postPackage.ShippingRoute.EstimatedDistanceKm = dist; ...
                             }
                         }
                     }
 
-                    // TÍNH TOÁN 3 KỊCH BẢN (NẾU CÓ DATA)
-                    if (dur > 0)
+                    // GỌI HELPER TÍNH TOÁN
+                    if (durationHours > 0)
                     {
-                        var pickup = postPackage.ShippingRoute.ExpectedPickupDate;
-                        var deadline = postPackage.ShippingRoute.ExpectedDeliveryDate;
-
-                        // Gọi hàm helper tính toán (Code helper ở dưới)
                         dto.DriverSuggestion = TripCalculationHelper.CalculateScenarios(
-                            dist, dur,
+                            dist,
+                            durationHours,
                             postPackage.ShippingRoute.ExpectedPickupDate,
                             postPackage.ShippingRoute.ExpectedDeliveryDate
-                );
+                        );
                     }
                 }
 
                 // =================================================================
-                // 2. CHECK TÀI XẾ NỘI BỘ (INTERNAL DRIVER CHECK)
+                // 3. CHECK TÀI XẾ NỘI BỘ (INTERNAL DRIVER CHECK)
                 // =================================================================
                 var currentUserId = _userUtility.GetUserIdFromToken();
 
-                // Kiểm tra user hiện tại có phải là Owner không
-                // Lưu ý: Nếu Repo ExistsAsync trả về bool thì OK.
-                // Kiểm tra bằng cách lấy thử, nếu khác null nghĩa là tồn tại
-                var ownerObj = await _unitOfWork.OwnerRepo.GetByIdAsync(currentUserId);
-                var isOwner = (ownerObj != null);
+                // [FIX 1]: Thay vì ExistsAsync, dùng GetByIdAsync != null (Chuẩn nhất)
+                var ownerEntity = await _unitOfWork.OwnerRepo.GetByIdAsync(currentUserId);
+                var isOwner = (ownerEntity != null);
 
-                if (isOwner && postPackage.ShippingRoute != null)
+                if (isOwner && postPackage.ShippingRoute != null && dto.DriverSuggestion != null)
                 {
-                    // A. Lấy danh sách tài xế kèm thống kê giờ chạy từ Service kia
-                    // Hàm GetDriversWithStatsByOwnerIdAsync phải trả về List<LinkedDriverDTO>
+                    // A. Lấy danh sách tài xế
                     var myDrivers = await _ownerDriverLinkService.GetDriversWithStatsByOwnerIdAsync(currentUserId);
 
-                    // =================================================================
-                    // B. Check thêm lịch bận của chuyến đi này (Collision Check)
-                    // =================================================================
-                    var start = postPackage.ShippingRoute.ExpectedPickupDate;
-                    var end = postPackage.ShippingRoute.ExpectedDeliveryDate;
+                    if (myDrivers != null && myDrivers.Any())
+                    {
+                        // B. Xác định khung thời gian
+                        var newTripStart = postPackage.ShippingRoute.ExpectedPickupDate;
+                        var newTripEnd = postPackage.ShippingRoute.ExpectedDeliveryDate;
 
-                    // Lấy danh sách driverId để query lịch bận
-                    var driverIds = myDrivers.Select(d => d.DriverId).ToList();
+                        // Lấy ngày đầu tuần của chuyến đi mới (Thứ 2)
+                        var startOfTripWeek = GetStartOfWeek(newTripStart);
+                        var endOfTripWeek = startOfTripWeek.AddDays(7);
 
-                    // [FIX LỖI 500 TRANSLATION]
-                    // BƯỚC 1: Query Database (Chỉ lấy dữ liệu thô, KHÔNG tính toán ngày giờ ở đây)
-                    var rawAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
-                        .Include(a => a.Trip)
-                        .Where(a =>
-                            driverIds.Contains(a.DriverId) &&
-                            (a.Trip.Status != TripStatus.COMPLETED && a.Trip.Status != TripStatus.CANCELLED)
-                        )
-                        // CHỈ SELECT CÁC TRƯỜNG CẦN THIẾT (Projection)
-                        .Select(a => new
+                        var driverIds = myDrivers.Select(d => d.DriverId).ToList();
+
+                        // C. Query Lịch bận (RAW DATA)
+                        // [FIX 2]: Lấy TimeSpan (Duration) và DateTime về RAM để tránh lỗi SQL translation
+                        var rawAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                            .Include(a => a.Trip)
+                            .Where(a =>
+                                driverIds.Contains(a.DriverId) &&
+                                (a.Trip.Status != TripStatus.COMPLETED && a.Trip.Status != TripStatus.CANCELLED)
+                            )
+                            .Select(a => new
+                            {
+                                DriverId = a.DriverId,
+                                TripCode = a.Trip.TripCode,
+                                // Lấy các mốc thời gian gốc
+                                PickupTime = a.Trip.ActualPickupTime,
+                                CreateTime = a.Trip.CreateAt,
+                                EndTimeRaw = a.Trip.ActualCompletedTime,
+                                DurationSpan = a.Trip.ActualDuration // Lấy nguyên TimeSpan về
+                            })
+                            .ToListAsync();
+
+                        // D. MAP & TÍNH TOÁN (IN-MEMORY)
+
+                        // [FIX 3]: Lấy thẳng số giờ "Cần Có" từ Helper đã tính
+                        double requiredHoursForNewTrip = dto.DriverSuggestion.RequiredHoursFromQuota;
+
+                        dto.MyDrivers = myDrivers.Select(d =>
                         {
-                            DriverId = a.DriverId,
-                            TripCode = a.Trip.TripCode,
-                            // Lấy các mốc thời gian thô về để C# tự tính
-                            ActualPickup = a.Trip.ActualPickupTime,
-                            Created = a.Trip.CreateAt,
-                            ActualEnd = a.Trip.ActualCompletedTime,
-                            Duration = a.Trip.ActualDuration
-                        })
-                        .ToListAsync(); // <--- QUAN TRỌNG: Thực thi SQL ngay tại đây để lấy dữ liệu về RAM
+                            // Lọc lịch sử chuyến đi của tài xế này từ List Memory
+                            var driverTrips = rawAssignments
+                                .Where(x => x.DriverId == d.DriverId)
+                                .Select(x => new
+                                {
+                                    Code = x.TripCode,
+                                    // Start = ActualPickup ?? CreateAt
+                                    Start = x.PickupTime ?? x.CreateTime,
+                                    // End = ActualCompleted ?? (Start + Duration)
+                                    // [FIX 4]: Dùng .Add(TimeSpan) thay vì AddHours(double) để tránh lỗi compiler
+                                    End = x.EndTimeRaw ?? (x.PickupTime ?? x.CreateTime).Add(x.DurationSpan),
+                                    // Đổi TimeSpan ra giờ (double) để tính tổng
+                                    DurationHours = x.DurationSpan.TotalHours
+                                })
+                                .ToList();
 
-                    // BƯỚC 2: Tính toán và Filter trong bộ nhớ (Client-side Evaluation)
-                    // Lúc này .Add() là C# thuần túy nên không bị lỗi
-                    var busyAssignments = rawAssignments
-                        .Where(x =>
-                        {
-                            // Logic tính ngày bắt đầu/kết thúc của chuyến đi cũ
-                            var tripStart = x.ActualPickup ?? x.Created;
-                            var tripEnd = x.ActualEnd ?? tripStart.Add(x.Duration); // .Add() chạy ở đây là OK
+                            // 1. Check Trùng Lịch (Collision)
+                            var conflictTrip = driverTrips.FirstOrDefault(x =>
+                                x.Start < newTripEnd && x.End > newTripStart // Công thức giao nhau
+                            );
 
-                            // Logic trùng lịch: (StartA < EndB) && (EndA > StartB)
-                            // A: Chuyến cũ (tripStart, tripEnd)
-                            // B: Chuyến mới (start, end)
-                            return tripStart < end && tripEnd > start;
+                            // 2. Check Luật 48h (Trong tuần của chuyến đi mới)
+                            double hoursAlreadyBooked = driverTrips
+                                .Where(x => x.Start >= startOfTripWeek && x.Start < endOfTripWeek)
+                                .Sum(x => x.DurationHours);
+
+                            double remainingHours = 48 - hoursAlreadyBooked;
+
+                            // 3. Kết luận
+                            bool isBusy = (conflictTrip != null);
+                            // Hợp lệ nếu: Còn dư giờ > Giờ yêu cầu
+                            bool isOverloaded = (remainingHours < requiredHoursForNewTrip);
+
+                            string statusMsg = "Sẵn sàng";
+                            // Hiển thị rõ ràng: Còn bao nhiêu, Cần bao nhiêu
+                            string subStats = $"Tuần xe chạy còn trống: {remainingHours:N1}h (Cần: {requiredHoursForNewTrip:N1}h)";
+
+                            if (isBusy)
+                            {
+                                statusMsg = $"Bận chuyến {conflictTrip.Code}";
+                                subStats = "Đang kẹt lịch chạy trùng giờ";
+                            }
+                            else if (isOverloaded)
+                            {
+                                statusMsg = "Không đủ giờ lái (Luật 48h)";
+                                subStats = $"Đã nhận: {hoursAlreadyBooked:N1}h. Thiếu {(requiredHoursForNewTrip - remainingHours):N1}h nữa.";
+                            }
+                            else if (!d.CanDrive)
+                            {
+                                statusMsg = "Tài xế không khả dụng";
+                                subStats = "Vui lòng kiểm tra trạng thái bằng lái/tài khoản";
+                            }
+
+                            return new OwnerDriverStatusDTO
+                            {
+                                DriverId = d.DriverId,
+                                FullName = d.FullName,
+                                PhoneNumber = d.PhoneNumber,
+                                AvatarUrl = d.AvatarUrl,
+                                IsAvailable = !isBusy && !isOverloaded && d.CanDrive,
+                                StatusMessage = statusMsg,
+                                Stats = subStats
+                            };
                         })
+                        .OrderByDescending(x => x.IsAvailable)
                         .ToList();
-
-                    // C. Map sang DTO hiển thị cho màn hình Detail
-                    dto.MyDrivers = myDrivers.Select(d => {
-                        // Tìm trong danh sách busyAssignments đã filter ở bước 2
-                        var busyInfo = busyAssignments.FirstOrDefault(b => b.DriverId == d.DriverId);
-
-                        bool isBusy = busyInfo != null;
-                        bool isOverloaded = !d.CanDrive;
-
-                        string statusMsg = "Sẵn sàng";
-                        if (isBusy) statusMsg = $"Bận chuyến {busyInfo.TripCode}";
-                        else if (isOverloaded) statusMsg = "Hết giờ lái (Luật 48h)";
-
-                        return new OwnerDriverStatusDTO
-                        {
-                            DriverId = d.DriverId,
-                            FullName = d.FullName,
-                            PhoneNumber = d.PhoneNumber,
-                            AvatarUrl = d.AvatarUrl,
-                            IsAvailable = !isBusy && !isOverloaded,
-                            StatusMessage = statusMsg,
-                            Stats = $"Hôm nay: {d.HoursDrivenToday}h | Tuần: {d.HoursDrivenThisWeek}h"
-                        };
-                    }).OrderByDescending(x => x.IsAvailable).ToList();
+                    }
                 }
 
-                return new ResponseDTO("Success", 200, true, dto);
+                return new ResponseDTO("Thành công", 200, true, dto);
             }
-            catch (Exception ex) { return new ResponseDTO(ex.Message, 500, false); }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
+            }
+        }
+
+        // Helper nhỏ để lấy ngày thứ 2 đầu tuần
+        private DateTime GetStartOfWeek(DateTime dt)
+        {
+            int diff = (7 + (dt.DayOfWeek - DayOfWeek.Monday)) % 7;
+            return dt.AddDays(-1 * diff).Date;
         }
 
 

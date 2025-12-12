@@ -159,7 +159,7 @@ namespace BLL.Services.Impletement
                 // 2. Lấy Query (Include Driver để lấy thông tin cá nhân)
                 var query = _unitOfWork.OwnerDriverLinkRepo.GetAll()
                     .Include(l => l.Driver)
-                    .Where(link => link.OwnerId == ownerId);
+                    .Where(link => link.OwnerId == ownerId && link.Status == FleetJoinStatus.APPROVED);
 
                 // 3. Đếm tổng
                 var totalCount = await query.CountAsync();
@@ -327,6 +327,60 @@ namespace BLL.Services.Impletement
             }
 
             return resultList;
+        }
+
+        // =========================================================================
+        // [NEW] DRIVER CHECK TEAM STATUS
+        // =========================================================================
+        public async Task<ResponseDTO> GetCurrentTeamInfoAsync()
+        {
+            try
+            {
+                // 1. Lấy DriverId từ Token
+                var driverId = _userUtility.GetUserIdFromToken();
+                if (driverId == Guid.Empty)
+                {
+                    return new ResponseDTO("Unauthorized. Driver ID not found in token.", 401, false);
+                }
+
+                // 2. Tìm Link trong DB
+                // Logic: Tìm link nào chưa bị từ chối (REJECTED) hoặc bị xóa.
+                // Ưu tiên APPROVED, sau đó đến PENDING.
+                var link = await _unitOfWork.OwnerDriverLinkRepo.GetAll()
+                    .Include(l => l.Owner) // Include Owner để lấy thông tin chủ xe
+                    .Where(l => l.DriverId == driverId &&
+                                (l.Status == FleetJoinStatus.APPROVED || l.Status == FleetJoinStatus.PENDING))
+                    .OrderByDescending(l => l.Status == FleetJoinStatus.APPROVED) // Ưu tiên lấy cái đã Approved lên trước nếu có rác dữ liệu
+                    .FirstOrDefaultAsync();
+
+                if (link == null)
+                {
+                    // Trả về 404 nghĩa là Tài xế này tự do, chưa thuộc về ai
+                    return new ResponseDTO("Driver is not currently linked to any owner.", 404, false);
+                }
+
+                // 3. Map sang DTO
+                var resultDto = new DriverTeamInfoDTO
+                {
+                    OwnerDriverLinkId = link.OwnerDriverLinkId,
+                    Status = link.Status.ToString(),
+                    RequestedAt = link.RequestedAt,
+                    ApprovedAt = link.ApprovedAt,
+
+                    OwnerId = link.OwnerId,
+                    // Giả sử Entity Owner kế thừa BaseUser hoặc có các trường này
+                    OwnerName = link.Owner.FullName ?? "Unknown Owner",
+                    OwnerPhoneNumber = link.Owner.PhoneNumber,
+                    OwnerAvatar = link.Owner.AvatarUrl,
+                    OwnerEmail = link.Owner.Email
+                };
+
+                return new ResponseDTO("Retrieved team info successfully.", 200, true, resultDto);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error retrieving team info: {ex.Message}", 500, false);
+            }
         }
 
     }

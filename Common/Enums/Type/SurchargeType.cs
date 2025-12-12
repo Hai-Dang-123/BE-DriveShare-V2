@@ -8,20 +8,44 @@ namespace Common.Enums.Type
         // NHÓM 1: LIÊN QUAN ĐẾN PHƯƠNG TIỆN (VEHICLE HANDOVER ISSUES)
         // ===============================================================
 
-        [Description("Phí nhiên liệu")]
-        FUEL, // Trả thiếu xăng/dầu so với lúc nhận
+        VEHICLE_DAMAGE, // Phạt xe bị hư hỏng khi giao nhận (tài xế chịu trách nhiệm)
+        VEHICLE_DIRTY,   // Phạt xe bẩn khi giao nhận (tài xế chịu trách nhiệm)
 
-        [Description("Phí quá giới hạn Km")]
-        DISTANCE, // Chạy lố số km khoán (nếu có)
+        // --- NGOẠI THẤT (BODYWORK) ---
+        [Description("Trầy xước")]
+        SCRATCH,
 
-        [Description("Phí trả xe chậm")]
-        LATE_RETURN_VEHICLE, // Trả xe trễ giờ so với hợp đồng thuê
+        [Description("Móp méo")]
+        DENT,
 
-        [Description("Phí vệ sinh xe")]
-        CLEANING, // Xe quá bẩn, ám mùi, cần dọn nội thất
+        [Description("Nứt/Vỡ")]
+        CRACK, // Kính, đèn, gương
 
-        [Description("Phí sửa chữa hư hỏng xe")]
-        VEHICLE_DAMAGE, // Trầy xước, móp méo, vỡ đèn, hỏng lốp...
+        [Description("Tróc sơn")]
+        PAINT_PEELING,
+
+        // --- VỆ SINH (CLEANLINESS) ---
+        [Description("Dơ bẩn/Cần vệ sinh")]
+        DIRTY,
+
+        [Description("Có mùi hôi")]
+        ODOR, // Mùi thuốc lá, ẩm mốc...
+
+        // --- VẬN HÀNH & KỸ THUẬT (MECHANICAL) ---
+        [Description("Lỗi động cơ/Máy móc")]
+        MECHANICAL, // Check engine, tiếng kêu lạ
+
+        [Description("Lỗi hệ thống điện")]
+        ELECTRICAL , // Đèn, còi, màn hình, điều hòa
+
+        [Description("Lỗi lốp xe")]
+        TIRE , // Thủng, mòn, non hơi
+
+        // --- TÀI SẢN (INVENTORY) ---
+        [Description("Mất phụ kiện/Giấy tờ")]
+        MISSING_ITEM, // Lốp dự phòng, kích, giấy tờ
+
+
 
         // ===============================================================
         // NHÓM 2: LIÊN QUAN ĐẾN HÀNG HÓA (CARGO DELIVERY ISSUES)

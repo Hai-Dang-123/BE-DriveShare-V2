@@ -1,122 +1,113 @@
 ﻿using Common.DTOs;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Common.Helpers
 {
     public static class TripCalculationHelper
     {
-        public static DriverSuggestionDTO CalculateScenarios(double distance, double driveHours, DateTime pickup, DateTime deadline)
+        public static DriverSuggestionDTO CalculateScenarios(double distanceKm, double rawDrivingHours, DateTime pickup, DateTime deadline)
         {
             var suggestion = new DriverSuggestionDTO
             {
-                DistanceKm = distance,
-                EstimatedDurationHours = driveHours
+                DistanceKm = distanceKm,
+                EstimatedDurationHours = rawDrivingHours
             };
 
-            // Tính tổng thời gian cho phép (Deadline)
-            double deadlineHours = (deadline - pickup).TotalHours;
+            // Deadline cho phép (tính bằng giờ)
+            double deadlineWindow = (deadline - pickup).TotalHours;
+            if (deadlineWindow <= 0) deadlineWindow = 0.1; // Tránh chia cho 0
 
-            // =========================================================
+            // =====================================================================
             // KỊCH BẢN 1: SOLO (1 TÀI XẾ)
-            // =========================================================
-            // Luật giả định: Lái tối đa 10h/ngày. Phải nghỉ ngơi ~14h (ăn, ngủ, vệ sinh) cho mỗi chu kỳ 24h.
-            double soloDays = Math.Ceiling(driveHours / 10.0);
+            // =====================================================================
+            // Luật giả định: Lái 10h/ngày. Nghỉ 15p mỗi 4h.
+            double totalBreakTime = (rawDrivingHours / 4.0) * 0.25;
+            double daysNeeded = Math.Ceiling(rawDrivingHours / 10.0);
+            double totalRestTime = (daysNeeded > 1) ? (daysNeeded - 1) * 10.0 : 0;
 
-            // Công thức: Giờ lái + (Số ngày - 1) * 14h nghỉ.
-            // (Trừ ngày cuối cùng vì đến nơi là xong, không cần cộng giờ ngủ đêm cuối)
-            double soloTotalTime = driveHours + ((soloDays - 1) * 14.0);
+            double soloElapsed = rawDrivingHours + totalBreakTime + totalRestTime;
 
             suggestion.SoloScenario = new DriverScenarioDTO
             {
-                TotalHoursNeeded = Math.Round(soloTotalTime, 1),
+                TotalElapsedHours = Math.Round(soloElapsed, 1),
+                DrivingHoursPerDriver = Math.Round(rawDrivingHours, 1), // Gánh 100%
 
-                // Với 1 tài xế, họ chịu trách nhiệm toàn bộ thời gian chuyến đi
-                WorkHoursPerDriver = Math.Round(soloTotalTime, 1),
-
-                IsPossible = soloTotalTime <= deadlineHours,
-                Message = $"1 Tài xế: Chạy ngày nghỉ đêm. Mất khoảng {soloDays} ngày."
+                // Check: Kịp deadline VÀ Không quá 48h lái (Luật tuần)
+                IsPossible = (soloElapsed <= deadlineWindow) && (rawDrivingHours <= 48),
+                Message = $"1 Tài xế: Cần {daysNeeded} ngày (bao gồm nghỉ ngơi)."
             };
 
             if (!suggestion.SoloScenario.IsPossible)
             {
-                double delay = soloTotalTime - deadlineHours;
-                suggestion.SoloScenario.Note = $"Dự kiến trễ khoảng {delay:F1} giờ so với thời gian yêu cầu.";
-            }
-            else
-            {
-                suggestion.SoloScenario.Note = "Kịp tiến độ. Tiết kiệm chi phí nhân sự nhất.";
+                if (rawDrivingHours > 48) suggestion.SoloScenario.Note = "Vượt quá giới hạn 48h lái/tuần.";
+                else suggestion.SoloScenario.Note = "Không kịp thời gian giao hàng.";
             }
 
-            // =========================================================
+            // =====================================================================
             // KỊCH BẢN 2: TEAM (2 TÀI XẾ)
-            // =========================================================
-            // Xe chạy liên tục, chỉ dừng ăn uống/đổ dầu nhanh. Hiệu suất ~95% so với lái thuần.
-            double teamTotalTime = driveHours / 0.95;
+            // =====================================================================
+            // Xe chạy liên tục, chỉ dừng đổi tài/đổ xăng (Hiệu suất 95%)
+            double teamElapsed = rawDrivingHours / 0.95;
 
             suggestion.TeamScenario = new DriverScenarioDTO
             {
-                TotalHoursNeeded = Math.Round(teamTotalTime, 1),
+                TotalElapsedHours = Math.Round(teamElapsed, 1),
+                DrivingHoursPerDriver = Math.Round(rawDrivingHours / 2, 1), // Chia đôi gánh nặng
 
-                // Chia đôi thời gian công tác (mỗi người chịu 50% hành trình)
-                WorkHoursPerDriver = Math.Round(teamTotalTime / 2, 1),
-
-                IsPossible = teamTotalTime <= deadlineHours,
-                Message = "2 Tài xế: Thay phiên lái liên tục. Xe không nghỉ đêm."
+                // Check: Kịp deadline
+                IsPossible = teamElapsed <= deadlineWindow,
+                Message = "2 Tài xế (Team): Chạy luân phiên liên tục."
             };
 
             if (!suggestion.TeamScenario.IsPossible)
-            {
-                suggestion.TeamScenario.Note = "Vẫn trễ giờ dù chạy 2 tài (Deadline quá gấp).";
-            }
-            else
-            {
-                suggestion.TeamScenario.Note = "Kịp tiến độ. Phương án cân bằng tốt nhất.";
-            }
+                suggestion.TeamScenario.Note = "Vẫn trễ deadline (Cần xem xét Express).";
 
-            // =========================================================
-            // KỊCH BẢN 3: EXPRESS (3 TÀI XẾ)
-            // =========================================================
-            // Chạy "đua", giảm thiểu tối đa thời gian dừng. Hiệu suất ~98%.
-            double expressTotalTime = driveHours / 0.98;
+            // =====================================================================
+            // [BỔ SUNG] KỊCH BẢN 3: EXPRESS (3 TÀI XẾ)
+            // =====================================================================
+            // Dành cho hàng siêu gấp hoặc đường rất dài. Hiệu suất tối đa 98%.
+            double expressElapsed = rawDrivingHours / 0.98;
 
             suggestion.ExpressScenario = new DriverScenarioDTO
             {
-                TotalHoursNeeded = Math.Round(expressTotalTime, 1),
+                TotalElapsedHours = Math.Round(expressElapsed, 1),
+                DrivingHoursPerDriver = Math.Round(rawDrivingHours / 3, 1), // Chia 3 gánh nặng
 
-                // Chia 3 thời gian công tác
-                WorkHoursPerDriver = Math.Round(expressTotalTime / 3, 1),
-
-                IsPossible = expressTotalTime <= deadlineHours,
-                Message = "3 Tài xế: Chạy siêu tốc (Express). Dành cho hàng gấp/lạnh."
+                IsPossible = expressElapsed <= deadlineWindow,
+                Message = "3 Tài xế (Express): Chạy tốc độ tối đa, không dừng nghỉ."
             };
 
-            if (suggestion.ExpressScenario.IsPossible)
-            {
-                suggestion.ExpressScenario.Note = "Giao hàng nhanh nhất có thể.";
-            }
+            if (!suggestion.ExpressScenario.IsPossible)
+                suggestion.ExpressScenario.Note = "Deadline bất khả thi (Cần dời lịch giao).";
 
-            // =========================================================
-            // HỆ THỐNG ĐƯA RA LỜI KHUYÊN (RECOMMENDATION)
-            // =========================================================
+            // =====================================================================
+            // KẾT LUẬN (RECOMMENDATION)
+            // Mặc định là giờ gốc (nếu không cách nào chạy được)
+            suggestion.RequiredHoursFromQuota = rawDrivingHours;
+
             if (suggestion.SoloScenario.IsPossible)
             {
-                suggestion.SystemRecommendation = "Kịch bản 1 TÀI XẾ là đủ để kịp giờ và tiết kiệm chi phí nhất.";
+                suggestion.SystemRecommendation = "SOLO";
+                // Solo thì 1 người gánh hết 100%
+                suggestion.RequiredHoursFromQuota = suggestion.SoloScenario.DrivingHoursPerDriver;
             }
             else if (suggestion.TeamScenario.IsPossible)
             {
-                suggestion.SystemRecommendation = "Khuyên dùng 2 TÀI XẾ (Team) để đảm bảo tiến độ và an toàn sức khỏe tài xế.";
+                suggestion.SystemRecommendation = "TEAM";
+                // Team thì chia đôi
+                suggestion.RequiredHoursFromQuota = suggestion.TeamScenario.DrivingHoursPerDriver;
             }
             else if (suggestion.ExpressScenario.IsPossible)
             {
-                suggestion.SystemRecommendation = "Hàng quá gấp! Bắt buộc phải dùng 3 TÀI XẾ (Express) mới kịp.";
+                suggestion.SystemRecommendation = "EXPRESS";
+                // Express chia ba
+                suggestion.RequiredHoursFromQuota = suggestion.ExpressScenario.DrivingHoursPerDriver;
             }
             else
             {
-                suggestion.SystemRecommendation = "CẢNH BÁO: Deadline quá gấp, không thể chạy kịp kể cả với 3 tài xế!";
+                suggestion.SystemRecommendation = "IMPOSSIBLE";
+                // Nếu không chạy được, gán giá trị nhỏ nhất có thể (Team) để hiển thị tham khảo
+                suggestion.RequiredHoursFromQuota = suggestion.TeamScenario.DrivingHoursPerDriver;
             }
 
             return suggestion;
