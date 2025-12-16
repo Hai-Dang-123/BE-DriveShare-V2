@@ -27,6 +27,8 @@ namespace BLL.Services.Interface
 
         // 2. Lấy chi tiết 1 giấy tờ
         Task<ResponseDTO> GetVehicleDocumentDetailAsync(Guid documentId);
+     
+        Task<ResponseDTO> GetVehicleDocumentsByVehicleIdAsync(Guid vehicleId);
 
         // 3. Duyệt
         Task<ResponseDTO> ReviewVehicleDocumentAsync(Guid documentId, bool isApproved, string? rejectReason);

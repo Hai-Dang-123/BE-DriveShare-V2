@@ -39,21 +39,23 @@ builder.AddAppConfiguration();
 builder.Services.AddAuthorizationPolicies();
 
 builder.Services.AddSignalR();
+builder.Services.AddCorsPolicy();
+
 
 
 // ======================================================================
 // ✅ FIX 1: ĐĂNG KÝ CORS GLOBAL
 // ======================================================================
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-});
+//builder.Services.AddCors(options =>
+//{
+//    options.AddPolicy("AllowFrontend", policy =>
+//    {
+//        policy
+//            .AllowAnyOrigin()
+//            .AllowAnyHeader()
+//            .AllowAnyMethod();
+//    });
+//});
 
 
 // ======================================================================
@@ -75,7 +77,7 @@ app.UseApplicationMiddlewares();
 // ======================================================================
 // ✅ FIX 2: BẬT CORS đúng vị trí (PHẢI TRƯỚC Authentication/Authorization)
 // ======================================================================
-app.UseCors("AllowFrontend");
+app.UseCors("DefaultCorsPolicy");
 
 // Map Hub Endpoint
 app.MapHub<TripTrackingHub>("/hubs/tracking");

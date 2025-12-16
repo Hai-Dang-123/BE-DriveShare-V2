@@ -12,6 +12,7 @@ namespace BLL.Services.Interface
 
         Task<ResponseDTO> GetByIdAsync(Guid id);
 
+
         // 1. Admin/Public Get All
         Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder);
 
