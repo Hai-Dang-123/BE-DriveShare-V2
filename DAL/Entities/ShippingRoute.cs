@@ -31,6 +31,17 @@ namespace DAL.Entities
         public double EstimatedDistanceKm { get; set; }
         public double EstimatedDurationHours { get; set; }
 
+        // --- BỔ SUNG CÁC TRƯỜNG NÀY ---
+
+        // Thời gian chạy thực tế (cho phép null để tương thích dữ liệu cũ)
+        public double? TravelTimeHours { get; set; }
+
+        // Thời gian chờ (cho phép null)
+        public double? WaitTimeHours { get; set; }
+
+        // Ghi chú cấm tải (cho phép null)
+        public string? RestrictionNote { get; set; }
+
 
     }
 }

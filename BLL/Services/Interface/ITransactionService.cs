@@ -5,17 +5,14 @@ namespace BLL.Services.Interface
 {
     public interface ITransactionService
     {
-        /// <summary>
-        /// (User) Tạo yêu cầu rút tiền (TRỪ TIỀN) từ ví CỦA MÌNH.
-        /// (Hàm này trả về ResponseDTO để Controller có thể hiển thị cho user).
-        /// </summary>
+        // 1. User gọi nạp tiền
+        Task<ResponseDTO> CreateTopupAsync(InternalTransactionRequestDTO dto);
+
+        // 2. User gọi rút tiền
         Task<ResponseDTO> RequestWithdrawalAsync(WithdrawalRequestDTO dto);
 
-        /// <summary>
-        /// (Hệ thống/Admin) Tạo giao dịch NẠP TIỀN (CỘNG TIỀN) vào ví của một User.
-        /// ⚠️ SỬA ĐỔI: Trả về ResponseDTO
-        /// </summary>
-        Task<ResponseDTO> CreateTopupAsync(InternalTransactionRequestDTO dto);
+        // 3. Webhook gọi xác nhận nạp tiền (Hàm mới thêm)
+        Task<ResponseDTO> ConfirmTopupTransactionAsync(string tokenCode, decimal transferAmount, string bankReferenceCode);
 
         /// <summary>
         /// (Hệ thống/Service) Tạo một giao dịch THANH TOÁN (TRỪ TIỀN) liên quan đến chuyến đi.
@@ -32,5 +29,6 @@ namespace BLL.Services.Interface
 
         Task<ResponseDTO> GetAllAsync(int pageNumber, int pageSize);
         Task<ResponseDTO> GetByIdAsync(Guid transactionId);
+        Task<bool> IsUserRestrictedDueToDebtAsync(Guid userId);
     }
 }

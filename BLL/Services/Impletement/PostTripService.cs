@@ -17,12 +17,14 @@ namespace BLL.Services.Impletement
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
         private readonly IUserDocumentService _userDocumentService;
+        private readonly INotificationService _notificationService;
 
-        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService)
+        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService, INotificationService notificationService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _userDocumentService = userDocumentService;
+            _notificationService = notificationService;
         }
 
         // =========================================================================
@@ -417,6 +419,17 @@ namespace BLL.Services.Impletement
 
                 await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                 await _unitOfWork.SaveChangeAsync();
+
+                // [CHÈN VÀO ĐÂY]
+                if (newStatus == PostStatus.OPEN)
+                {
+                    _ = Task.Run(() => _notificationService.SendToRoleAsync(
+                        "Driver", // Role name trong DB
+                        "🚚 Chuyến xe mới!",
+                        "Một chuyến xe mới đang chờ bạn. Nhận chuyến ngay!",
+                        new Dictionary<string, string> { { "screen", "TripDetail" }, { "id", postTripId.ToString() } }
+                    ));
+                }
 
                 return new ResponseDTO($"Status updated to {newStatus} successfully", 200, true);
             }

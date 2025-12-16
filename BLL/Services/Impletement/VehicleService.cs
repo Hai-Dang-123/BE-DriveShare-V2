@@ -3,6 +3,7 @@ using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
 using Common.Enums.Type;
+using Common.Helpers;
 using Common.ValueObjects;
 using DAL.Entities;
 using DAL.UnitOfWork;
@@ -183,8 +184,8 @@ namespace BLL.Services.Impletement
                 if (vehicle == null)
                     return new ResponseDTO("Vehicle not found", 404, false);
 
-                if (vehicle.OwnerId != userId)
-                    return new ResponseDTO("Forbidden: You are not the owner of this vehicle", 403, false);
+                //if (vehicle.OwnerId != userId)
+                //    return new ResponseDTO("Forbidden: You are not the owner of this vehicle", 403, false);
 
                 var dto = new VehicleDetailDTO
                 {
@@ -456,6 +457,8 @@ namespace BLL.Services.Impletement
                 }).ToList()
             };
         }
+
+       
 
     }
 }

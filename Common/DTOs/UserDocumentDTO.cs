@@ -41,6 +41,9 @@ namespace Common.DTOs
     public class DriverDocumentsDTO
     {
         public DocumentDetailDTO? DrivingLicense { get; set; }
+        // [BỔ SUNG] Thêm trường này
+        public DocumentDetailDTO? HealthCheck { get; set; }
+
     }
 
     public class DocumentDetailDTO

@@ -41,5 +41,19 @@ namespace DriverShareProject.Controllers
             var response = await _userService.GetByIdAsync(id);
             return StatusCode(response.StatusCode, response);
         }
+
+        [HttpGet("role/{roleName}")]
+        public async Task<IActionResult> GetUsersByRole(
+            string roleName,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortDirection = "ASC"
+        )
+        {
+            var response = await _userService.GetAllUserByRoleAsync(roleName, pageNumber, pageSize, search, sortField, sortDirection);
+            return StatusCode(response.StatusCode, response);
+        }
     }
 }

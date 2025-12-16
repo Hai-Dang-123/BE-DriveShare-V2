@@ -11,16 +11,16 @@ namespace DriverShareProject.Controllers
     [Route("api/webhook")]
     public class SepayWebhookController : ControllerBase
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IWalletService _walletService;
-        private readonly IEmailService _emailService;
+        //private readonly IUnitOfWork _unitOfWork;
+        //private readonly IWalletService _walletService;
+        //private readonly IEmailService _emailService;
 
-        public SepayWebhookController(IUnitOfWork unitOfWork, IWalletService walletService, IEmailService emailService)
-        {
-            _unitOfWork = unitOfWork;
-            _walletService = walletService;
-            _emailService = emailService;
-        }
+        //public SepayWebhookController(IUnitOfWork unitOfWork, IWalletService walletService, IEmailService emailService)
+        //{
+        //    _unitOfWork = unitOfWork;
+        //    _walletService = walletService;
+        //    _emailService = emailService;
+        //}
 
         //[HttpPost("sepay")]
         //public async Task<IActionResult> SepayCallbackItemBooking([FromBody] SepayWebhookPayload payload)
@@ -352,6 +352,76 @@ namespace DriverShareProject.Controllers
         //        return StatusCode(500, new { success = false, message = "Lỗi hệ thống", error = ex.Message });
         //    }
         //}
+
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ITransactionService _transactionService;
+
+        public SepayWebhookController(IUnitOfWork unitOfWork, ITransactionService transactionService)
+        {
+            _unitOfWork = unitOfWork;
+            _transactionService = transactionService;
+        }
+
+        [HttpPost("sepay")]
+        public async Task<IActionResult> SepayCallback([FromBody] SepayWebhookPayload payload)
+        {
+            if (payload == null)
+                return BadRequest(new { success = false, message = "Payload is null" });
+
+            try
+            {
+                // 1. Kiểm tra điều kiện tiên quyết (Chỉ nhận tiền vào)
+                bool isPaymentIn = string.Equals(payload.TransferType, "in", StringComparison.OrdinalIgnoreCase);
+                bool isValidAmount = payload.TransferAmount > 0;
+
+                if (!isPaymentIn || !isValidAmount)
+                    return BadRequest(new { success = false, message = "Invalid transaction type or amount" });
+
+                string content = payload.Content ?? "";
+
+                // 2. LOGIC PARSE REGEX (Lấy Token từ Content)
+                // Nội dung mong đợi: "MBVCB... TOPUP TP123456 ..."
+                // Regex tìm từ khóa "TOPUP" theo sau là mã Token (chữ và số)
+                if (content.Contains("TOPUP", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Regex: TOPUP[_ dấu cách]?([Ký tự A-Z Số 0-9]+)
+                    var match = Regex.Match(content, @"TOPUP[_ ]?([A-Z0-9]+)", RegexOptions.IgnoreCase);
+
+                    if (!match.Success)
+                        return BadRequest(new { success = false, message = "Cannot find Token in content" });
+
+                    // Đây là mã Token (Ví dụ: TP839210)
+                    string extractedToken = match.Groups[1].Value;
+
+                    // 3. GỌI SERVICE ĐỂ XỬ LÝ NGHIỆP VỤ
+                    var result = await _transactionService.ConfirmTopupTransactionAsync(
+                        extractedToken,
+                        payload.TransferAmount,
+                        payload.ReferenceCode
+                    );
+
+                    if (result.IsSuccess)
+                    {
+                        return Ok(new { success = true, message = "Topup success" });
+                    }
+                    else
+                    {
+                        // Lỗi nghiệp vụ (Token sai, Hết hạn, Sai tiền...)
+                        return BadRequest(new { success = false, message = result.Message });
+                    }
+                }
+
+                // Nếu nội dung không có chữ TOPUP
+                return BadRequest(new { success = false, message = "Unknown transaction content" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "System Error", error = ex.Message });
+            }
+        }
+
+
+
 
 
         public class SepayWebhookPayload

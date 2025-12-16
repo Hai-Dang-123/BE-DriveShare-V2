@@ -44,12 +44,10 @@ namespace DriverShareProject.Controllers
         /// <summary>
         /// Tạo một yêu cầu rút tiền (Withdrawal) từ ví của người dùng đang đăng nhập.
         /// </summary>
-        [HttpPost("my-wallet/withdraw")]
+        [HttpPost("withdraw")]
         public async Task<IActionResult> RequestWithdrawal([FromBody] WithdrawalRequestDTO dto)
         {
-            // ⚠️ SỬA ĐỔI: Gọi TransactionService
             var response = await _transactionService.RequestWithdrawalAsync(dto);
-
             return StatusCode(response.StatusCode, response);
         }
 

@@ -44,6 +44,15 @@ namespace Common.DTOs
         public string VehicleBrand { get; set; }
         public string VehicleColor { get; set; }
         public string OwnerPhone { get; set; }
+        public List<InspectionHistoryDTO> InspectionHistories { get; set; } = new();
+    }
+
+    public class InspectionHistoryDTO
+    {
+        public DateTime Date { get; set; }
+        public DateTime ExpDate { get; set; }
+        public string Station { get; set; }
+        public string Result { get; set; }
     }
 
     public class ReviewVehicleDocumentDTO

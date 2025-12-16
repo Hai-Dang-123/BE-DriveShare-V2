@@ -20,6 +20,7 @@ namespace DAL.Context
         public DbSet<Driver> Drivers { get; set; } = null!;
         public DbSet<Owner> Owners { get; set; } = null!;
         public DbSet<Provider> Providers { get; set; } = null!;
+        public DbSet<PackageHandlingDetail> PackageHandlingDetails { get; set; }
 
         // --- Bảng Liên quan đến Người dùng ---
         public DbSet<UserDocument> UserDocuments { get; set; } = null!;
@@ -55,7 +56,6 @@ namespace DAL.Context
         public DbSet<TripRouteSuggestion> TripRouteSuggestions { get; set; } = null!;
         public DbSet<TripContact> TripContacts { get; set; } = null!;
         public DbSet<TripDriverAssignment> TripDriverAssignments { get; set; } = null!;
-        public DbSet<TripCompensation> TripCompensations { get; set; } = null!;
 
         // --- Bảng Hợp đồng (Contract) ---
         public DbSet<BaseContract> BaseContracts { get; set; } = null!;
@@ -84,7 +84,12 @@ namespace DAL.Context
         public DbSet<TripVehicleHandoverIssue> TripVehicleHandoverIssues { get; set; }
         public DbSet<TripVehicleHandoverIssueImage> TripVehicleHandoverIssueImages { get; set; }
         public DbSet<DriverWorkSession> DriverWorkSessions { get; set; } = null!;
+        public DbSet<InspectionHistory> InspectionHistories { get; set; } = null!;
 
+        public DbSet<TruckRestriction> TruckRestrictions { get; set; }
+
+        public DbSet<UserDeviceToken> UserDeviceTokens { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -145,7 +150,7 @@ namespace DAL.Context
             modelBuilder.Entity<TripRouteSuggestion>().HasKey(e => e.TripRouteSuggestionId);
             modelBuilder.Entity<TripContact>().HasKey(e => e.TripContactId);
             modelBuilder.Entity<TripDriverAssignment>().HasKey(e => e.TripDriverAssignmentId);
-            modelBuilder.Entity<TripCompensation>().HasKey(e => e.TripCompensationId);
+           
 
             // --- Các Bảng Hợp đồng (Templates) ---
             modelBuilder.Entity<ContractTemplate>().HasKey(e => e.ContractTemplateId);
@@ -165,6 +170,9 @@ namespace DAL.Context
             modelBuilder.Entity<TripVehicleHandoverIssue>().HasKey(tvi => tvi.TripVehicleHandoverIssueId);
             modelBuilder.Entity<TripVehicleHandoverIssueImage>().HasKey(tvii => tvii.TripVehicleHandoverIssueImageId);
             modelBuilder.Entity<DriverWorkSession>().HasKey(dws => dws.DriverWorkSessionId);
+            modelBuilder.Entity<InspectionHistory>().HasKey(ih => ih.InspectionHistoryId);
+            modelBuilder.Entity<TruckRestriction>().HasKey(tr => tr.TruckRestrictionId);
+            modelBuilder.Entity<UserDeviceToken>().HasKey(udt => udt.UserDeviceTokenId);
 
         }
 
@@ -198,6 +206,12 @@ namespace DAL.Context
         private void ConfigureValueObjectsAndJson(ModelBuilder modelBuilder)
         {
             // --- CẤU HÌNH VALUE OBJECTS (Owned Types) ---
+
+            // Cấu hình quan hệ 1-1 sử dụng Shared Primary Key
+            modelBuilder.Entity<Package>()
+                .HasOne(p => p.HandlingDetail)      // Package có 1 HandlingDetail
+                .WithOne(d => d.Package)            // HandlingDetail thuộc về 1 Package
+                .HasForeignKey<PackageHandlingDetail>(d => d.PackageId); // Khóa ngoại nằm ở bảng con và chính là PK
 
             // 1. Cấu hình cho BaseUser.Address
             modelBuilder.Entity<BaseUser>().OwnsOne(u => u.Address, loc =>
@@ -325,10 +339,7 @@ namespace DAL.Context
                 c => c.ToList()
             );
 
-            modelBuilder.Entity<Package>()
-                .Property(p => p.HandlingAttributes)
-                .HasConversion(stringListConverter)
-                .Metadata.SetValueComparer(stringListComparer);
+           
 
             modelBuilder.Entity<Vehicle>()
                 .Property(p => p.Features)
@@ -347,6 +358,13 @@ namespace DAL.Context
                 .WithMany(r => r.Users)
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Cấu hình quan hệ 1-N (1 User có nhiều Token)
+            modelBuilder.Entity<UserDeviceToken>()
+                .HasOne(t => t.User)
+                .WithMany() // Hoặc .WithMany(u => u.DeviceTokens) nếu bên User có list
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade); // Xóa User thì xóa luôn Token
 
             // BaseUser & Wallet (1-1)
             modelBuilder.Entity<BaseUser>()
@@ -615,12 +633,7 @@ namespace DAL.Context
                 .HasForeignKey(tdi => tdi.TripId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<TripCompensation>()
-                .HasOne(tc => tc.Trip)
-                .WithMany(t => t.Compensations)
-                .HasForeignKey(tc => tc.TripId)
-                .OnDelete(DeleteBehavior.Restrict);
-
+         
 
             modelBuilder.Entity<TripDriverContract>()
                 .HasOne(bc => bc.Trip)
@@ -684,11 +697,7 @@ namespace DAL.Context
             //    .WithMany(tdi => tdi.Compensations)
             //    .HasForeignKey(tc => tc.IssueId)
             //    .OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<TripCompensation>()
-                .HasOne(tc => tc.Requester)
-                .WithMany()
-                .HasForeignKey(tc => tc.RequesterId)
-                .OnDelete(DeleteBehavior.Restrict);
+           
 
             modelBuilder.Entity<PostContact>()
                 .HasOne(pc => pc.PostPackage)
@@ -701,6 +710,20 @@ namespace DAL.Context
                 .WithMany(pt => pt.PostTripDetails)
                 .HasForeignKey(ptd => ptd.PostTripId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // 1. Quan hệ với Vehicle (1-N)
+            modelBuilder.Entity<InspectionHistory>()
+                .HasOne(h => h.Vehicle)             // Lịch sử có 1 Xe
+                .WithMany(v => v.InspectionHistories) // Xe có nhiều Lịch sử
+                .HasForeignKey(h => h.VehicleId)    // Khóa ngoại là VehicleId
+                .OnDelete(DeleteBehavior.Cascade);  // QUAN TRỌNG: Xóa Xe -> Xóa luôn Lịch sử đăng kiểm
+
+            // 2. Quan hệ với VehicleDocument (1-0..1)
+            modelBuilder.Entity<InspectionHistory>()
+                .HasOne(h => h.Document)            // Lịch sử có 1 Giấy tờ (hoặc null)
+                .WithMany()                         // Giấy tờ không cần list lịch sử (Unidirectional)
+                .HasForeignKey(h => h.VehicleDocumentId)
+                .OnDelete(DeleteBehavior.SetNull);  // Nếu Xóa Giấy tờ -> Lịch sử vẫn giữ lại (nhưng link = null)
 
 
             // ============================================================
@@ -857,7 +880,7 @@ namespace DAL.Context
             modelBuilder.Entity<Transaction>().Property(p => p.BalanceAfter).HasPrecision(18, 2);
             modelBuilder.Entity<Transaction>().Property(p => p.BalanceBefore).HasPrecision(18, 2);
             modelBuilder.Entity<Trip>().Property(p => p.TotalFare).HasPrecision(18, 2);
-            modelBuilder.Entity<TripCompensation>().Property(p => p.Amount).HasPrecision(18, 2);
+          
             modelBuilder.Entity<TripDriverAssignment>().Property(p => p.BaseAmount).HasPrecision(18, 2);
             modelBuilder.Entity<TripDriverAssignment>().Property(p => p.BonusAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Wallet>().Property(p => p.Balance).HasPrecision(18, 2);

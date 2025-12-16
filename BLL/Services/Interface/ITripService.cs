@@ -21,6 +21,8 @@ namespace BLL.Services.Interface
 
         Task<ResponseDTO> GetTripDriverAnalysisAsync(Guid tripId);
 
+        Task<ResponseDTO> CancelTripByOwnerAsync(CancelTripDTO dto);
+
 
 
 

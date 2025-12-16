@@ -10,6 +10,8 @@ namespace Common.DTOs
     {
         // Danh sách log của từng ngày
         public List<DailyHistoryLogDTO> DailyLogs { get; set; } = new List<DailyHistoryLogDTO>();
+        // [MỚI] Tài xế bắt buộc phải tick vào ô này
+
     }
 
     public class DailyHistoryLogDTO

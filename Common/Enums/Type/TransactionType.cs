@@ -30,8 +30,8 @@ namespace Common.Enums.Type
         // tiền thanh toán cho nền tảng
         PLATFORM_PAYMENT,
 
-        COMPENSATION         // bồi thường
-
+        COMPENSATION,         // bồi thường
+ 
 
     }
 

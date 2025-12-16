@@ -32,6 +32,11 @@ namespace Common.DTOs
         // [NEW] Lưu trữ kết quả tính toán từ Vietmap
         public double? EstimatedDistanceKm { get; set; }
         public double? EstimatedDurationHours { get; set; }
+
+        // Tách biệt rõ ràng
+        public double? TravelTimeHours { get; set; }  // Thời gian chạy thực tế
+        public double? WaitTimeHours { get; set; }    // Thời gian chờ (quan trọng)
+        public string? RestrictionNote { get; set; }  // Ghi chú lý do cấm
     }
 
     // --- DTOs/PostPackage/PostContactInputDTO.cs ---
@@ -173,6 +178,14 @@ namespace Common.DTOs
         public string Status { get; set; }
         public List<PackageImageReadDTO> PackageImages { get; set; } = new List<PackageImageReadDTO>();
         public ItemForPackageInPostDTO Item { get; set; } = null!; // Lồng Item
+                                                                   // [BỔ SUNG] Các thuộc tính này đang thiếu
+        public bool IsFragile { get; set; }
+        public bool IsLiquid { get; set; }
+        public bool IsRefrigerated { get; set; }
+        public bool IsFlammable { get; set; }
+        public bool IsHazardous { get; set; }
+        public bool IsBulky { get; set; }
+        public bool IsPerishable { get; set; }
     }
 
     // --- DTOs/PostPackage/PostPackageDetailDTO.cs ---

@@ -85,8 +85,8 @@ namespace DAL.UnitOfWork
         private ITransactionRepository? _transactionRepo;
         public ITransactionRepository TransactionRepo => _transactionRepo ??= new TransactionRepository(_context);
 
-        private ITripCompensationRepository? _tripCompensationRepo;
-        public ITripCompensationRepository TripCompensationRepo => _tripCompensationRepo ??= new TripCompensationRepository(_context);
+        //private ITripCompensationRepository? _tripCompensationRepo;
+        //public ITripCompensationRepository TripCompensationRepo => _tripCompensationRepo ??= new TripCompensationRepository(_context);
 
         private ITripContactRepository? _tripContactRepo;
         public ITripContactRepository TripContactRepo => _tripContactRepo ??= new TripContactRepository(_context);
@@ -166,11 +166,21 @@ namespace DAL.UnitOfWork
         private ITripVehicleHandoverIssueImageRepository? _tripVehicleHandoverIssueImageRepo;
         public ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo => _tripVehicleHandoverIssueImageRepo ??= new TripVehicleHandoverIssueImageRepository(_context);
 
+        private IPackageHandlingDetailRepository? _packageHandlingDetailRepo;
+        public IPackageHandlingDetailRepository PackageHandlingDetailRepo => _packageHandlingDetailRepo ??= new PackageHandlingDetailRepository(_context);
 
         // =======================================================================
         // TRANSACTION & SAVE (OPTIMIZED)
         // =======================================================================
+        private IInspectionHistoryRepository? _inspectionHistoryRepo;
+        public IInspectionHistoryRepository InspectionHistoryRepo => _inspectionHistoryRepo ??= new InspectionHistoryRepository(_context);
 
+        private ITruckRestrictionRepository? _truckRestrictionRepo;
+        public ITruckRestrictionRepository TruckRestrictionRepo => _truckRestrictionRepo ??= new TruckRestrictionRepository(_context);
+        private IUserDeviceTokenRepository? _userDeviceTokenRepo;
+        public IUserDeviceTokenRepository UserDeviceTokenRepo => _userDeviceTokenRepo ??= new UserDeviceTokenRepository(_context);
+        private INotificationRepository? _notificationRepo;
+        public INotificationRepository NotificationRepo => _notificationRepo ??= new NotificationRepository(_context);
         public async Task<int> SaveAsync()
         {
             return await _context.SaveChangesAsync();

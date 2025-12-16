@@ -96,5 +96,17 @@ namespace DriverShareProject.Controllers
             if (!response.IsSuccess) return StatusCode(response.StatusCode, response);
             return Ok(response);
         }
+
+        /// <summary>
+        /// Xem lịch sử đăng kiểm của xe (Dành cho Owner hoặc Staff)
+        /// </summary>
+        [HttpGet("vehicle/{vehicleId}")]
+        //[Authorize]
+        public async Task<IActionResult> GetHistory(Guid vehicleId)
+        {
+            var result = await _service.GetHistoryByVehicleIdAsync(vehicleId);
+            if (!result.IsSuccess) return StatusCode(result.StatusCode, result);
+            return StatusCode(result.StatusCode, result);
+        }
     }
 }

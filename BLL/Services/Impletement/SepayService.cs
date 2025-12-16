@@ -1,4 +1,5 @@
-﻿using Common.Settings;
+﻿using BLL.Services.Interface;
+using Common.Settings;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -9,7 +10,7 @@ using System.Web;
 
 namespace BLL.Services.Impletement
 {
-    public class SepayService 
+    public class SepayService : ISepayService
     {
 
         //private readonly IHttpClientFactory _httpClientFactory;
@@ -61,5 +62,22 @@ namespace BLL.Services.Impletement
         //    var qrUrl = $"https://qr.sepay.vn/img?bank={bankCode}&acc={accountNumber}&amount={amount}&des={encodedDes}&template={template}";
         //    return qrUrl;
         //}
+
+        // Thông tin ngân hàng nhận tiền (Cấu hình cứng hoặc lấy từ AppSettings)
+        private readonly string _bankCode = "MBBank"; // Ví dụ: MBBank, VCB...
+        private readonly string _accountNumber = "0337147985";
+        private readonly string _template = "compact";
+
+        public string CreateSepayQR(decimal amount, string description)
+        {
+            // ✅ Encode nội dung chuyển khoản để đảm bảo URL hợp lệ
+            var encodedDes = HttpUtility.UrlEncode(description);
+
+            // 📷 Tạo URL ảnh QR từ SePay
+            // Mẫu: https://qr.sepay.vn/img?bank=...&acc=...&amount=...&des=...
+            var qrUrl = $"https://qr.sepay.vn/img?bank={_bankCode}&acc={_accountNumber}&amount={amount}&des={encodedDes}&template={_template}";
+
+            return qrUrl;
+        }
     }
 }

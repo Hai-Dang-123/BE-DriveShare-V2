@@ -54,5 +54,8 @@ namespace DAL.Entities
         public virtual ICollection<Trip> Trips { get; set; } = new List<Trip>();
         public virtual ICollection<TripVehicleHandoverRecord> TripVehicleHandoverRecords { get; set; } = new List<TripVehicleHandoverRecord>();
 
+        // Thêm dòng này: Một xe có nhiều lịch sử đăng kiểm
+        public virtual ICollection<InspectionHistory> InspectionHistories { get; set; } = new List<InspectionHistory>();
+
     }
 }

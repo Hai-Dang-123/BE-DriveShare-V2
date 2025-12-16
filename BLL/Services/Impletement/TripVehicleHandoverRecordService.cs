@@ -21,13 +21,15 @@ namespace BLL.Services.Impletement
         private readonly UserUtility _userUtility;
         private readonly IEmailService _emailService;
         private readonly IFirebaseUploadService _firebaseUploadService;
+        private readonly INotificationService _notificationService;
 
-        public TripVehicleHandoverRecordService(IUnitOfWork unitOfWork, UserUtility userUtility, IEmailService emailService, IFirebaseUploadService firebaseUploadService)
+        public TripVehicleHandoverRecordService(IUnitOfWork unitOfWork, UserUtility userUtility, IEmailService emailService, IFirebaseUploadService firebaseUploadService, INotificationService notificationService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _emailService = emailService;
             _firebaseUploadService = firebaseUploadService;
+            _notificationService = notificationService;
         }
 
         public async Task<bool> CreateTripVehicleHandoverRecordAsync(TripVehicleHandoverRecordCreateDTO dto)
@@ -407,6 +409,20 @@ namespace BLL.Services.Impletement
                 // Lưu & Commit
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync(); // [FIX] Gọi qua biến transaction
+
+                // [CHÈN VÀO ĐÂY]
+                if (record.Status == DeliveryRecordStatus.COMPLETED)
+                {
+                    // Cả 2 đã ký -> Báo cho cả 2
+                    _ = Task.Run(() => _notificationService.SendToUserAsync(record.OwnerId, "✅ Đã ký biên bản", "Biên bản giao nhận đã hoàn tất.", null));
+                    _ = Task.Run(() => _notificationService.SendToUserAsync(record.DriverId, "✅ Đã ký biên bản", "Biên bản giao nhận đã hoàn tất.", null));
+                }
+                else
+                {
+                    // Mới 1 người ký -> Báo cho người kia
+                    var targetId = (record.OwnerSigned == true) ? record.DriverId : record.OwnerId;
+                    _ = Task.Run(() => _notificationService.SendToUserAsync(targetId, "✍️ Yêu cầu ký tên", "Đối tác đã ký biên bản. Vui lòng vào xác nhận.", null));
+                }
 
                 return new ResponseDTO("Ký biên bản thành công.", 200, true);
             }

@@ -18,5 +18,15 @@ namespace BLL.Services.Interface
 
         Task SendTripLiquidationEmailAsync(ParticipantFinancialReport report, string tripCode);
 
+        // [MỚI] Hàm gửi thông báo biến động số dư (Nạp/Rút thành công)
+        Task SendTransactionSuccessEmailAsync(string email, string fullName, string transactionType, decimal amount, decimal newBalance, string transactionCode);
+
+        // [MỚI] Hàm gửi thông báo nạp tiền thất bại (Để user biết mà khiếu nại)
+        Task SendTopupFailureEmailAsync(string email, string fullName, decimal amount, string reason);
+        Task SendDebtRecoveryEmailAsync(string email, string fullName, decimal recoveredAmount, decimal remainingDebt, decimal newBalance);
+        // Trong IEmailService.cs
+        Task SendDepositRefundEmailAsync(string email, string fullName, decimal amount, string tripCode, string reason);
+
+        Task SendCancellationCompensationEmailAsync(string email, string fullName, string tripCode, decimal amount, string reason, string ownerName);
     }
 }

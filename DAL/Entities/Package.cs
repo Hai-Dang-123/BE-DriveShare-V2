@@ -20,15 +20,8 @@ namespace DAL.Entities
 
         public PackageStatus Status { get; set; } 
 
-        // --- GỢI Ý CẢI TIẾN (Thay thế cho các trường Is...) ---
-        // Lưu dưới dạng JSON hoặc một mảng string trong DB
-        // Ví dụ: ["FRAGILE", "FLAMMABLE", "REFRIGERATION"]
-        public List<string> HandlingAttributes { get; set; } = new List<string>();
-        public string? OtherRequirements { get; set; }
-
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-
+        public DateTime? UpdatedAt { get; set; }
         // Người tạo
         public virtual Owner? Owner { get; set; }
         public Guid? OwnerId { get; set; } // FK to Owner
@@ -48,5 +41,7 @@ namespace DAL.Entities
 
         // Liên kết 1-n
         public virtual ICollection<PackageImage> PackageImages { get; set; } = new List<PackageImage>();
+        // [UPDATED] Thay thế List<string> bằng Relationship 1-1
+        public virtual PackageHandlingDetail? HandlingDetail { get; set; }
     }
 }

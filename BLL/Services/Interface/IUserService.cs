@@ -19,5 +19,12 @@ namespace BLL.Services.Interface
              string sortDirection = "ASC"
          );
         Task<ResponseDTO> GetByIdAsync(Guid userId);
+        Task<ResponseDTO> GetAllUserByRoleAsync(
+            string roleName,
+            int pageNumber,
+            int pageSize,
+            string search = null,
+            string sortField = null,
+            string sortDirection = "ASC");
     }
 }

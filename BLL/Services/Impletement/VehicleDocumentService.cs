@@ -2,6 +2,7 @@
 using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
+using Common.Enums.Type;
 using Common.Settings;
 using DAL.Entities;
 using DAL.UnitOfWork;
@@ -84,10 +85,9 @@ namespace BLL.Services.Impletement
                 if (vehicle == null) return new ResponseDTO("Xe không tồn tại.", 404, false);
                 if (vehicle.OwnerId != userId) return new ResponseDTO("Không có quyền.", 403, false);
 
-                // 2. Validate
+                // 2. Validate & Upload Firebase
                 if (dto.FrontFile == null || dto.FrontFile.Length == 0) return new ResponseDTO("Thiếu ảnh mặt trước.", 400, false);
 
-                // 3. Upload Firebase
                 var frontUrl = await _firebaseService.UploadFileAsync(dto.FrontFile, userId, FirebaseFileType.VEHICLE_DOCUMENTS);
                 string? backUrl = null;
                 if (dto.BackFile != null)
@@ -95,7 +95,7 @@ namespace BLL.Services.Impletement
                     backUrl = await _firebaseService.UploadFileAsync(dto.BackFile, userId, FirebaseFileType.VEHICLE_DOCUMENTS);
                 }
 
-                // 4. Tạo Entity
+                // 3. Tạo Document Entity
                 var document = new VehicleDocument
                 {
                     VehicleDocumentId = Guid.NewGuid(),
@@ -104,15 +104,22 @@ namespace BLL.Services.Impletement
                     ExpirationDate = dto.ExpirationDate,
                     FrontDocumentUrl = frontUrl,
                     BackDocumentUrl = backUrl,
-
-                    // [UPDATED] Luôn là Pending Review khi mới tạo
                     Status = VerifileStatus.PENDING_REVIEW,
                     CreatedAt = DateTime.UtcNow
                 };
 
+                // [NEW] Nếu là giấy Đăng kiểm, lưu tạm thông tin vào Note hoặc trường phụ để Staff duyệt sau
+                // Ở đây mình giả sử lưu vào AdminNotes tạm thời để Staff thấy khi review
+                if (dto.DocumentType == DocumentType.INSPECTION_CERTIFICATE && dto.InspectionDate.HasValue)
+                {
+                    // Format chuỗi JSON hoặc text để lưu tạm
+                    document.AdminNotes = $"[USER_SUBMIT] Date: {dto.InspectionDate:dd/MM/yyyy} | Station: {dto.InspectionStation}";
+                }
+
                 await _unitOfWork.VehicleDocumentRepo.AddAsync(document);
                 await _unitOfWork.SaveChangeAsync();
 
+                // Response DTO (Giữ nguyên)
                 var response = new VehicleDocumentResponseDTO
                 {
                     VehicleDocumentId = document.VehicleDocumentId,
@@ -122,7 +129,6 @@ namespace BLL.Services.Impletement
                     BackImage = document.BackDocumentUrl,
                     ExpirationDate = document.ExpirationDate,
                     Status = document.Status.ToString(),
-
                 };
 
                 return new ResponseDTO("Đã tải lên giấy tờ. Vui lòng chờ nhân viên duyệt.", 201, true, response);
@@ -134,69 +140,76 @@ namespace BLL.Services.Impletement
         }
 
         // =========================================================================
-        // 3. [NEW] STAFF DUYỆT GIẤY TỜ XE (MANUAL REVIEW)
+        // 3. STAFF DUYỆT GIẤY TỜ & TẠO LỊCH SỬ ĐĂNG KIỂM TỰ ĐỘNG
         // =========================================================================
-       
         public async Task<ResponseDTO> ReviewVehicleDocumentAsync(Guid documentId, bool isApproved, string? rejectReason)
         {
-            using var transaction = await _unitOfWork.BeginTransactionAsync(); // Nên dùng Transaction để đảm bảo tính nhất quán
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 1. Lấy thông tin giấy tờ
                 var doc = await _unitOfWork.VehicleDocumentRepo.GetByIdAsync(documentId);
                 if (doc == null) return new ResponseDTO("Giấy tờ không tồn tại.", 404, false);
 
                 if (isApproved)
                 {
-                    // --- A. Cập nhật trạng thái giấy tờ ---
+                    // A. Cập nhật trạng thái Document
                     doc.Status = VerifileStatus.ACTIVE;
                     doc.ProcessedAt = DateTime.UtcNow;
                     doc.AdminNotes = "Approved by Staff.";
 
-                    // --- B. [NEW] Cập nhật trạng thái XE ---
-                    // Lấy thông tin xe dựa trên VehicleId của giấy tờ
+                    // B. Cập nhật trạng thái XE -> ACTIVE
                     var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(doc.VehicleId);
-
                     if (vehicle != null)
                     {
-                        // Cập nhật trạng thái xe thành ACTIVE (hoặc trạng thái tương đương trong Enum của bạn)
-                        // Lưu ý: Bạn có thể cần kiểm tra xem xe có ĐỦ các loại giấy tờ bắt buộc chưa trước khi Active.
-                        // Ở đây mình làm theo yêu cầu: duyệt là Active luôn.
                         vehicle.Status = VehicleStatus.ACTIVE;
-
                         await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
+                    }
+
+                    // C. [NEW] TẠO LỊCH SỬ ĐĂNG KIỂM (Nếu loại giấy là INSPECTION_CERTIFICATE)
+                    if (doc.DocumentType == DocumentType.INSPECTION_CERTIFICATE && doc.ExpirationDate.HasValue)
+                    {
+                        // Parse thông tin từ AdminNotes (nếu có lưu ở bước Add) hoặc lấy mặc định
+                        DateTime inspectionDate = DateTime.UtcNow; // Mặc định hôm nay nếu ko có data
+                        string station = "N/A";
+
+                        if (!string.IsNullOrEmpty(doc.AdminNotes) && doc.AdminNotes.Contains("[USER_SUBMIT]"))
+                        {
+                            // Logic parse đơn giản (Tùy bạn implement kỹ hơn)
+                            // VD: "[USER_SUBMIT] Date: 12/12/2025 | Station: 50-05V"
+                            // ... Code parse string ...
+                        }
+
+                        var history = new InspectionHistory
+                        {
+                            InspectionHistoryId = Guid.NewGuid(),
+                            VehicleId = doc.VehicleId,
+                            VehicleDocumentId = doc.VehicleDocumentId,
+                            InspectionDate = inspectionDate,
+                            ExpirationDate = doc.ExpirationDate.Value, // Lấy từ giấy tờ
+                            InspectionStation = station,
+                            Result = "ĐẠT", // Mặc định Đạt nếu được duyệt
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        await _unitOfWork.InspectionHistoryRepo.AddAsync(history); // Cần thêm Repo này
                     }
                 }
                 else
                 {
-                    // Từ chối giấy tờ
-                    if (string.IsNullOrWhiteSpace(rejectReason))
-                        return new ResponseDTO("Vui lòng nhập lý do từ chối.", 400, false);
-
+                    // Từ chối
+                    if (string.IsNullOrWhiteSpace(rejectReason)) return new ResponseDTO("Vui lòng nhập lý do từ chối.", 400, false);
                     doc.Status = VerifileStatus.REJECTED;
                     doc.ProcessedAt = DateTime.UtcNow;
                     doc.AdminNotes = rejectReason;
 
-                    // (Optional) Nếu từ chối giấy tờ, bạn có muốn set Xe về trạng thái REJECTED hoặc PENDING không?
-                    // Ví dụ:
-                    
-                    var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(doc.VehicleId);
-                    if (vehicle != null && vehicle.Status == VehicleStatus.ACTIVE)
-                    {
-                        vehicle.Status = VehicleStatus.INACTIVE; // Hoặc REJECTED
-                        await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
-                    }
-                    
+                    // Nếu từ chối, có thể set xe về INACTIVE tùy logic
                 }
 
-                // Cập nhật giấy tờ
                 await _unitOfWork.VehicleDocumentRepo.UpdateAsync(doc);
-
-                // Lưu tất cả thay đổi (cả Doc và Vehicle)
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
-                return new ResponseDTO(isApproved ? "Đã duyệt giấy tờ và kích hoạt xe." : "Đã từ chối giấy tờ xe.", 200, true);
+                return new ResponseDTO(isApproved ? "Đã duyệt và cập nhật hồ sơ xe." : "Đã từ chối giấy tờ.", 200, true);
             }
             catch (Exception ex)
             {
@@ -204,6 +217,8 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
             }
         }
+
+       
 
         public async Task<ResponseDTO> GetPendingVehicleDocumentsListAsync(
     int pageNumber,
@@ -308,6 +323,21 @@ namespace BLL.Services.Impletement
 
                 if (doc == null) return new ResponseDTO("Document not found", 404, false);
 
+                // [NEW] Lấy danh sách lịch sử đăng kiểm của xe này để Staff tham khảo
+                // (Giúp Staff biết xe này đã đăng kiểm bao nhiêu lần rồi)
+                var historyList = await _unitOfWork.InspectionHistoryRepo.GetAll()
+                    .Where(h => h.VehicleId == doc.VehicleId)
+                    .OrderByDescending(h => h.InspectionDate)
+                    .Take(5) // Lấy 5 lần gần nhất
+                    .Select(h => new InspectionHistoryDTO
+                    {
+                        Date = h.InspectionDate,
+                        ExpDate = h.ExpirationDate,
+                        Station = h.InspectionStation,
+                        Result = h.Result
+                    })
+                    .ToListAsync();
+
                 var detail = new VehicleDocumentPendingDetailDTO
                 {
                     VehicleDocumentId = doc.VehicleDocumentId,
@@ -326,11 +356,38 @@ namespace BLL.Services.Impletement
                     VehicleModel = doc.Vehicle?.Model ?? "N/A",
                     VehicleColor = doc.Vehicle?.Color ?? "N/A",
                     OwnerName = doc.Vehicle?.Owner?.FullName ?? "N/A",
-                    OwnerPhone = doc.Vehicle?.Owner?.PhoneNumber ?? "N/A"
+                    OwnerPhone = doc.Vehicle?.Owner?.PhoneNumber ?? "N/A",
+
+                    // [NEW] Trường mới trả về cho FE
+                    InspectionHistories = historyList
                 };
 
 
                 return new ResponseDTO("Success", 200, true, detail);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO(ex.Message, 500, false);
+            }
+        }
+
+        public async Task<ResponseDTO> GetHistoryByVehicleIdAsync(Guid vehicleId)
+        {
+            try
+            {
+                var history = await _unitOfWork.InspectionHistoryRepo.GetAll()
+                    .Where(x => x.VehicleId == vehicleId)
+                    .OrderByDescending(x => x.InspectionDate) // Mới nhất lên đầu
+                    .Select(h => new InspectionHistoryDTO
+                    {
+                        Date = h.InspectionDate,
+                        ExpDate = h.ExpirationDate,
+                        Station = h.InspectionStation,
+                        Result = h.Result
+                    })
+                    .ToListAsync();
+
+                return new ResponseDTO("Success", 200, true, history);
             }
             catch (Exception ex)
             {

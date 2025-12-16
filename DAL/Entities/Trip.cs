@@ -54,13 +54,15 @@ namespace DAL.Entities
         public virtual TripRoute TripRoute { get; set; } = null!;
         public virtual PostTrip? PostTrip { get; set; } // Bài đăng tuyển tài xế (nếu có)
 
+        // [NEW] Lưu báo cáo quyết toán chi tiết (JSON)
+        public string? LiquidationReportJson { get; set; }
+
         // Liên kết 1-n
         public virtual ICollection<DriverWorkSession> DriverWorkSessions { get; set; } = new List<DriverWorkSession>();
         public virtual ICollection<TripDriverAssignment> DriverAssignments { get; set; } = new List<TripDriverAssignment>();
         public virtual ICollection<TripContact> TripContacts { get; set; } = new List<TripContact>();
         public virtual ICollection<TripRouteSuggestion> TripRouteSuggestions { get; set; } = new List<TripRouteSuggestion>();
         public virtual ICollection<TripDeliveryRecord> TripDeliveryRecords { get; set; } = new List<TripDeliveryRecord>();
-        public virtual ICollection<TripCompensation> Compensations { get; set; } = new List<TripCompensation>();
 
         // (Liên kết hợp đồng - đã có trong BaseContract qua TripId)
         public virtual ICollection<TripDriverContract> DriverContracts { get; set; } = new List<TripDriverContract>();

@@ -55,5 +55,23 @@ namespace DriverShareProject.Controllers
             var result = await _assignmentService.DriverCheckOutAsync(dto);
             return StatusCode(result.StatusCode, result);
         }
+
+        // 5. Owner/Admin xóa tài xế khỏi chuyến (Có hoàn cọc)
+        [HttpDelete("{assignmentId}")]
+        //[Authorize(Roles = "Owner,Admin")]
+        public async Task<IActionResult> RemoveDriverFromTrip(Guid assignmentId)
+        {
+            var result = await _assignmentService.CancelAssignmentAsync(assignmentId);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        // 6. Tài xế tự hủy chuyến (Có check quy định 3 ngày & hoàn cọc)
+        [HttpDelete("self-cancel/{assignmentId}")]
+        //[Authorize(Roles = "Driver")]
+        public async Task<IActionResult> DriverSelfCancel(Guid assignmentId)
+        {
+            var result = await _assignmentService.CancelAssignmentByDriverAsync(assignmentId);
+            return StatusCode(result.StatusCode, result);
+        }
     }
 }

@@ -12,5 +12,6 @@ namespace Common.Enums.Status
         ACCEPTED,
         //REJECTED,
         COMPLETED,
+        CANCELLED
     }
 }

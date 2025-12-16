@@ -12,6 +12,7 @@ namespace Common.Enums.Status
         LOOKING_FOR_OWNER, // ĐANG TÌM CHỦ HÀNG
         IN_PROGRESS, // ĐANG VẬN CHUYỂN
         DELETED,    // XÓA
-        COMPLETED   // HOÀN THÀNH
+        COMPLETED,   // HOÀN THÀNH
+        REJECTED     // TỪ CHỐI
     }
 }

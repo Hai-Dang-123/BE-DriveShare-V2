@@ -159,7 +159,7 @@ namespace BLL.Services.Impletement
                 // 2. Lấy Query (Include Driver để lấy thông tin cá nhân)
                 var query = _unitOfWork.OwnerDriverLinkRepo.GetAll()
                     .Include(l => l.Driver)
-                    .Where(link => link.OwnerId == ownerId && link.Status == FleetJoinStatus.APPROVED);
+                    .Where(link => link.OwnerId == ownerId && link.Status != FleetJoinStatus.REJECTED);
 
                 // 3. Đếm tổng
                 var totalCount = await query.CountAsync();

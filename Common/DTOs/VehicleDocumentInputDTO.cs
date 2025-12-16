@@ -32,5 +32,9 @@ namespace Common.DTOs
         public IFormFile FrontFile { get; set; } = null!; // Mặt trước bắt buộc
 
         public IFormFile? BackFile { get; set; } // Mặt sau (có thể null nếu là bảo hiểm 1 mặt)
+
+        // --- [NEW] THÔNG TIN ĐĂNG KIỂM (Dành cho loại INSPECTION_CERTIFICATE) ---
+        public DateTime? InspectionDate { get; set; }
+        public string? InspectionStation { get; set; } // Mã trạm
     }
 }

@@ -109,6 +109,16 @@ namespace DriverShareProject.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
+        [HttpPut("cancel-by-owner")]
+        public async Task<IActionResult> CancelTripByOwner([FromBody] CancelTripDTO dto)
+        {
+           
+
+            var result = await _tripService.CancelTripByOwnerAsync(dto);
+
+            return StatusCode(result.StatusCode, result);
+        }
+
 
     }
 }

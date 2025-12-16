@@ -13,5 +13,7 @@ namespace Common.Enums.Type
         VEHICLE_LINCENSE,
         CIVIL_INSURANCE, // BẢO HIỂM DÂN SỰ
         PHYSICAL_INSURANCE, // BẢO HIỂM VẬT CHẤT
+        INSPECTION_CERTIFICATE,
+        HEALTH_CHECK
     }
 }

@@ -303,12 +303,19 @@ namespace BLL.Services.Impletement
             // --- [LOGIC MỚI] CHECK GPLX (Driver License) ---
             if (driver.UserDocuments != null)
             {
+                // 1. Check GPLX (Driver License)
                 var gplx = driver.UserDocuments.FirstOrDefault(d => d.DocumentType == DocumentType.DRIVER_LINCENSE);
                 dto.HasVerifiedDriverLicense = (gplx != null && gplx.Status == VerifileStatus.ACTIVE);
+
+                // 2. [MỚI] Check GKSK (Health Check)
+                var gksk = driver.UserDocuments.FirstOrDefault(d => d.DocumentType == DocumentType.HEALTH_CHECK);
+                dto.HasVerifiedHealthCheck = (gksk != null && gksk.Status == VerifileStatus.ACTIVE);
             }
             else
             {
+                // Nếu list null hoặc rỗng -> Chưa có gì cả
                 dto.HasVerifiedDriverLicense = false;
+                dto.HasVerifiedHealthCheck = false;
             }
 
             // --- [LOGIC MỚI] CHECK LỊCH SỬ CHẠY XE ---
@@ -492,6 +499,160 @@ namespace BLL.Services.Impletement
             }).ToList() ?? new List<PackageSummaryInDashboardDTO>();
 
             return dto;
+        }
+
+        // =========================================================
+        // 🔹 6. GET ALL USER BY SPECIFIC ROLE (Có Paging, Sort, Search chi tiết)
+        // =========================================================
+        public async Task<ResponseDTO> GetAllUserByRoleAsync(
+            string roleName,
+            int pageNumber,
+            int pageSize,
+            string search = null,
+            string sortField = null,
+            string sortDirection = "ASC")
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(roleName))
+                    return new ResponseDTO("Role name is required.", 400, false);
+
+                roleName = roleName.Trim();
+                bool desc = sortDirection?.ToUpper() == "DESC";
+                string keyword = search?.Trim().ToLower();
+
+                // ---------------------------------------------------------
+                // CASE 1: DRIVER
+                // ---------------------------------------------------------
+                if (roleName.Equals("Driver", StringComparison.OrdinalIgnoreCase))
+                {
+                    var query = _unitOfWork.DriverRepo.GetAll()
+                        .AsNoTracking()
+                        .Include(u => u.Role)
+                        .Include(u => u.UserDocuments) // Cần để map Verified Status
+                        .Where(u => u.Status != UserStatus.DELETED);
+
+                    // Search
+                    if (!string.IsNullOrEmpty(keyword))
+                    {
+                        query = query.Where(u =>
+                            u.FullName.ToLower().Contains(keyword) ||
+                            u.Email.ToLower().Contains(keyword) ||
+                            u.PhoneNumber.Contains(keyword) ||
+                            (u.LicenseNumber != null && u.LicenseNumber.ToLower().Contains(keyword)) // Search riêng Driver
+                        );
+                    }
+
+                    // Sort
+                    query = sortField?.ToLower() switch
+                    {
+                        "fullname" => desc ? query.OrderByDescending(u => u.FullName) : query.OrderBy(u => u.FullName),
+                        "email" => desc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+                        "createdat" => desc ? query.OrderByDescending(u => u.CreatedAt) : query.OrderBy(u => u.CreatedAt),
+                        "licensenumber" => desc ? query.OrderByDescending(u => u.LicenseNumber) : query.OrderBy(u => u.LicenseNumber),
+                        _ => query.OrderByDescending(u => u.CreatedAt)
+                    };
+
+                    // Paging
+                    var totalCount = await query.CountAsync();
+                    var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+
+                    // Mapping
+                    var dtos = items.Select(x => MapToDriverProfileDTO(x)).ToList();
+                    return new ResponseDTO("Success", 200, true, new PaginatedDTO<DriverProfileDTO>(dtos, totalCount, pageNumber, pageSize));
+                }
+
+                // ---------------------------------------------------------
+                // CASE 2: OWNER
+                // ---------------------------------------------------------
+                else if (roleName.Equals("Owner", StringComparison.OrdinalIgnoreCase))
+                {
+                    var query = _unitOfWork.OwnerRepo.GetAll()
+                        .AsNoTracking()
+                        .Include(u => u.Role)
+                        .Include(u => u.UserDocuments)
+                        .Where(u => u.Status != UserStatus.DELETED);
+
+                    // Search
+                    if (!string.IsNullOrEmpty(keyword))
+                    {
+                        query = query.Where(u =>
+                            u.FullName.ToLower().Contains(keyword) ||
+                            u.Email.ToLower().Contains(keyword) ||
+                            u.PhoneNumber.Contains(keyword) ||
+                            (u.CompanyName != null && u.CompanyName.ToLower().Contains(keyword)) || // Search riêng Owner
+                            (u.TaxCode != null && u.TaxCode.Contains(keyword))
+                        );
+                    }
+
+                    // Sort
+                    query = sortField?.ToLower() switch
+                    {
+                        "fullname" => desc ? query.OrderByDescending(u => u.FullName) : query.OrderBy(u => u.FullName),
+                        "email" => desc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+                        "createdat" => desc ? query.OrderByDescending(u => u.CreatedAt) : query.OrderBy(u => u.CreatedAt),
+                        "companyname" => desc ? query.OrderByDescending(u => u.CompanyName) : query.OrderBy(u => u.CompanyName),
+                        _ => query.OrderByDescending(u => u.CreatedAt)
+                    };
+
+                    // Paging
+                    var totalCount = await query.CountAsync();
+                    var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+
+                    // Mapping
+                    var dtos = items.Select(x => MapToOwnerProfileDTO(x)).ToList();
+                    return new ResponseDTO("Success", 200, true, new PaginatedDTO<OwnerProfileDTO>(dtos, totalCount, pageNumber, pageSize));
+                }
+
+                // ---------------------------------------------------------
+                // CASE 3: PROVIDER
+                // ---------------------------------------------------------
+                else if (roleName.Equals("Provider", StringComparison.OrdinalIgnoreCase))
+                {
+                    var query = _unitOfWork.ProviderRepo.GetAll()
+                        .AsNoTracking()
+                        .Include(u => u.Role)
+                        .Include(u => u.UserDocuments)
+                        .Where(u => u.Status != UserStatus.DELETED);
+
+                    // Search
+                    if (!string.IsNullOrEmpty(keyword))
+                    {
+                        query = query.Where(u =>
+                            u.FullName.ToLower().Contains(keyword) ||
+                            u.Email.ToLower().Contains(keyword) ||
+                            u.PhoneNumber.Contains(keyword) ||
+                            (u.CompanyName != null && u.CompanyName.ToLower().Contains(keyword)) // Search riêng Provider
+                        );
+                    }
+
+                    // Sort
+                    query = sortField?.ToLower() switch
+                    {
+                        "fullname" => desc ? query.OrderByDescending(u => u.FullName) : query.OrderBy(u => u.FullName),
+                        "email" => desc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+                        "createdat" => desc ? query.OrderByDescending(u => u.CreatedAt) : query.OrderBy(u => u.CreatedAt),
+                        "companyname" => desc ? query.OrderByDescending(u => u.CompanyName) : query.OrderBy(u => u.CompanyName),
+                        _ => query.OrderByDescending(u => u.CreatedAt)
+                    };
+
+                    // Paging
+                    var totalCount = await query.CountAsync();
+                    var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+
+                    // Mapping
+                    var dtos = items.Select(x => MapToProviderProfileDTO(x)).ToList();
+                    return new ResponseDTO("Success", 200, true, new PaginatedDTO<ProviderProfileDTO>(dtos, totalCount, pageNumber, pageSize));
+                }
+                else
+                {
+                    return new ResponseDTO($"Role '{roleName}' is not supported for this API.", 400, false);
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error getting users by role: {ex.Message}", 500, false);
+            }
         }
     }
 }

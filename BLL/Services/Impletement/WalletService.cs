@@ -51,7 +51,6 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Error getting wallet: {ex.Message}", 500, false);
             }
         }
-
         public async Task<ResponseDTO> GetMyTransactionHistoryAsync(int pageNumber = 1, int pageSize = 10)
         {
             try
@@ -90,12 +89,7 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Error getting transaction history: {ex.Message}", 500, false);
             }
         }
-
-       
-
-
         // ─────── HÀM PRIVATE HELPER (MAPPER) ───────
-
         private WalletDTO MapWalletToDTO(Wallet wallet)
         {
             return new WalletDTO
@@ -109,7 +103,6 @@ namespace BLL.Services.Impletement
                 LastUpdatedAt = wallet.LastUpdatedAt
             };
         }
-
         private TransactionDTO MapTransactionToDTO(Transaction t)
         {
             return new TransactionDTO

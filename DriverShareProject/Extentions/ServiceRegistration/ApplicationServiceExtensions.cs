@@ -64,7 +64,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
             services.AddScoped<ITripDeliveryIssueImageService, TripDeliveryIssueImageService>();
             services.AddScoped<ITripDeliveryIssueService, TripDeliveryIssueService>();
-            services.AddScoped<ITripCompensationService, TripCompensationService>();
+            //services.AddScoped<ITripCompensationService, TripCompensationService>();
             services.AddScoped<ITripDeliveryRecordService, TripDeliveryRecordService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IPostContactService, PostContactService>();
@@ -79,6 +79,8 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<ITripVehicleHandoverRecordService, TripVehicleHandoverRecordService>();
             services.AddScoped<IPostAnalysisService, PostAnalysisService>();
             services.AddScoped<IAIService, AIService>();
+            services.AddScoped<ITrafficRestrictionService, TrafficRestrictionService>();
+            services.AddScoped<INotificationService, NotificationService>();
 
             services.AddScoped<IVietMapService, VietMapService>();
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();
@@ -88,7 +90,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<UserUtility>();
 
-
+            services.AddScoped<ISepayService, SepayService>();
             services.AddHttpClient<IVNPTTokenService, VNPTTokenService>();
             // Trong Program.cs hoặc Startup.cs
             services.AddHttpClient<IEKYCService, EKYCService>()

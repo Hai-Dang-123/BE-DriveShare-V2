@@ -24,5 +24,8 @@ namespace Common.DTOs
 
         // [MỚI] Check xem đã khai báo lịch sử chạy ban đầu chưa
         public bool HasDeclaredInitialHistory { get; set; }
+
+        // [BỔ SUNG] Field này
+        public bool HasVerifiedHealthCheck { get; set; }
     }
 }

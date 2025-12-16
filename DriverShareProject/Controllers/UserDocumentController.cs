@@ -150,6 +150,20 @@ namespace DriverShareProject.Controllers
             var response = await _service.GetPendingReviewDetailAsync(id);
             return StatusCode(response.StatusCode, response);
         }
+
+        [HttpPost("verify-health-check")]
+        public async Task<IActionResult> VerifyHealthCheck([FromForm] UploadIdentityRequestDTO request)
+        {
+
+            var result = await _service.CreateAndVerifyDocumentAsync(
+                request.Front,
+                request.Back,   // Có thể null
+                request.Selfie, // Có thể null
+                DocumentType.HEALTH_CHECK
+            );
+
+            return StatusCode(result.StatusCode, result);
+        }
     }
 
     // ============================================================

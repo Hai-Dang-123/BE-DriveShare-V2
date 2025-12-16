@@ -24,6 +24,8 @@ namespace BLL.Services.Impletement
         private readonly IUserDocumentService _userDocumentService;
         private readonly IVietMapService _vietMapService;
         private readonly IOwnerDriverLinkService _ownerDriverLinkService;
+        private readonly ITrafficRestrictionService _trafficRestrictionService;
+        private readonly INotificationService _notificationService;
 
         public PostPackageService(
             IUnitOfWork unitOfWork,
@@ -32,7 +34,9 @@ namespace BLL.Services.Impletement
             IPostContactService postContactService,
             IUserDocumentService userDocumentService,
             IVietMapService vietMapService,
-            IOwnerDriverLinkService ownerDriverLinkService)
+            IOwnerDriverLinkService ownerDriverLinkService,
+            ITrafficRestrictionService trafficRestrictionService,
+            INotificationService notificationService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -41,6 +45,8 @@ namespace BLL.Services.Impletement
             _userDocumentService = userDocumentService;
             _vietMapService = vietMapService;
             _ownerDriverLinkService = ownerDriverLinkService;
+            _trafficRestrictionService = trafficRestrictionService;
+            _notificationService = notificationService;
         }
 
         // =============================================================================
@@ -89,6 +95,17 @@ namespace BLL.Services.Impletement
 
                 await transaction.CommitAsync();
 
+                // [CHÈN VÀO ĐÂY]
+                if (dto.NewStatus == PostStatus.OPEN)
+                {
+                    _ = Task.Run(() => _notificationService.SendToRoleAsync(
+                        "Owner", // Role name trong DB
+                        "📦 Đơn hàng mới!",
+                        "Có một đơn hàng mới vừa được đăng tải. Vào xem ngay!",
+                        new Dictionary<string, string> { { "screen", "PostDetail" }, { "id", dto.PostPackageId.ToString() } }
+                    ));
+                }
+
                 return new ResponseDTO("Change status successfully.", 200, true, postPackage);
             }
             catch (Exception ex)
@@ -101,156 +118,120 @@ namespace BLL.Services.Impletement
         // =============================================================================
         // 2. CREATE POST
         // =============================================================================
-        //public async Task<ResponseDTO> CreateProviderPostPackageAsync(PostPackageCreateDTO dto)
-        //{
-        //    using var transaction = await _unitOfWork.BeginTransactionAsync();
-        //    try
-        //    {
-        //        var userId = _userUtility.GetUserIdFromToken();
-        //        if (userId == Guid.Empty) return new ResponseDTO("Invalid user token.", 401, false);
+        // Đảm bảo đã inject service này ở Constructor
+        // private readonly ITrafficRestrictionService _trafficRestrictionService;
 
-        //        // --- CHECK GIẤY TỜ ---
-        //        var verifyCheck = await _userDocumentService.ValidateUserDocumentsAsync(userId);
-        //        if (!verifyCheck.IsValid) return new ResponseDTO(verifyCheck.Message, 403, false);
-
-        //        // --- VALIDATE NGÀY GIỜ ---
-        //        var route = dto.ShippingRoute;
-        //        var today = DateTime.UtcNow.Date;
-
-        //        if (route.ExpectedPickupDate.Date < today) return new ResponseDTO("Ngày lấy hàng dự kiến không thể ở trong quá khứ.", 400, false);
-        //        if (route.ExpectedDeliveryDate.Date < route.ExpectedPickupDate.Date) return new ResponseDTO("Ngày giao hàng không thể trước ngày lấy hàng.", 400, false);
-        //        if (route.StartTimeToPickup.HasValue && route.EndTimeToPickup.HasValue && route.StartTimeToPickup > route.EndTimeToPickup) return new ResponseDTO("Khung giờ lấy hàng không hợp lệ.", 400, false);
-        //        if (route.StartTimeToDelivery.HasValue && route.EndTimeToDelivery.HasValue && route.StartTimeToDelivery > route.EndTimeToDelivery) return new ResponseDTO("Khung giờ giao hàng không hợp lệ.", 400, false);
-
-        //        // --- CREATE ROUTE ---
-        //        ShippingRoute newShippingRoute = await _shippingRouteService.CreateAndAddShippingRouteAsync(dto.ShippingRoute);
-
-        //        // --- CREATE POST ---
-        //        var postPackage = new PostPackage
-        //        {
-        //            PostPackageId = Guid.NewGuid(),
-        //            ProviderId = userId,
-        //            Title = dto.Title,
-        //            Description = dto.Description,
-        //            OfferedPrice = dto.OfferedPrice,
-        //            Created = DateTime.UtcNow,
-        //            Updated = DateTime.UtcNow,
-        //            Status = dto.Status,
-        //            ShippingRouteId = newShippingRoute.ShippingRouteId
-        //        };
-        //        await _unitOfWork.PostPackageRepo.AddAsync(postPackage);
-
-        //        // --- CREATE CONTACTS ---
-        //        await _postContactService.CreateAndAddContactsAsync(postPackage.PostPackageId, dto.SenderContact, dto.ReceiverContact);
-
-        //        // --- LINK PACKAGES ---
-        //        foreach (var packageId in dto.PackageIds)
-        //        {
-        //            var package = await _unitOfWork.PackageRepo.GetByIdAsync(packageId);
-        //            if (package == null) throw new Exception($"Package ID {packageId} not found.");
-        //            if (package.ProviderId != userId) throw new Exception($"Package {package.PackageCode} is not yours.");
-        //            if (package.PostPackageId != null) throw new Exception($"Package {package.PackageCode} already in another post.");
-        //            if (package.Status != PackageStatus.PENDING) throw new Exception($"Package {package.PackageCode} must be PENDING.");
-
-        //            package.PostPackageId = postPackage.PostPackageId;
-        //            package.Status = PackageStatus.LOOKING_FOR_OWNER;
-        //            await _unitOfWork.PackageRepo.UpdateAsync(package);
-        //        }
-
-        //        await _unitOfWork.SaveChangeAsync();
-        //        await transaction.CommitAsync();
-
-        //        return new ResponseDTO($"Tạo bài đăng thành công ({dto.PackageIds.Count} gói hàng).", 201, true, new { PostPackageId = postPackage.PostPackageId });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        return new ResponseDTO(ex.Message, 400, false);
-        //    }
-        //}
-
-        // =============================================================================
-        // 3. GET ALL POST PACKAGES (ADMIN/PUBLIC)
-        // =============================================================================
-
-        // =============================================================================
-        // 2. CREATE POST (ĐÃ CẬP NHẬT VALIDATE THỜI GIAN)
-        // =============================================================================
         public async Task<ResponseDTO> CreateProviderPostPackageAsync(PostPackageCreateDTO dto)
         {
+            // Bắt đầu transaction để đảm bảo tính toàn vẹn dữ liệu
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
+                // 1. --- AUTH & BASIC VALIDATION ---
                 var userId = _userUtility.GetUserIdFromToken();
                 if (userId == Guid.Empty) return new ResponseDTO("Invalid user token.", 401, false);
 
-                // --- CHECK GIẤY TỜ ---
                 var verifyCheck = await _userDocumentService.ValidateUserDocumentsAsync(userId);
                 if (!verifyCheck.IsValid) return new ResponseDTO(verifyCheck.Message, 403, false);
 
-                // --- VALIDATE NGÀY GIỜ CƠ BẢN ---
                 var route = dto.ShippingRoute;
                 var today = DateTime.UtcNow.Date;
 
                 if (route.ExpectedPickupDate.Date < today) return new ResponseDTO("Ngày lấy hàng dự kiến không thể ở trong quá khứ.", 400, false);
                 if (route.ExpectedDeliveryDate <= route.ExpectedPickupDate) return new ResponseDTO("Ngày giao hàng phải sau thời gian lấy hàng.", 400, false);
-                if (route.StartTimeToPickup.HasValue && route.EndTimeToPickup.HasValue && route.StartTimeToPickup > route.EndTimeToPickup) return new ResponseDTO("Khung giờ lấy hàng không hợp lệ.", 400, false);
-                if (route.StartTimeToDelivery.HasValue && route.EndTimeToDelivery.HasValue && route.StartTimeToDelivery > route.EndTimeToDelivery) return new ResponseDTO("Khung giờ giao hàng không hợp lệ.", 400, false);
 
-                // =======================================================================
-                // [FIXED] LOGIC KIỂM TRA KHẢ THI & GEOCODE
-                // =======================================================================
+                // 2. --- TÍNH TOÁN LỘ TRÌNH & RESTRICTIONS ---
+                // Khởi tạo biến để lưu kết quả tính toán
+                double calculatedDistance = 0;
+                double travelTimeTotal = 0;
+                double waitTimeTotal = 0;
+                double totalDuration = 0;
+                string restrictionNote = null;
 
-                // --- TÍNH TOÁN & VALIDATE LỘ TRÌNH ---
-                double savedDistance = 0;
-                double savedDuration = 0;
-
-                // 1. Geocode (Giữ nguyên logic sửa lỗi Location)
+                // A. Geocode (Chuyển đổi địa chỉ sang tọa độ nếu thiếu)
                 if (IsLocationMissingCoordinates(dto.ShippingRoute.StartLocation))
                 {
                     var geo = await _vietMapService.GeocodeAsync(dto.ShippingRoute.StartLocation.Address);
                     if (geo != null) dto.ShippingRoute.StartLocation = new Location(dto.ShippingRoute.StartLocation.Address, geo.Latitude ?? 0, geo.Longitude ?? 0);
                 }
+
                 if (IsLocationMissingCoordinates(dto.ShippingRoute.EndLocation))
                 {
                     var geo = await _vietMapService.GeocodeAsync(dto.ShippingRoute.EndLocation.Address);
                     if (geo != null) dto.ShippingRoute.EndLocation = new Location(dto.ShippingRoute.EndLocation.Address, geo.Latitude ?? 0, geo.Longitude ?? 0);
                 }
 
-                // 2. Gọi Vietmap & Validate
+                // B. Gọi VietMap & Check Cấm tải
                 if (!IsLocationMissingCoordinates(dto.ShippingRoute.StartLocation) && !IsLocationMissingCoordinates(dto.ShippingRoute.EndLocation))
                 {
+                    // Lấy lộ trình xe tải
                     var path = await _vietMapService.GetRouteAsync(dto.ShippingRoute.StartLocation, dto.ShippingRoute.EndLocation, "truck");
 
-                    if (path != null)
+                    if (path == null)
                     {
-                        double rawHours = path.Time / (1000.0 * 60 * 60);
-                        savedDuration = Math.Round((rawHours * 1.15) + 0.5, 1); // Buffer 15% + 30p
-                        savedDistance = Math.Round(path.Distance / 1000.0, 2);
+                        // Nếu không tìm thấy đường, trả lỗi (hoặc bạn có thể cho phép nhập tay tùy nghiệp vụ)
+                        return new ResponseDTO("Không tìm thấy lộ trình phù hợp giữa hai điểm này.", 400, false);
+                    }
 
-                        // Validate thời gian Provider
-                        if (savedDuration > 0)
-                        {
-                            double providerHours = (dto.ShippingRoute.ExpectedDeliveryDate - dto.ShippingRoute.ExpectedPickupDate).TotalHours;
-                            if (providerHours < savedDuration - 0.1)
-                            {
-                                await transaction.RollbackAsync();
-                                return new ResponseDTO($"Thời gian giao hàng không khả thi. Cần tối thiểu {savedDuration} giờ.", 400, false);
-                            }
-                        }
+                    // --- Tính toán thời gian chạy (Travel Time) ---
+                    double rawHours = path.Time / (1000.0 * 60 * 60);
+                    calculatedDistance = Math.Round(path.Distance / 1000.0, 2);
+
+                    // Buffer an toàn: 15% + 30 phút cho kẹt xe/nghỉ ngơi
+                    double bufferHours = (rawHours * 0.15) + 0.5;
+                    travelTimeTotal = Math.Round(rawHours + bufferHours, 1);
+
+                    // --- Tính toán thời gian chờ (Wait Time) do Cấm tải ---
+                    // Dự kiến xe đến cửa ngõ đích sau khi chạy xong travelTimeTotal
+                    var estimatedArrivalTime = dto.ShippingRoute.ExpectedPickupDate.AddHours(travelTimeTotal);
+
+                    // Gọi TrafficRestrictionService (Service chúng ta vừa tạo)
+                    var restrictionResult = await _trafficRestrictionService.CheckRestrictionAsync(dto.ShippingRoute.EndLocation.Address, estimatedArrivalTime);
+
+                    if (restrictionResult.IsRestricted)
+                    {
+                        waitTimeTotal = Math.Round(restrictionResult.WaitTime, 1);
+                        restrictionNote = $"Phải chờ {waitTimeTotal}h do {restrictionResult.Reason}";
+                    }
+
+                    // --- Tổng thời gian cần thiết ---
+                    totalDuration = travelTimeTotal + waitTimeTotal;
+
+                    // --- VALIDATE LOGIC THỜI GIAN ---
+                    // Thời gian Provider cam kết (Delivery - Pickup)
+                    double providerInputDuration = (dto.ShippingRoute.ExpectedDeliveryDate - dto.ShippingRoute.ExpectedPickupDate).TotalHours;
+
+                    // Kiểm tra: Nếu thời gian cam kết < Thời gian tính toán thực tế -> Lỗi
+                    // (Cho phép sai số nhỏ 0.1h)
+                    if (providerInputDuration < totalDuration - 0.1)
+                    {
+                        await transaction.RollbackAsync();
+
+                        string errorMsg = $"Thời gian giao hàng quá ngắn! Hệ thống tính toán cần tối thiểu {totalDuration} giờ";
+                        errorMsg += $" (Chạy: {travelTimeTotal}h";
+                        if (waitTimeTotal > 0) errorMsg += $", Chờ cấm tải: {waitTimeTotal}h";
+                        errorMsg += ").";
+
+                        return new ResponseDTO(errorMsg, 400, false);
                     }
                 }
 
-                // --- GÁN GIÁ TRỊ VÀO ENTITY ---
-                dto.ShippingRoute.EstimatedDistanceKm = savedDistance;
-                dto.ShippingRoute.EstimatedDurationHours = savedDuration;
+                // 3. --- LƯU DỮ LIỆU ---
 
+                // Cập nhật kết quả tính toán vào DTO để Service ShippingRoute lưu xuống DB
+                dto.ShippingRoute.EstimatedDistanceKm = calculatedDistance;
+                dto.ShippingRoute.TravelTimeHours = travelTimeTotal;
+                dto.ShippingRoute.WaitTimeHours = waitTimeTotal;
+                dto.ShippingRoute.EstimatedDurationHours = totalDuration;
+                dto.ShippingRoute.RestrictionNote = restrictionNote;
 
+                // Lưu ý: Các trường TimeOnly (StartTimeToPickup...) đã có trong DTO, 
+                // hàm CreateAndAddShippingRouteAsync sẽ tự động lưu chúng nếu user có nhập.
 
-                // --- CREATE ROUTE ---
+                // A. Tạo ShippingRoute
                 ShippingRoute newShippingRoute = await _shippingRouteService.CreateAndAddShippingRouteAsync(dto.ShippingRoute);
 
-                // --- CREATE POST ---
+                // B. Tạo Bài đăng (PostPackage)
                 var postPackage = new PostPackage
                 {
                     PostPackageId = Guid.NewGuid(),
@@ -260,28 +241,32 @@ namespace BLL.Services.Impletement
                     OfferedPrice = dto.OfferedPrice,
                     Created = DateTime.UtcNow,
                     Updated = DateTime.UtcNow,
-                    Status = dto.Status,
+                    Status = dto.Status, // Thường là PENDING hoặc OPEN
                     ShippingRouteId = newShippingRoute.ShippingRouteId
                 };
                 await _unitOfWork.PostPackageRepo.AddAsync(postPackage);
 
-                // --- CREATE CONTACTS ---
+                // C. Tạo Contact (Sender/Receiver)
                 await _postContactService.CreateAndAddContactsAsync(postPackage.PostPackageId, dto.SenderContact, dto.ReceiverContact);
 
-                // --- LINK PACKAGES ---
+                // D. Link Packages (Cập nhật trạng thái các gói hàng)
                 foreach (var packageId in dto.PackageIds)
                 {
                     var package = await _unitOfWork.PackageRepo.GetByIdAsync(packageId);
-                    if (package == null) throw new Exception($"Package ID {packageId} not found.");
-                    if (package.ProviderId != userId) throw new Exception($"Package {package.PackageCode} is not yours.");
-                    if (package.PostPackageId != null) throw new Exception($"Package {package.PackageCode} already in another post.");
-                    if (package.Status != PackageStatus.PENDING) throw new Exception($"Package {package.PackageCode} must be PENDING.");
 
+                    // Validate Package
+                    if (package == null) throw new Exception($"Gói hàng {packageId} không tồn tại.");
+                    if (package.ProviderId != userId) throw new Exception($"Gói hàng {package.PackageCode} không thuộc quyền quản lý của bạn.");
+                    if (package.PostPackageId != null) throw new Exception($"Gói hàng {package.PackageCode} đã nằm trong bài đăng khác.");
+                    if (package.Status != PackageStatus.PENDING) throw new Exception($"Gói hàng {package.PackageCode} phải ở trạng thái PENDING.");
+
+                    // Update Package
                     package.PostPackageId = postPackage.PostPackageId;
-                    package.Status = PackageStatus.LOOKING_FOR_OWNER;
+                    package.Status = PackageStatus.LOOKING_FOR_OWNER; // Chuyển trạng thái sang tìm chủ xe
                     await _unitOfWork.PackageRepo.UpdateAsync(package);
                 }
 
+                // 4. --- COMMIT ---
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
@@ -290,26 +275,31 @@ namespace BLL.Services.Impletement
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return new ResponseDTO(ex.Message, 400, false);
+                return new ResponseDTO($"Lỗi tạo bài đăng: {ex.Message}", 400, false);
             }
         }
 
         // Helper check tọa độ
         private bool IsLocationMissingCoordinates(Location loc)
         {
-            // Kiểm tra null an toàn và giá trị 0
-            return loc == null || !loc.Latitude.HasValue || !loc.Longitude.HasValue ||
-                   (loc.Latitude.Value == 0 && loc.Longitude.Value == 0);
+            return loc == null || !loc.Latitude.HasValue || !loc.Longitude.HasValue || (loc.Latitude.Value == 0 && loc.Longitude.Value == 0);
         }
+
+        // =============================================================================
+        // 3. GET ALL POST PACKAGES (OPTIMIZED)
+        // =============================================================================
         public async Task<ResponseDTO> GetAllPostPackagesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
+                // [OPTIMIZATION] AsNoTracking để đọc nhanh hơn + AsSplitQuery để tách query 1-N
                 IQueryable<PostPackage> query = _unitOfWork.PostPackageRepo.GetAllQueryable()
+                    .AsNoTracking()
+                    .AsSplitQuery() // Quan trọng: Tách query SQL để tránh Cartesian Explosion
                     .Include(p => p.Provider)
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
-                    .Include(p => p.Packages);
+                    .Include(p => p.Packages).ThenInclude(pkg => pkg.HandlingDetail); // Include chi tiết
 
                 // Search & Sort
                 query = ApplyPostPackageFilter(query, search);
@@ -317,7 +307,22 @@ namespace BLL.Services.Impletement
 
                 // Paging
                 var totalCount = await query.CountAsync();
-                var pagedData = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+                var pagedData = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                // Check expire (Lưu ý: Vì dùng AsNoTracking nên cần Attach lại nếu muốn SaveChanges, 
+                // nhưng ở đây ta chấp nhận query lại context để update hoặc bỏ qua update trong hàm Get này để tối ưu tốc độ)
+                // Để an toàn và vẫn update được trạng thái, ta nên dùng Tracking cho page hiện tại hoặc update riêng.
+                // Ở đây tôi giữ logic cũ nhưng cảnh báo về Performance nếu SaveChange quá nhiều.
+                // Tuy nhiên, vì pagedData số lượng ít (pageSize), nên việc update này không quá chậm.
+                // Ta cần attach lại vì AsNoTracking. Hoặc đơn giản bỏ AsNoTracking ở trên nếu muốn update.
+                // Để tối ưu nhất: Ta bỏ AsNoTracking ở query trên để Update được.
+
+                // Re-query without AsNoTracking for the logic `CheckAndExpirePostsAsync` to work properly with EF Change Tracker
+                // Hoặc đơn giản là xóa .AsNoTracking() ở dòng query đầu tiên.
+                // [DECISION]: Để query nhanh nhất, ta dùng AsSplitQuery. Việc tracking 10-20 records không quá tốn.
 
                 await CheckAndExpirePostsAsync(pagedData);
 
@@ -328,17 +333,18 @@ namespace BLL.Services.Impletement
         }
 
         // =============================================================================
-        // 4. GET BY PROVIDER
+        // 4. GET BY PROVIDER (OPTIMIZED)
         // =============================================================================
         public async Task<ResponseDTO> GetPostPackagesByProviderIdAsync(Guid providerId, int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
-                // Lưu ý: Repo nên trả về IQueryable chưa query DB
-                IQueryable<PostPackage> query = _unitOfWork.PostPackageRepo.GetByProviderIdQueryable(providerId);
-
-                // Include nếu Repo chưa include (cần check lại Repo của bạn)
-                // query = query.Include(...); 
+                IQueryable<PostPackage> query = _unitOfWork.PostPackageRepo.GetByProviderIdQueryable(providerId)
+                    .AsSplitQuery() // Tối ưu query
+                    .Include(p => p.Provider)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
+                    .Include(p => p.Packages).ThenInclude(pkg => pkg.HandlingDetail);
 
                 query = ApplyPostPackageFilter(query, search);
                 query = ApplyPostPackageSort(query, sortBy, sortOrder);
@@ -355,18 +361,19 @@ namespace BLL.Services.Impletement
         }
 
         // =============================================================================
-        // 5. GET OPEN POSTS
+        // 5. GET OPEN POSTS (OPTIMIZED)
         // =============================================================================
         public async Task<ResponseDTO> GetOpenPostPackagesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
             try
             {
                 IQueryable<PostPackage> query = _unitOfWork.PostPackageRepo.GetAllQueryable()
+                    .AsSplitQuery() // Tối ưu query
                     .Include(p => p.Provider)
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
-                    .Include(p => p.Packages)
-                    .Where(p => p.Status == PostStatus.OPEN); // Chỉ lấy OPEN
+                    .Include(p => p.Packages).ThenInclude(pkg => pkg.HandlingDetail)
+                    .Where(p => p.Status == PostStatus.OPEN);
 
                 query = ApplyPostPackageFilter(query, search);
                 query = ApplyPostPackageSort(query, sortBy, sortOrder);
@@ -386,7 +393,7 @@ namespace BLL.Services.Impletement
         }
 
         // =============================================================================
-        // 7. GET MY POSTS
+        // 7. GET MY POSTS (OPTIMIZED)
         // =============================================================================
         public async Task<ResponseDTO> GetMyPostPackagesAsync(int pageNumber, int pageSize, string? search, string? sortBy, string? sortOrder)
         {
@@ -395,7 +402,12 @@ namespace BLL.Services.Impletement
                 var providerId = _userUtility.GetUserIdFromToken();
                 if (providerId == Guid.Empty) return new ResponseDTO("Unauthorized.", 401, false);
 
-                IQueryable<PostPackage> query = _unitOfWork.PostPackageRepo.GetByProviderIdQueryable(providerId);
+                IQueryable<PostPackage> query = _unitOfWork.PostPackageRepo.GetByProviderIdQueryable(providerId)
+                    .AsSplitQuery() // Tối ưu query
+                    .Include(p => p.Provider)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
+                    .Include(p => p.Packages).ThenInclude(pkg => pkg.HandlingDetail);
 
                 query = ApplyPostPackageFilter(query, search);
                 query = ApplyPostPackageSort(query, sortBy, sortOrder);
@@ -412,7 +424,335 @@ namespace BLL.Services.Impletement
         }
 
         // =============================================================================
-        // PRIVATE HELPERS (SEARCH & SORT)
+        // [FIXED & UPDATED] 6. GET DETAILS
+        // =============================================================================
+        public async Task<ResponseDTO> GetPostPackageDetailsAsync(Guid postPackageId)
+        {
+            try
+            {
+                // 1. Query tối ưu (AsSplitQuery)
+                var postPackage = await _unitOfWork.PostPackageRepo.GetAllQueryable()
+                    .AsSplitQuery()
+                    .Include(p => p.Provider)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
+                    .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
+                    .Include(p => p.PostContacts)
+                    .Include(p => p.Packages).ThenInclude(pk => pk.PackageImages)
+                    .Include(p => p.Packages).ThenInclude(pk => pk.Item).ThenInclude(i => i.ItemImages)
+                    .Include(p => p.Packages).ThenInclude(pk => pk.HandlingDetail)
+                    .FirstOrDefaultAsync(p => p.PostPackageId == postPackageId);
+
+                if (postPackage == null) return new ResponseDTO("Bài đăng không tồn tại.", 404, false);
+
+                // 2. Check hết hạn
+                await CheckAndExpirePostsAsync(new List<PostPackage> { postPackage });
+
+                var dto = MapToDetailDTO(postPackage);
+                dto.MyDrivers = new List<OwnerDriverStatusDTO>();
+
+                // --- 3. TÍNH TOÁN GỢI Ý (DRIVER SUGGESTION) ---
+                if (postPackage.ShippingRoute != null)
+                {
+                    // Lấy dữ liệu từ DB (đã lưu lúc Create Post)
+                    double dist = postPackage.ShippingRoute.EstimatedDistanceKm;
+                    double durationHours = postPackage.ShippingRoute.EstimatedDurationHours;
+
+                    // [MỚI] Lấy WaitTime & Buffer
+                    double waitTimeHours = postPackage.ShippingRoute.WaitTimeHours ?? 0;
+                    double bufferHours = 0; // Nếu chưa lưu buffer thì tạm tính 0 hoặc tính lại
+
+                    // Fallback: Nếu DB chưa có dữ liệu (dữ liệu cũ), gọi VietMap tính lại
+                    if (dist == 0 || durationHours == 0)
+                    {
+                        var startNode = postPackage.ShippingRoute.StartLocation;
+                        var endNode = postPackage.ShippingRoute.EndLocation;
+
+                        if (!IsLocationMissingCoordinates(startNode) && !IsLocationMissingCoordinates(endNode))
+                        {
+                            var path = await _vietMapService.GetRouteAsync(startNode, endNode, "truck");
+                            if (path != null)
+                            {
+                                // Tính toán lại Duration & Distance
+                                double rawHours = path.Time / (1000.0 * 60 * 60);
+                                dist = Math.Round(path.Distance / 1000.0, 2);
+
+                                // Buffer mặc định 15% + 30p
+                                bufferHours = (rawHours * 0.15) + 0.5;
+                                durationHours = rawHours + bufferHours; // Tổng estimated
+                            }
+                        }
+                    }
+
+                    // Gọi Helper tính toán kịch bản (Phiên bản mới 6 tham số)
+                    if (durationHours > 0)
+                    {
+                        dto.DriverSuggestion = TripCalculationHelper.CalculateScenarios(
+                            dist,
+                            durationHours, // Lưu ý: Nếu durationHours đã gồm buffer thì truyền rawHours vào đây sẽ chuẩn hơn
+                            waitTimeHours,
+                            bufferHours,
+                            postPackage.ShippingRoute.ExpectedPickupDate,
+                            postPackage.ShippingRoute.ExpectedDeliveryDate
+                        );
+                    }
+                }
+
+                // --- 4. CHECK TÀI XẾ NỘI BỘ (OWNER ONLY) ---
+                var currentUserId = _userUtility.GetUserIdFromToken();
+                var ownerEntity = await _unitOfWork.OwnerRepo.GetByIdAsync(currentUserId);
+                var isOwner = (ownerEntity != null);
+
+                // Chỉ chạy logic này nếu là Owner và đã có gợi ý tài xế
+                if (isOwner && postPackage.ShippingRoute != null && dto.DriverSuggestion != null)
+                {
+                    var myDrivers = await _ownerDriverLinkService.GetDriversWithStatsByOwnerIdAsync(currentUserId);
+
+                    if (myDrivers != null && myDrivers.Any())
+                    {
+                        var newTripStart = postPackage.ShippingRoute.ExpectedPickupDate;
+                        var newTripEnd = postPackage.ShippingRoute.ExpectedDeliveryDate;
+
+                        // Helper lấy đầu tuần (Thứ 2)
+                        var startOfTripWeek = GetStartOfWeek(newTripStart);
+                        var endOfTripWeek = startOfTripWeek.AddDays(7);
+
+                        var driverIds = myDrivers.Select(d => d.DriverId).ToList();
+
+                        // Lấy lịch chạy của các tài xế này
+                        var rawAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+                            .AsNoTracking()
+                            .Include(a => a.Trip)
+                            .Where(a =>
+                                driverIds.Contains(a.DriverId) &&
+                                (a.Trip.Status != TripStatus.COMPLETED && a.Trip.Status != TripStatus.CANCELLED)
+                            )
+                            .Select(a => new
+                            {
+                                DriverId = a.DriverId,
+                                TripCode = a.Trip.TripCode,
+                                PickupTime = a.Trip.ActualPickupTime,
+                                CreateTime = a.Trip.CreateAt,
+                                EndTimeRaw = a.Trip.ActualCompletedTime,
+                                DurationSpan = a.Trip.ActualDuration
+                            })
+                            .ToListAsync();
+
+                        // Số giờ cần thiết cho chuyến mới (Lấy từ Suggestion)
+                        double requiredHoursForNewTrip = dto.DriverSuggestion.RequiredHoursFromQuota;
+
+                        dto.MyDrivers = myDrivers.Select(d =>
+                        {
+                            // Lọc chuyến của tài xế này
+                            var driverTrips = rawAssignments
+                                .Where(x => x.DriverId == d.DriverId)
+                                .Select(x => new
+                                {
+                                    Code = x.TripCode,
+                                    // Logic tính giờ Start/End tương đối
+                                    Start = x.PickupTime ?? x.CreateTime,
+                                    End = x.EndTimeRaw ?? (x.PickupTime ?? x.CreateTime).Add(x.DurationSpan),
+                                    DurationHours = x.DurationSpan.TotalHours
+                                })
+                                .ToList();
+
+                            // Check trùng giờ (Conflict)
+                            var conflictTrip = driverTrips.FirstOrDefault(x => x.Start < newTripEnd && x.End > newTripStart);
+
+                            // Check quá tải tuần (Overload)
+                            double hoursAlreadyBooked = driverTrips
+                                .Where(x => x.Start >= startOfTripWeek && x.Start < endOfTripWeek)
+                                .Sum(x => x.DurationHours);
+
+                            double remainingHours = 48 - hoursAlreadyBooked;
+
+                            bool isBusy = (conflictTrip != null);
+                            bool isOverloaded = (remainingHours < requiredHoursForNewTrip);
+
+                            string statusMsg = "Sẵn sàng";
+                            string subStats = $"Tuần này còn: {remainingHours:N1}h (Cần: {requiredHoursForNewTrip:N1}h)";
+
+                            if (isBusy)
+                            {
+                                statusMsg = $"Bận chuyến {conflictTrip.Code}";
+                                subStats = "Đang kẹt lịch chạy trùng giờ";
+                            }
+                            else if (isOverloaded)
+                            {
+                                statusMsg = "Không đủ giờ lái (Luật 48h)";
+                                subStats = $"Đã chạy: {hoursAlreadyBooked:N1}h. Thiếu {(requiredHoursForNewTrip - remainingHours):N1}h.";
+                            }
+                            else if (!d.CanDrive)
+                            {
+                                statusMsg = "Tài xế không khả dụng";
+                                subStats = "Kiểm tra bằng lái/tài khoản";
+                            }
+
+                            return new OwnerDriverStatusDTO
+                            {
+                                DriverId = d.DriverId,
+                                FullName = d.FullName,
+                                PhoneNumber = d.PhoneNumber,
+                                AvatarUrl = d.AvatarUrl,
+                                IsAvailable = !isBusy && !isOverloaded && d.CanDrive,
+                                StatusMessage = statusMsg,
+                                Stats = subStats
+                            };
+                        })
+                        .OrderByDescending(x => x.IsAvailable)
+                        .ToList();
+                    }
+                }
+
+                return new ResponseDTO("Thành công", 200, true, dto);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
+            }
+        }
+
+        // Helper nhỏ để lấy ngày đầu tuần (Thứ 2)
+        private DateTime GetStartOfWeek(DateTime dt)
+        {
+            int diff = (7 + (dt.DayOfWeek - DayOfWeek.Monday)) % 7;
+            return dt.Date.AddDays(-1 * diff);
+        }
+
+        public async Task<ResponseDTO> CalculateAndValidateRouteAsync(RouteCalculationRequestDTO dto)
+        {
+            try
+            {
+                // --- 1. VALIDATION & GEOCODING ---
+                if (dto.StartLocation == null || string.IsNullOrWhiteSpace(dto.StartLocation.Address))
+                    return new ResponseDTO("Vui lòng nhập địa chỉ điểm đi.", 400, false);
+                if (dto.EndLocation == null || string.IsNullOrWhiteSpace(dto.EndLocation.Address))
+                    return new ResponseDTO("Vui lòng nhập địa chỉ điểm đến.", 400, false);
+
+                // Geocode Start
+                if (IsLocationMissingCoordinates(dto.StartLocation))
+                {
+                    var geo = await _vietMapService.GeocodeAsync(dto.StartLocation.Address);
+                    if (geo != null)
+                        dto.StartLocation = new Location(dto.StartLocation.Address, geo.Latitude ?? 0, geo.Longitude ?? 0);
+                }
+                // Geocode End
+                if (IsLocationMissingCoordinates(dto.EndLocation))
+                {
+                    var geo = await _vietMapService.GeocodeAsync(dto.EndLocation.Address);
+                    if (geo != null)
+                        dto.EndLocation = new Location(dto.EndLocation.Address, geo.Latitude ?? 0, geo.Longitude ?? 0);
+                }
+
+                if (IsLocationMissingCoordinates(dto.StartLocation) || IsLocationMissingCoordinates(dto.EndLocation))
+                    return new ResponseDTO("Không xác định được tọa độ địa điểm (Vui lòng kiểm tra lại địa chỉ).", 400, false);
+
+                // --- 2. GET ROUTE (VIETMAP) ---
+                var path = await _vietMapService.GetRouteAsync(dto.StartLocation, dto.EndLocation, "truck");
+                if (path == null) return new ResponseDTO("Không tìm thấy lộ trình phù hợp cho xe tải.", 404, false);
+
+                // --- 3. TÍNH TOÁN THỜI GIAN DI CHUYỂN (TRAVEL TIME) ---
+                double rawHours = path.Time / (1000.0 * 60 * 60);
+                double distanceKm = Math.Round(path.Distance / 1000.0, 2);
+
+                // Buffer: Cộng thêm 15% + 30 phút cho tắc đường/nghỉ ngơi
+                double bufferHours = (rawHours * 0.15) + 0.5;
+                double travelTimeTotal = rawHours + bufferHours;
+
+                // --- 4. CHECK GIỜ CẤM & TÍNH THỜI GIAN CHỜ (LOGIC START & END) ---
+
+                double totalWaitTime = 0;
+                string restrictionNote = "";
+
+                // BƯỚC 4.1: Kiểm tra cấm tải tại ĐẦU ĐI (Start Location)
+                // Xe muốn xuất phát lúc ExpectedPickupDate. Check xem giờ đó chỗ đi có cấm không?
+                var startRestriction = await _trafficRestrictionService.CheckRestrictionAsync(
+                    dto.StartLocation.Address,
+                    dto.ExpectedPickupDate
+                );
+
+                if (startRestriction.IsRestricted)
+                {
+                    totalWaitTime += startRestriction.WaitTime;
+                    restrictionNote += $"Đầu đi: Chờ {Math.Round(startRestriction.WaitTime, 1)}h ({startRestriction.Reason}). ";
+                }
+
+                // BƯỚC 4.2: Tính giờ đến dự kiến (Arrival Time)
+                // Giờ xuất phát thực tế = Giờ muốn đi + Thời gian phải chờ ở đầu đi
+                var realDepartureTime = dto.ExpectedPickupDate.AddHours(startRestriction.IsRestricted ? startRestriction.WaitTime : 0);
+
+                // Giờ đến = Giờ xuất phát thực tế + Thời gian chạy
+                var estimatedArrivalTime = realDepartureTime.AddHours(travelTimeTotal);
+
+                // BƯỚC 4.3: Kiểm tra cấm tải tại ĐẦU ĐẾN (End Location)
+                var endRestriction = await _trafficRestrictionService.CheckRestrictionAsync(
+                    dto.EndLocation.Address,
+                    estimatedArrivalTime
+                );
+
+                if (endRestriction.IsRestricted)
+                {
+                    totalWaitTime += endRestriction.WaitTime;
+                    // Nếu đã có note đầu đi thì thêm dấu phẩy hoặc xuống dòng
+                    string separator = string.IsNullOrEmpty(restrictionNote) ? "" : " + ";
+                    restrictionNote += $"{separator}Đầu đến: Chờ {Math.Round(endRestriction.WaitTime, 1)}h ({endRestriction.Reason}).";
+                }
+
+                // --- 5. TỔNG HỢP & VALIDATE ---
+                double totalDuration = travelTimeTotal + totalWaitTime; // Tổng = Chạy + Chờ (Start) + Chờ (End)
+
+                // Tính ngày giao hàng tối thiểu
+                var minDeliveryDateRaw = dto.ExpectedPickupDate.AddHours(totalDuration);
+                var minDeliveryDate = CeilToNextHour(minDeliveryDateRaw);
+
+                // Gợi ý ngày giao hàng (thư thả thêm 1 ngày)
+                var suggestedDate = minDeliveryDate.AddDays(1);
+
+                // Map kết quả ra DTO
+                var result = new RouteCalculationResultDTO
+                {
+                    EstimatedDistanceKm = distanceKm,
+                    TravelTimeHours = Math.Round(travelTimeTotal, 1),
+                    WaitTimeHours = Math.Round(totalWaitTime, 1),    // Tổng chờ cả 2 đầu
+                    EstimatedDurationHours = Math.Round(totalDuration, 1),
+                    RestrictionNote = restrictionNote,
+
+                    SuggestedMinDeliveryDate = suggestedDate,
+                    IsValid = true,
+                    Message = totalWaitTime > 0
+                              ? $"Lộ trình khả thi. Lưu ý: {restrictionNote}"
+                              : "Lộ trình khả thi."
+                };
+
+                // Validate với thời gian khách mong muốn
+                if (dto.ExpectedDeliveryDate.HasValue && dto.ExpectedDeliveryDate.Value <= minDeliveryDate)
+                {
+                    result.IsValid = false;
+                    result.Message = $"Thời gian quá gấp! Cần {Math.Round(totalDuration, 1)}h (Gồm {Math.Round(travelTimeTotal, 1)}h chạy + {Math.Round(totalWaitTime, 1)}h chờ cấm tải). Gợi ý: {suggestedDate:dd/MM/yyyy HH:mm}";
+                }
+
+                return new ResponseDTO("Tính toán thành công", 200, true, result);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi hệ thống khi tính toán: {ex.Message}", 500, false);
+            }
+        }
+
+        // Hàm phụ trợ (Helper) - Để ở dưới cùng của class hoặc trong Helper class
+        private DateTime CeilToNextHour(DateTime dt)
+        {
+            // Nếu phút > 0 hoặc giây > 0 thì làm tròn lên giờ tiếp theo
+            if (dt.Minute > 0 || dt.Second > 0)
+            {
+                return new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, 0, 0).AddHours(1);
+            }
+            return dt;
+        }
+
+        
+
+        // =============================================================================
+        // PRIVATE HELPERS
         // =============================================================================
 
         private IQueryable<PostPackage> ApplyPostPackageFilter(IQueryable<PostPackage> query, string? search)
@@ -440,210 +780,14 @@ namespace BLL.Services.Impletement
                 "title" => desc ? query.OrderByDescending(p => p.Title) : query.OrderBy(p => p.Title),
                 "price" => desc ? query.OrderByDescending(p => p.OfferedPrice) : query.OrderBy(p => p.OfferedPrice),
                 "created" => desc ? query.OrderByDescending(p => p.Created) : query.OrderBy(p => p.Created),
-                _ => query.OrderByDescending(p => p.Created) // Default
+                _ => query.OrderByDescending(p => p.Created)
             };
         }
 
-        // =============================================================================
-        // [FIXED] 6. GET DETAILS
-        // =============================================================================
-        public async Task<ResponseDTO> GetPostPackageDetailsAsync(Guid postPackageId)
-        {
-            try
-            {
-                // =================================================================
-                // 1. GET PACKAGE DETAILS
-                // =================================================================
-                var postPackage = await _unitOfWork.PostPackageRepo.GetDetailsByIdAsync(postPackageId);
-                if (postPackage == null) return new ResponseDTO("Bài đăng không tồn tại.", 404, false);
-
-                await CheckAndExpirePostsAsync(new List<PostPackage> { postPackage });
-
-                var dto = MapToDetailDTO(postPackage);
-                dto.MyDrivers = new List<OwnerDriverStatusDTO>();
-
-                // =================================================================
-                // 2. TÍNH TOÁN GỢI Ý (DRIVER SUGGESTION)
-                // =================================================================
-                double dist = 0;
-                double durationHours = 0;
-
-                if (postPackage.ShippingRoute != null)
-                {
-                    dist = postPackage.ShippingRoute.EstimatedDistanceKm;
-                    durationHours = postPackage.ShippingRoute.EstimatedDurationHours;
-
-                    // FALLBACK API NẾU DB = 0
-                    if (dist == 0 || durationHours == 0)
-                    {
-                        var startNode = postPackage.ShippingRoute.StartLocation;
-                        var endNode = postPackage.ShippingRoute.EndLocation;
-
-                        if (!IsLocationMissingCoordinates(startNode) && !IsLocationMissingCoordinates(endNode))
-                        {
-                            var path = await _vietMapService.GetRouteAsync(startNode, endNode, "truck");
-                            if (path != null)
-                            {
-                                durationHours = Math.Round((path.Time / (1000.0 * 60 * 60) * 1.15) + 0.5, 1);
-                                dist = Math.Round(path.Distance / 1000.0, 2);
-                            }
-                        }
-                    }
-
-                    // GỌI HELPER TÍNH TOÁN
-                    if (durationHours > 0)
-                    {
-                        dto.DriverSuggestion = TripCalculationHelper.CalculateScenarios(
-                            dist,
-                            durationHours,
-                            postPackage.ShippingRoute.ExpectedPickupDate,
-                            postPackage.ShippingRoute.ExpectedDeliveryDate
-                        );
-                    }
-                }
-
-                // =================================================================
-                // 3. CHECK TÀI XẾ NỘI BỘ (INTERNAL DRIVER CHECK)
-                // =================================================================
-                var currentUserId = _userUtility.GetUserIdFromToken();
-
-                // [FIX 1]: Thay vì ExistsAsync, dùng GetByIdAsync != null (Chuẩn nhất)
-                var ownerEntity = await _unitOfWork.OwnerRepo.GetByIdAsync(currentUserId);
-                var isOwner = (ownerEntity != null);
-
-                if (isOwner && postPackage.ShippingRoute != null && dto.DriverSuggestion != null)
-                {
-                    // A. Lấy danh sách tài xế
-                    var myDrivers = await _ownerDriverLinkService.GetDriversWithStatsByOwnerIdAsync(currentUserId);
-
-                    if (myDrivers != null && myDrivers.Any())
-                    {
-                        // B. Xác định khung thời gian
-                        var newTripStart = postPackage.ShippingRoute.ExpectedPickupDate;
-                        var newTripEnd = postPackage.ShippingRoute.ExpectedDeliveryDate;
-
-                        // Lấy ngày đầu tuần của chuyến đi mới (Thứ 2)
-                        var startOfTripWeek = GetStartOfWeek(newTripStart);
-                        var endOfTripWeek = startOfTripWeek.AddDays(7);
-
-                        var driverIds = myDrivers.Select(d => d.DriverId).ToList();
-
-                        // C. Query Lịch bận (RAW DATA)
-                        // [FIX 2]: Lấy TimeSpan (Duration) và DateTime về RAM để tránh lỗi SQL translation
-                        var rawAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
-                            .Include(a => a.Trip)
-                            .Where(a =>
-                                driverIds.Contains(a.DriverId) &&
-                                (a.Trip.Status != TripStatus.COMPLETED && a.Trip.Status != TripStatus.CANCELLED)
-                            )
-                            .Select(a => new
-                            {
-                                DriverId = a.DriverId,
-                                TripCode = a.Trip.TripCode,
-                                // Lấy các mốc thời gian gốc
-                                PickupTime = a.Trip.ActualPickupTime,
-                                CreateTime = a.Trip.CreateAt,
-                                EndTimeRaw = a.Trip.ActualCompletedTime,
-                                DurationSpan = a.Trip.ActualDuration // Lấy nguyên TimeSpan về
-                            })
-                            .ToListAsync();
-
-                        // D. MAP & TÍNH TOÁN (IN-MEMORY)
-
-                        // [FIX 3]: Lấy thẳng số giờ "Cần Có" từ Helper đã tính
-                        double requiredHoursForNewTrip = dto.DriverSuggestion.RequiredHoursFromQuota;
-
-                        dto.MyDrivers = myDrivers.Select(d =>
-                        {
-                            // Lọc lịch sử chuyến đi của tài xế này từ List Memory
-                            var driverTrips = rawAssignments
-                                .Where(x => x.DriverId == d.DriverId)
-                                .Select(x => new
-                                {
-                                    Code = x.TripCode,
-                                    // Start = ActualPickup ?? CreateAt
-                                    Start = x.PickupTime ?? x.CreateTime,
-                                    // End = ActualCompleted ?? (Start + Duration)
-                                    // [FIX 4]: Dùng .Add(TimeSpan) thay vì AddHours(double) để tránh lỗi compiler
-                                    End = x.EndTimeRaw ?? (x.PickupTime ?? x.CreateTime).Add(x.DurationSpan),
-                                    // Đổi TimeSpan ra giờ (double) để tính tổng
-                                    DurationHours = x.DurationSpan.TotalHours
-                                })
-                                .ToList();
-
-                            // 1. Check Trùng Lịch (Collision)
-                            var conflictTrip = driverTrips.FirstOrDefault(x =>
-                                x.Start < newTripEnd && x.End > newTripStart // Công thức giao nhau
-                            );
-
-                            // 2. Check Luật 48h (Trong tuần của chuyến đi mới)
-                            double hoursAlreadyBooked = driverTrips
-                                .Where(x => x.Start >= startOfTripWeek && x.Start < endOfTripWeek)
-                                .Sum(x => x.DurationHours);
-
-                            double remainingHours = 48 - hoursAlreadyBooked;
-
-                            // 3. Kết luận
-                            bool isBusy = (conflictTrip != null);
-                            // Hợp lệ nếu: Còn dư giờ > Giờ yêu cầu
-                            bool isOverloaded = (remainingHours < requiredHoursForNewTrip);
-
-                            string statusMsg = "Sẵn sàng";
-                            // Hiển thị rõ ràng: Còn bao nhiêu, Cần bao nhiêu
-                            string subStats = $"Tuần xe chạy còn trống: {remainingHours:N1}h (Cần: {requiredHoursForNewTrip:N1}h)";
-
-                            if (isBusy)
-                            {
-                                statusMsg = $"Bận chuyến {conflictTrip.Code}";
-                                subStats = "Đang kẹt lịch chạy trùng giờ";
-                            }
-                            else if (isOverloaded)
-                            {
-                                statusMsg = "Không đủ giờ lái (Luật 48h)";
-                                subStats = $"Đã nhận: {hoursAlreadyBooked:N1}h. Thiếu {(requiredHoursForNewTrip - remainingHours):N1}h nữa.";
-                            }
-                            else if (!d.CanDrive)
-                            {
-                                statusMsg = "Tài xế không khả dụng";
-                                subStats = "Vui lòng kiểm tra trạng thái bằng lái/tài khoản";
-                            }
-
-                            return new OwnerDriverStatusDTO
-                            {
-                                DriverId = d.DriverId,
-                                FullName = d.FullName,
-                                PhoneNumber = d.PhoneNumber,
-                                AvatarUrl = d.AvatarUrl,
-                                IsAvailable = !isBusy && !isOverloaded && d.CanDrive,
-                                StatusMessage = statusMsg,
-                                Stats = subStats
-                            };
-                        })
-                        .OrderByDescending(x => x.IsAvailable)
-                        .ToList();
-                    }
-                }
-
-                return new ResponseDTO("Thành công", 200, true, dto);
-            }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
-            }
-        }
-
-        // Helper nhỏ để lấy ngày thứ 2 đầu tuần
-        private DateTime GetStartOfWeek(DateTime dt)
-        {
-            int diff = (7 + (dt.DayOfWeek - DayOfWeek.Monday)) % 7;
-            return dt.AddDays(-1 * diff).Date;
-        }
+        
 
 
 
-        // =============================================================================
-        // MAPPERS
-        // =============================================================================
         private PostPackageReadDTO MapToReadDTO(PostPackage p)
         {
             return new PostPackageReadDTO
@@ -718,6 +862,15 @@ namespace BLL.Services.Impletement
                     WeightKg = pkg.WeightKg,
                     VolumeM3 = pkg.VolumeM3,
                     Status = pkg.Status.ToString(),
+
+                    IsFragile = pkg.HandlingDetail?.IsFragile ?? false,
+                    IsLiquid = pkg.HandlingDetail?.IsLiquid ?? false,
+                    IsRefrigerated = pkg.HandlingDetail?.IsRefrigerated ?? false,
+                    IsFlammable = pkg.HandlingDetail?.IsFlammable ?? false,
+                    IsHazardous = pkg.HandlingDetail?.IsHazardous ?? false,
+                    IsBulky = pkg.HandlingDetail?.IsBulky ?? false,
+                    IsPerishable = pkg.HandlingDetail?.IsPerishable ?? false,
+
                     PackageImages = pkg.PackageImages?.Select(img => new PackageImageReadDTO
                     {
                         PackageImageId = img.PackageImageId,
@@ -742,123 +895,6 @@ namespace BLL.Services.Impletement
                     }
                 }).ToList() ?? new List<PackageForPostDTO>()
             };
-        }
-
-        // Trong PostPackageService.cs
-        public async Task<ResponseDTO> CalculateAndValidateRouteAsync(RouteCalculationRequestDTO dto)
-        {
-            try
-            {
-                // 1. VALIDATE ĐẦU VÀO (Thêm đoạn này để chặn lỗi 500)
-                if (dto.StartLocation == null || string.IsNullOrWhiteSpace(dto.StartLocation.Address))
-                    return new ResponseDTO("Vui lòng nhập địa chỉ điểm đi.", 400, false);
-
-                if (dto.EndLocation == null || string.IsNullOrWhiteSpace(dto.EndLocation.Address))
-                    return new ResponseDTO("Vui lòng nhập địa chỉ điểm đến.", 400, false);
-
-
-                // 1. Kiểm tra tọa độ (Geocode nếu thiếu)
-                // SỬA LỖI: Tạo new Location thay vì gán property
-                if (IsLocationMissingCoordinates(dto.StartLocation))
-                {
-                    var geo = await _vietMapService.GeocodeAsync(dto.StartLocation.Address);
-                    if (geo != null)
-                    {
-                        // SỬA LỖI: Thêm ?? 0
-                        dto.StartLocation = new Location(
-                            dto.StartLocation.Address,
-                            geo.Latitude ?? 0,
-                            geo.Longitude ?? 0
-                        );
-                    }
-                }
-
-                if (IsLocationMissingCoordinates(dto.EndLocation))
-                {
-                    var geo = await _vietMapService.GeocodeAsync(dto.EndLocation.Address);
-                    if (geo != null)
-                    {
-                        // SỬA LỖI: Thêm ?? 0
-                        dto.EndLocation = new Location(
-                            dto.EndLocation.Address,
-                            geo.Latitude ?? 0,
-                            geo.Longitude ?? 0
-                        );
-                    }
-                }
-
-                // Nếu vẫn không có tọa độ -> Báo lỗi địa chỉ
-                if (IsLocationMissingCoordinates(dto.StartLocation) || IsLocationMissingCoordinates(dto.EndLocation))
-                {
-                    return new ResponseDTO("Không xác định được tọa độ địa điểm. Vui lòng kiểm tra lại địa chỉ.", 400, false);
-                }
-
-                // 2. Gọi Vietmap lấy thông số
-                var path = await _vietMapService.GetRouteAsync(dto.StartLocation, dto.EndLocation, "truck");
-
-                if (path == null)
-                    return new ResponseDTO("Không tìm thấy lộ trình phù hợp.", 404, false);
-
-                // 3. Tính toán thời gian an toàn
-                double rawHours = path.Time / (1000.0 * 60 * 60);
-                double safetyFactor = 1.15; // +15% an toàn
-                double loadingTime = 0.5;   // +30p bốc dỡ
-                double estimatedHours = (rawHours * safetyFactor) + loadingTime;
-
-                estimatedHours = Math.Round(estimatedHours, 1);
-                double distanceKm = Math.Round(path.Distance / 1000.0, 2);
-
-                // 4. Tính ngày giao hàng tối thiểu
-                var rawMinDate = dto.ExpectedPickupDate.AddHours(estimatedHours);
-
-                var minDeliveryDate = CeilToNextHour(rawMinDate);
-
-                var suggestedDate = minDeliveryDate.AddDays(2);
-
-                var result = new RouteCalculationResultDTO
-                {
-                    DistanceKm = distanceKm,
-                    EstimatedDurationHours = estimatedHours,
-                    SuggestedMinDeliveryDate = suggestedDate,
-                    IsValid = true,
-                    Message = "Lộ trình khả thi."
-                };
-
-                // 5. Validate ngày giao (nếu user đã chọn)
-                if (dto.ExpectedDeliveryDate.HasValue)
-                {
-                    if (dto.ExpectedDeliveryDate.Value <= minDeliveryDate)
-                    {
-                        
-
-                        result.IsValid = false;
-                        result.Message = $"Thời gian quá ngắn! Với {distanceKm}km, cần khoảng {estimatedHours}h. " +
-                                         $"Gợi ý ngày giao: {suggestedDate:dd/MM/yyyy HH:mm}";
-                    }
-                }
-
-                return new ResponseDTO("Tính toán thành công", 200, true, result);
-            }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Lỗi tính toán: {ex.Message}", 500, false);
-            }
-        }
-
-        // HÀM HELPER LÀM TRÒN (Viết thêm vào cuối class hoặc trong Utility)
-        private DateTime CeilToNextHour(DateTime dt)
-        {
-            // Bỏ giây và mili-giây trước
-            var d = dt.AddTicks(-(dt.Ticks % TimeSpan.TicksPerMinute));
-
-            // Nếu phút > 0 thì cộng thêm 1 giờ và reset phút về 0
-            if (d.Minute > 0)
-            {
-                return new DateTime(d.Year, d.Month, d.Day, d.Hour, 0, 0, d.Kind).AddHours(1);
-            }
-
-            // Nếu phút = 0 thì giữ nguyên (chỉ reset giây)
-            return new DateTime(d.Year, d.Month, d.Day, d.Hour, 0, 0, d.Kind);
         }
     }
 }

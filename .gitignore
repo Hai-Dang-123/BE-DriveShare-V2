@@ -598,3 +598,6 @@ DriverShareProject/appsettings.json
 /DAL/Migrations
 DriverShareProject/appsettings (1).json
 DriverShareProject/appsettings (1).json
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

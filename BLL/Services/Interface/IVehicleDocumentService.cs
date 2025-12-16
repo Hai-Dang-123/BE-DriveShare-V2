@@ -30,5 +30,7 @@ namespace BLL.Services.Interface
 
         // 3. Duyệt
         Task<ResponseDTO> ReviewVehicleDocumentAsync(Guid documentId, bool isApproved, string? rejectReason);
+        // Lấy lịch sử đăng kiểm của một chiếc xe
+        Task<ResponseDTO> GetHistoryByVehicleIdAsync(Guid vehicleId);
     }
 }

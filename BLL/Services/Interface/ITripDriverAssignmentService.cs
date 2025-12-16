@@ -39,5 +39,8 @@ namespace BLL.Services.Interface
         /// <param name="dto"></param>
         /// <returns></returns>
         Task<ResponseDTO> DriverCheckOutAsync(DriverCheckOutDTO dto);
+
+        Task<ResponseDTO> CancelAssignmentAsync(Guid assignmentId);
+        Task<ResponseDTO> CancelAssignmentByDriverAsync(Guid assignmentId);
     }
 }

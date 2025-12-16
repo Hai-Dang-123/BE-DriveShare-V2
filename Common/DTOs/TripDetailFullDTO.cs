@@ -24,6 +24,8 @@ namespace Common.DTOs
         public double VehicleDropoffLat { get; set; }
         public double VehicleDropoffLng { get; set; }
 
+        public string? LiquidationReportJson { get; set; }
+
         // 🧩 Vehicle
         public VehicleSummaryDTO Vehicle { get; set; } = new();
 

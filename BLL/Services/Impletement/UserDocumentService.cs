@@ -95,176 +95,167 @@ namespace BLL.Services.Impletement
         }
 
         // ============================================================
-        // 2. CREATE AND VERIFY (HỖ TRỢ CCCD VÀ GPLX)
+        // 2. CREATE AND VERIFY (TRANSACTION + AUTO LOGIC)
         // ============================================================
         public async Task<ResponseDTO> CreateAndVerifyDocumentAsync(IFormFile frontImg, IFormFile? backImg, IFormFile? selfieImg, DocumentType docType)
         {
+            // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
-                if (userId == Guid.Empty) return new ResponseDTO("Người dùng không hợp lệ.", 401, false);
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // Validation đầu vào
-                if (frontImg == null) return new ResponseDTO("Bắt buộc phải có ảnh mặt trước.", 400, false);
+                // Validation
+                if (frontImg == null) return new ResponseDTO("Thiếu ảnh mặt trước.", 400, false);
+                if (docType == DocumentType.CCCD && (backImg == null || selfieImg == null))
+                    return new ResponseDTO("CCCD cần 3 ảnh.", 400, false);
 
-                if (docType == DocumentType.CCCD)
-                {
-                    if (backImg == null || selfieImg == null)
-                        return new ResponseDTO("CCCD yêu cầu đủ 3 ảnh (Trước, Sau, Chân dung).", 400, false);
-                }
-
-                // Check đã tồn tại ACTIVE chưa (Tránh spam)
+                // Check Active Exists (Tối ưu query với AnyAsync)
                 bool exists = await _unitOfWork.UserDocumentRepo.GetAll()
                     .AnyAsync(x => x.UserId == userId && x.DocumentType == docType && x.Status == VerifileStatus.ACTIVE);
+                if (exists) return new ResponseDTO($"Đã có hồ sơ {docType} hợp lệ.", 400, false);
 
-                if (exists) return new ResponseDTO($"Bạn đã có hồ sơ {docType} được xác thực rồi.", 400, false);
+                // --- A. XỬ LÝ UPLOAD ẢNH (Common) ---
+                var uploadTasks = new List<Task<string?>>();
+                var frontTask = _firebaseUploadService.UploadFileAsync(await CloneFileToMemoryAsync(frontImg), userId, FirebaseFileType.USER_DOCUMENTS);
+                uploadTasks.Add(frontTask);
 
-                // --- 1. Clone Files (Để dùng nhiều lần) ---
+                Task<string?>? backTask = backImg != null ? _firebaseUploadService.UploadFileAsync(await CloneFileToMemoryAsync(backImg), userId, FirebaseFileType.USER_DOCUMENTS) : null;
+                if (backTask != null) uploadTasks.Add(backTask);
+
+                Task<string?>? selfieTask = selfieImg != null ? _firebaseUploadService.UploadFileAsync(await CloneFileToMemoryAsync(selfieImg), userId, FirebaseFileType.USER_DOCUMENTS) : null;
+                if (selfieTask != null) uploadTasks.Add(selfieTask);
+
+                // --- B. PHÂN NHÁNH XỬ LÝ THEO LOẠI ---
+
+                // CASE 1: GIẤY KHÁM SỨC KHỎE -> Manual Review (Không gọi VNPT)
+                if (docType == DocumentType.HEALTH_CHECK)
+                {
+                    await Task.WhenAll(uploadTasks);
+
+                    var healthDoc = new UserDocument
+                    {
+                        UserDocumentId = Guid.NewGuid(),
+                        UserId = userId,
+                        DocumentType = docType,
+                        FrontImageUrl = await frontTask,
+                        CreatedAt = DateTime.UtcNow,
+                        Status = VerifileStatus.PENDING_REVIEW, // Chờ staff duyệt
+                        RejectionReason = "Đang chờ nhân viên duyệt."
+                    };
+
+                    await _unitOfWork.UserDocumentRepo.AddAsync(healthDoc);
+                    await _unitOfWork.SaveChangeAsync();
+                    await transaction.CommitAsync(); // Commit ngay
+
+                    // Có thể bắn Notification cho Admin ở đây (Task.Run...)
+
+                    return new ResponseDTO("Đã gửi Giấy khám sức khỏe, vui lòng chờ duyệt.", 200, true, MapToDetailDTO(healthDoc));
+                }
+
+                // CASE 2: CCCD / GPLX -> Auto Verify (VNPT)
                 var frontEkyc = await CloneFileToMemoryAsync(frontImg);
                 var backEkyc = backImg != null ? await CloneFileToMemoryAsync(backImg) : null;
                 var selfieEkyc = selfieImg != null ? await CloneFileToMemoryAsync(selfieImg) : null;
 
-                // --- 2. Upload Firebase (Chạy Song song) ---
-                var uploadTasks = new List<Task<string?>>();
+                var ekycResult = await _ekycService.VerifyIdentityAsync(frontEkyc, backEkyc, selfieEkyc, docType);
+                await Task.WhenAll(uploadTasks); // Đợi upload xong
 
-                var frontUrlTask = _firebaseUploadService.UploadFileAsync(await CloneFileToMemoryAsync(frontImg), userId, FirebaseFileType.USER_DOCUMENTS);
-                uploadTasks.Add(frontUrlTask);
-
-                Task<string?>? backUrlTask = null;
-                if (backImg != null)
-                {
-                    backUrlTask = _firebaseUploadService.UploadFileAsync(await CloneFileToMemoryAsync(backImg), userId, FirebaseFileType.USER_DOCUMENTS);
-                    uploadTasks.Add(backUrlTask);
-                }
-
-                Task<string?>? selfieUrlTask = null;
-                if (selfieImg != null)
-                {
-                    selfieUrlTask = _firebaseUploadService.UploadFileAsync(await CloneFileToMemoryAsync(selfieImg), userId, FirebaseFileType.USER_DOCUMENTS);
-                    uploadTasks.Add(selfieUrlTask);
-                }
-
-                // --- 3. Gọi EKYC Verify (VNPT) ---
-                // Truyền docType vào để Service biết gọi API nào (OCR Full hay OCR Front Only)
-                var ekycTask = _ekycService.VerifyIdentityAsync(frontEkyc, backEkyc, selfieEkyc, docType);
-
-                // Chờ tất cả hoàn thành
-                await Task.WhenAll(uploadTasks);
-                var ekycResult = await ekycTask;
-
-                // --- 4. Xử lý kết quả EKYC ---
                 if (!ekycResult.IsSuccess || ekycResult.OcrData == null)
-                {
-                    return new ResponseDTO($"Lỗi EKYC: {ekycResult.ErrorMessage}", 400, false);
-                }
+                    throw new Exception($"Lỗi EKYC: {ekycResult.ErrorMessage}");
 
-                // --- 5. Map vào Entity ---
                 var userDoc = new UserDocument
                 {
                     UserDocumentId = Guid.NewGuid(),
                     UserId = userId,
                     DocumentType = docType,
-
-                    // URLs từ Firebase
-                    FrontImageUrl = await frontUrlTask,
-                    BackImageUrl = backUrlTask != null ? await backUrlTask : null,
-                    PortraitImageUrl = selfieUrlTask != null ? await selfieUrlTask : null,
-
-                    // Hashes từ VNPT
-                    FrontImageHash = ekycResult.FrontHash,
-                    BackImageHash = ekycResult.BackHash,
-                    PortraitImageHash = ekycResult.FaceHash,
-
-                    // Thông tin OCR
+                    // URLs
+                    FrontImageUrl = await frontTask,
+                    BackImageUrl = backTask != null ? await backTask : null,
+                    PortraitImageUrl = selfieTask != null ? await selfieTask : null,
+                    // OCR Data
                     IdentityNumber = ekycResult.OcrData.Id,
                     FullName = ekycResult.OcrData.Name,
                     DateOfBirth = ParseVnptDate(ekycResult.OcrData.BirthDay),
-                    IssueDate = ParseVnptDate(ekycResult.OcrData.IssueDate),
                     ExpiryDate = ParseVnptDate(ekycResult.OcrData.ValidDate),
-
+                    IssueDate = ParseVnptDate(ekycResult.OcrData.IssueDate),
                     PlaceOfOrigin = ekycResult.OcrData.OriginLocation,
                     PlaceOfResidence = ekycResult.OcrData.RecentLocation,
-                    IssuePlace = ekycResult.OcrData.IssuePlace,
-
-                    // Kết quả phân tích
+                    // Analysis
                     IsDocumentReal = ekycResult.IsRealCard,
                     FaceMatchScore = ekycResult.FaceMatchScore,
-
-                    // LƯU LOG RAW JSON
                     EkycLog = ekycResult.OcrRawJson,
 
                     CreatedAt = DateTime.UtcNow,
-                    Status = VerifileStatus.INACTIVE // Mặc định chưa duyệt
+                    Status = VerifileStatus.INACTIVE
                 };
 
-                // Nếu là GPLX thì lấy hạng bằng (Rank)
-                if (docType == DocumentType.DRIVER_LINCENSE)
-                {
-                    userDoc.LicenseClass = ekycResult.OcrData.Rank;
-                }
+                if (docType == DocumentType.DRIVER_LINCENSE) userDoc.LicenseClass = ekycResult.OcrData.Rank;
 
-                // --- 6. Logic Duyệt Tự Động ---
+                // --- Auto Approve Logic ---
                 var rejectReasons = new List<string>();
+                if (!ekycResult.IsRealCard) rejectReasons.Add("Giấy tờ giả mạo/chụp màn hình.");
+                if (selfieImg != null && (ekycResult.FaceMatchScore ?? 0) < 85) rejectReasons.Add("Khuôn mặt không khớp.");
+                if (ekycResult.OcrData.Tampering?.IsLegal == "no") rejectReasons.Add("Giấy tờ bị chỉnh sửa.");
+                if (ekycResult.OcrData.WarningMsg?.Any() == true) rejectReasons.AddRange(ekycResult.OcrData.WarningMsg);
 
-                // Check 1: Giấy tờ thật
-                if (!ekycResult.IsRealCard)
-                    rejectReasons.Add("Giấy tờ có dấu hiệu giả mạo hoặc chụp qua màn hình.");
-
-                // Check 2: Khớp khuôn mặt (Chỉ check nếu có ảnh selfie)
-                if (selfieImg != null && (ekycResult.FaceMatchScore ?? 0) < 85)
-                    rejectReasons.Add($"Khuôn mặt không khớp (Độ khớp: {ekycResult.FaceMatchScore:F2}% < 85%).");
-
-                // Check 3: Tampering (Can thiệp chỉnh sửa)
-                if (ekycResult.OcrData.Tampering != null && ekycResult.OcrData.Tampering.IsLegal == "no")
-                {
-                    rejectReasons.Add("Giấy tờ có dấu hiệu bị chỉnh sửa/cắt ghép.");
-                }
-
-                // Check 4: Warning Messages từ VNPT (Mờ, nhòe, mất góc...)
-                if (ekycResult.OcrData.WarningMsg != null && ekycResult.OcrData.WarningMsg.Any())
-                {
-                    rejectReasons.AddRange(ekycResult.OcrData.WarningMsg);
-                }
-
-                // Quyết định Status
                 if (rejectReasons.Count == 0)
                 {
                     userDoc.Status = VerifileStatus.ACTIVE;
                     userDoc.VerifiedAt = DateTime.UtcNow;
 
-                    // Cập nhật thông tin User nếu cần (ví dụ update tên thật từ giấy tờ)
-                    var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
-                    if (user != null)
+                    // Update Base Info
+                    if (docType == DocumentType.DRIVER_LINCENSE)
                     {
-                        user.LastUpdatedAt = DateTime.UtcNow;
-                        await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                        var driver = await _unitOfWork.DriverRepo.GetByIdAsync(userId);
+                        if (driver != null)
+                        {
+                            driver.LicenseNumber = userDoc.IdentityNumber;
+                            driver.LicenseClass = userDoc.LicenseClass;
+                            driver.LicenseExpiryDate = userDoc.ExpiryDate;
+                            driver.IsLicenseVerified = true;
+                            await _unitOfWork.DriverRepo.UpdateAsync(driver);
+                        }
+                    }
+                    else if (docType == DocumentType.CCCD)
+                    {
+                        var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+                        if (user != null)
+                        {
+                            user.FullName = userDoc.FullName;
+                            if (userDoc.DateOfBirth.HasValue) user.DateOfBirth = userDoc.DateOfBirth.Value;
+                            await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                        }
                     }
                 }
                 else
                 {
-                    userDoc.Status = VerifileStatus.INACTIVE; // Hoặc REJECTED
+                    userDoc.Status = VerifileStatus.INACTIVE;
                     userDoc.RejectionReason = string.Join("; ", rejectReasons);
                 }
 
-                // Lưu vào DB
                 await _unitOfWork.UserDocumentRepo.AddAsync(userDoc);
                 await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
 
-                // Trả về kết quả
-                if (userDoc.Status == VerifileStatus.ACTIVE)
-                    return new ResponseDTO($"Xác thực {docType} thành công.", 200, true, MapToDetailDTO(userDoc));
-                else
-                    return new ResponseDTO($"Xác thực thất bại: {userDoc.RejectionReason}", 400, false, new { Reason = userDoc.RejectionReason });
+                return userDoc.Status == VerifileStatus.ACTIVE
+                    ? new ResponseDTO("Xác thực thành công.", 200, true, MapToDetailDTO(userDoc))
+                    : new ResponseDTO("Xác thực thất bại.", 400, false, new { Reason = userDoc.RejectionReason });
 
             }
             catch (Exception ex)
             {
-                return new ResponseDTO($"Lỗi hệ thống: {ex.Message}", 500, false);
+                await transaction.RollbackAsync();
+                return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
             }
         }
 
         // ============================================================
         // CÁC HÀM GET (GIỮ NGUYÊN)
+        // ============================================================
+        // ============================================================
+        // CÁC HÀM GET (ĐÃ BỔ SUNG GKSK)
         // ============================================================
         public async Task<ResponseDTO> GetMyVerifiedDocumentsAsync()
         {
@@ -280,12 +271,13 @@ namespace BLL.Services.Impletement
 
                 if (user == null) return new ResponseDTO("User not found", 404, false);
 
+                // Lấy tất cả document của user (bao gồm cả active, rejected, pending...)
                 var allDocs = await _unitOfWork.UserDocumentRepo.GetAll()
-                    .Where(x => x.UserId == userId) // Lấy hết để hiện cả cái bị từ chối
+                    .Where(x => x.UserId == userId)
                     .AsNoTracking()
                     .ToListAsync();
 
-                // Lấy CCCD mới nhất
+                // 1. Lấy CCCD mới nhất
                 var cccdEntity = allDocs
                     .Where(x => x.DocumentType == DocumentType.CCCD)
                     .OrderByDescending(x => x.CreatedAt)
@@ -297,18 +289,27 @@ namespace BLL.Services.Impletement
                     CCCD = MapToDetailDTO(cccdEntity)
                 };
 
+                // 2. Nếu là Tài xế -> Lấy thêm GPLX và GKSK
                 if (user.Role != null && user.Role.RoleName.ToUpper().Contains("DRIVER"))
                 {
                     response.IsDriver = true;
-                    // Lấy GPLX mới nhất
+
+                    // Lấy Bằng lái xe mới nhất
                     var licenseEntity = allDocs
                         .Where(x => x.DocumentType == DocumentType.DRIVER_LINCENSE)
                         .OrderByDescending(x => x.CreatedAt)
                         .FirstOrDefault();
 
+                    // [MỚI] Lấy Giấy khám sức khỏe mới nhất
+                    var healthEntity = allDocs
+                        .Where(x => x.DocumentType == DocumentType.HEALTH_CHECK)
+                        .OrderByDescending(x => x.CreatedAt)
+                        .FirstOrDefault();
+
                     response.DriverDocuments = new DriverDocumentsDTO
                     {
-                        DrivingLicense = MapToDetailDTO(licenseEntity)
+                        DrivingLicense = MapToDetailDTO(licenseEntity),
+                        HealthCheck = MapToDetailDTO(healthEntity) // <--- Bổ sung dòng này
                     };
                 }
 
@@ -479,72 +480,78 @@ namespace BLL.Services.Impletement
         }
 
         // ============================================================
-        // 1. USER GỬI YÊU CẦU DUYỆT THỦ CÔNG
+        // 4. REQUEST MANUAL REVIEW (USER)
         // ============================================================
         public async Task<ResponseDTO> RequestManualReviewAsync(RequestManualReviewDTO dto)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var userId = _userUtility.GetUserIdFromToken();
                 var doc = await _unitOfWork.UserDocumentRepo.GetByIdAsync(dto.UserDocumentId);
 
-                if (doc == null) return new ResponseDTO("Không tìm thấy tài liệu.", 404, false);
+                if (doc == null) return new ResponseDTO("Not found", 404, false);
+                if (doc.UserId != userId) return new ResponseDTO("Forbidden", 403, false);
+                if (doc.Status == VerifileStatus.ACTIVE) return new ResponseDTO("Đã Active rồi.", 400, false);
 
-                // Validate
-                if (doc.UserId != userId) return new ResponseDTO("Bạn không có quyền thao tác tài liệu này.", 403, false);
-                if (doc.Status == VerifileStatus.ACTIVE) return new ResponseDTO("Tài liệu này đã được xác thực rồi.", 400, false);
-                if (doc.Status == VerifileStatus.PENDING_REVIEW) return new ResponseDTO("Tài liệu đang chờ duyệt, vui lòng đợi.", 400, false);
-
-                // Update Status
                 doc.Status = VerifileStatus.PENDING_REVIEW;
-                // Lưu lý do user khiếu nại vào field RejectionReason tạm thời (hoặc tạo field UserNote riêng ở DB)
                 doc.RejectionReason = $"[USER REQUEST]: {dto.UserNote}";
-
-                // Nếu có field LastUpdatedAt trong Base Entity
-                // doc.LastUpdatedAt = DateTime.UtcNow; 
+                doc.LastUpdatedAt = DateTime.UtcNow;
 
                 await _unitOfWork.UserDocumentRepo.UpdateAsync(doc);
                 await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
 
-                // Trả về DTO chi tiết thay vì string
-                return new ResponseDTO("Đã gửi yêu cầu thành công.", 200, true, MapToDetailDTO(doc));
+                return new ResponseDTO("Đã gửi yêu cầu xem xét.", 200, true, MapToDetailDTO(doc));
             }
             catch (Exception ex)
             {
-                return new ResponseDTO($"Lỗi hệ thống: {ex.Message}", 500, false);
+                await transaction.RollbackAsync();
+                return new ResponseDTO(ex.Message, 500, false);
             }
         }
 
         // ============================================================
-        // 2. STAFF DUYỆT HOẶC TỪ CHỐI
+        // 3. REVIEW DOCUMENT (TRANSACTION - ADMIN/STAFF)
         // ============================================================
         public async Task<ResponseDTO> ReviewDocumentAsync(ReviewDocumentDTO dto)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var doc = await _unitOfWork.UserDocumentRepo.GetByIdAsync(dto.UserDocumentId);
                 if (doc == null) return new ResponseDTO("Tài liệu không tồn tại.", 404, false);
 
-                // Chỉ duyệt những đơn đang PENDING (hoặc INACTIVE tùy logic)
                 if (doc.Status != VerifileStatus.PENDING_REVIEW && doc.Status != VerifileStatus.INACTIVE)
-                {
-                    return new ResponseDTO("Trạng thái tài liệu không hợp lệ để duyệt.", 400, false);
-                }
+                    return new ResponseDTO("Trạng thái không hợp lệ để duyệt.", 400, false);
 
                 if (dto.IsApproved)
                 {
-                    // DUYỆT
+                    // Approve Logic
                     doc.Status = VerifileStatus.ACTIVE;
                     doc.VerifiedAt = DateTime.UtcNow;
-                    doc.RejectionReason = null; // Xóa lý do từ chối/khiếu nại cũ
-                    doc.IsDocumentReal = true;  // Override kết quả AI
+                    doc.RejectionReason = null;
+                    doc.IsDocumentReal = true; // Override AI/Default
+
+                    // Đồng bộ dữ liệu sang bảng Driver nếu là GPLX hoặc GKSK (active)
+                    if (doc.DocumentType == DocumentType.DRIVER_LINCENSE)
+                    {
+                        var driver = await _unitOfWork.DriverRepo.GetByIdAsync(doc.UserId);
+                        if (driver != null)
+                        {
+                            // Nếu OCR fail trước đó, giờ admin nhập tay hoặc trust OCR cũ
+                            if (!string.IsNullOrEmpty(doc.IdentityNumber)) driver.LicenseNumber = doc.IdentityNumber;
+                            if (!string.IsNullOrEmpty(doc.LicenseClass)) driver.LicenseClass = doc.LicenseClass;
+                            driver.IsLicenseVerified = true;
+                            await _unitOfWork.DriverRepo.UpdateAsync(driver);
+                        }
+                    }
+                    // GKSK: Chỉ cần status active là đủ điều kiện, không cần map field nào cụ thể
                 }
                 else
                 {
-                    // TỪ CHỐI
-                    if (string.IsNullOrWhiteSpace(dto.RejectReason))
-                        return new ResponseDTO("Vui lòng nhập lý do từ chối.", 400, false);
-
+                    // Reject Logic
+                    if (string.IsNullOrWhiteSpace(dto.RejectReason)) return new ResponseDTO("Cần lý do từ chối.", 400, false);
                     doc.Status = VerifileStatus.REJECTED;
                     doc.RejectionReason = dto.RejectReason;
                     doc.VerifiedAt = null;
@@ -552,16 +559,15 @@ namespace BLL.Services.Impletement
 
                 await _unitOfWork.UserDocumentRepo.UpdateAsync(doc);
                 await _unitOfWork.SaveChangeAsync();
+                await transaction.CommitAsync();
 
-                return new ResponseDTO(
-                    dto.IsApproved ? "Đã duyệt tài liệu." : "Đã từ chối tài liệu.",
-                    200,
-                    true,
-                    MapToDetailDTO(doc)
-                );
+                // Send Notification Logic here if needed
+
+                return new ResponseDTO(dto.IsApproved ? "Đã duyệt." : "Đã từ chối.", 200, true, MapToDetailDTO(doc));
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
             }
         }

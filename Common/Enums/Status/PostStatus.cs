@@ -12,7 +12,6 @@ namespace Common.Enums.Status
         PENDING, // KHỞI TẠO
         AWAITING_SIGNATURE, // CHỜ KÝ
         AWAITING_PAYMENT, // CHỜ THANH TOÁN
-        AWAITING_WEBHOOK, // CHỜ WEBHOOK XÁC NHẬN
         OPEN, // ĐANG HOẠT ĐỘNG
         IN_PROGRESS, // ĐANG DI CHUYỂN
         DONE, // HOÀN THÀNH

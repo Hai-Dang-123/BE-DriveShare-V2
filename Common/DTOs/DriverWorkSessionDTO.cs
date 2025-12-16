@@ -28,6 +28,11 @@ namespace Common.DTOs
         public double HoursDrivenToday { get; set; }
         public double HoursDrivenThisWeek { get; set; }
         public string Message { get; set; }
+
+        // [BỔ SUNG DÒNG NÀY ĐỂ FIX LỖI]
+        public double RemainingHoursThisWeek { get; set; }
+
+        // (Optional) Thêm field này để debug dễ hơn
     }
 
     // 1. Input: Dùng để lọc dữ liệu

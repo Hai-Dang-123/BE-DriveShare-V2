@@ -93,6 +93,16 @@ namespace BLL.Services.Impletement
                 ExpectedDeliveryDate = dto.ExpectedDeliveryDate,
                 PickupTimeWindow = new TimeWindow(dto.StartTimeToPickup, dto.EndTimeToPickup),
                 DeliveryTimeWindow = new TimeWindow(dto.StartTimeToDelivery, dto.EndTimeToDelivery),
+
+                // Dùng '?? 0' để nếu DTO truyền null thì lưu vào DB là 0
+                EstimatedDistanceKm = dto.EstimatedDistanceKm ?? 0,
+                EstimatedDurationHours = dto.EstimatedDurationHours ?? 0,
+
+                // Các trường mới (Nếu bên Entity bạn để double? thì gán trực tiếp được)
+                // Nếu Entity để double thường thì phải thêm ?? 0
+                TravelTimeHours = dto.TravelTimeHours ?? 0,
+                WaitTimeHours = dto.WaitTimeHours ?? 0,
+                RestrictionNote = dto.RestrictionNote
             };
 
             // 4. THÊM vào UnitOfWork (KHÔNG SAVE)

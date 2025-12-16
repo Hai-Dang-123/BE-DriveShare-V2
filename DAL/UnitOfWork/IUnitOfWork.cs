@@ -29,7 +29,7 @@ namespace DAL.UnitOfWork
         IRoleRepository RoleRepo { get; }
         IShippingRouteRepository ShippingRouteRepo { get; }
         ITransactionRepository TransactionRepo { get; }
-        ITripCompensationRepository TripCompensationRepo { get; }
+        //ITripCompensationRepository TripCompensationRepo { get; }
         ITripContactRepository TripContactRepo { get; }
         ITripDeliveryIssueImageRepository TripDeliveryIssueImageRepo { get; }
         ITripDeliveryIssueRepository TripDeliveryIssueRepo { get; }
@@ -56,6 +56,11 @@ namespace DAL.UnitOfWork
         ITripVehicleHandoverIssueRepository TripVehicleHandoverIssueRepo { get; }
         ITripVehicleHandoverIssueImageRepository TripVehicleHandoverIssueImageRepo { get; }
         ITripVehicleHandoverTermResultRepository TripVehicleHandoverTermResultRepo { get; }
+        IPackageHandlingDetailRepository PackageHandlingDetailRepo { get; }
+        IInspectionHistoryRepository InspectionHistoryRepo { get; }
+        ITruckRestrictionRepository TruckRestrictionRepo { get; }
+        IUserDeviceTokenRepository UserDeviceTokenRepo { get; }
+        INotificationRepository NotificationRepo { get; }
 
         // --- 2. Save Changes ---
         Task<int> SaveAsync();

@@ -613,5 +613,339 @@ namespace BLL.Services.Impletement
 
             await SendEmailAsync(email, subject, body);
         }
+
+        // 1. EMAIL THÔNG BÁO GIAO DỊCH THÀNH CÔNG (Dùng chung cho Nạp & Rút)
+        public async Task SendTransactionSuccessEmailAsync(string email, string fullName, string transactionType, decimal amount, decimal newBalance, string transactionCode)
+        {
+            bool isIncome = amount > 0; // Số dương là Nạp, Âm là Rút
+            string color = isIncome ? "#16A34A" : "#DC2626"; // Xanh lá / Đỏ
+            string bgBox = isIncome ? "#F0FDF4" : "#FEF2F2";
+            string sign = isIncome ? "+" : "";
+            string title = isIncome ? "Nạp Tiền Thành Công" : "Rút Tiền Thành Công";
+            string icon = isIncome ? "💰" : "💸";
+            string requestTime = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+
+            var subject = $"{icon} [DriveShare] Thông báo biến động số dư: {sign}{amount:N0}đ";
+
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: {BackgroundColor}; margin: 0; padding: 0; }}
+        .container {{ max-width: 600px; margin: 20px auto; background-color: {CardColor}; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
+        .header {{ background: linear-gradient(135deg, {PrimaryColor} 0%, #0747A6 100%); padding: 24px; text-align: center; }}
+        .logo {{ width: 48px; filter: brightness(0) invert(1); }}
+        .content {{ padding: 30px; color: {TextColor}; }}
+        .amount-box {{ background-color: {bgBox}; border-left: 5px solid {color}; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        .label {{ font-size: 12px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }}
+        .value {{ font-size: 28px; font-weight: 800; color: {color}; margin-top: 5px; }}
+        .info-row {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #E5E7EB; }}
+        .info-row:last-child {{ border-bottom: none; }}
+        .info-label {{ font-size: 14px; color: #4B5563; }}
+        .info-val {{ font-size: 14px; font-weight: 600; color: #111827; }}
+        .footer {{ background-color: #F9FAFB; padding: 20px; text-align: center; font-size: 12px; color: #9CA3AF; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <img src='{LogoUrl}' alt='DriveShare' class='logo'/>
+        </div>
+        <div class='content'>
+            <h2 style='text-align: center; color: {PrimaryColor}; margin-top: 0;'>{title}</h2>
+            <p>Xin chào <strong>{fullName}</strong>,</p>
+            <p>Giao dịch của bạn đã được xử lý thành công. Chi tiết như sau:</p>
+
+            <div class='amount-box'>
+                <div class='label'>SỐ TIỀN GIAO DỊCH</div>
+                <div class='value'>{sign}{amount:N0} ₫</div>
+            </div>
+
+            <div style='background: #F9FAFB; padding: 15px; border-radius: 8px;'>
+                <div class='info-row'>
+                    <span class='info-label'>Mã giao dịch</span>
+                    <span class='info-val'>#{transactionCode}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>Loại giao dịch</span>
+                    <span class='info-val'>{transactionType}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>Thời gian</span>
+                    <span class='info-val'>{requestTime}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>Số dư mới</span>
+                    <span class='info-val' style='color: {PrimaryColor};'>{newBalance:N0} ₫</span>
+                </div>
+            </div>
+
+            <p style='font-size: 13px; color: #6B7280; text-align: center; margin-top: 20px;'>
+                Cảm ơn bạn đã sử dụng dịch vụ của DriveShare.
+            </p>
+        </div>
+        <div class='footer'>
+            &copy; {DateTime.Now.Year} DriveShare Logistics Platform.
+        </div>
+    </div>
+</body>
+</html>";
+            await SendEmailAsync(email, subject, body);
+        }
+
+        // 2. EMAIL THÔNG BÁO NẠP TIỀN THẤT BẠI (Dùng cho Webhook khi có lỗi)
+        public async Task SendTopupFailureEmailAsync(string email, string fullName, decimal amount, string reason)
+        {
+            var subject = $"⚠️ [DriveShare] Giao dịch nạp tiền thất bại";
+            var requestTime = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: {BackgroundColor}; }}
+        .container {{ max-width: 600px; margin: 20px auto; background-color: {CardColor}; border-radius: 12px; overflow: hidden; }}
+        .header {{ background: #DC2626; padding: 24px; text-align: center; }}
+        .logo {{ width: 48px; filter: brightness(0) invert(1); }}
+        .content {{ padding: 30px; color: {TextColor}; }}
+        .warning-box {{ background-color: #FEF2F2; border: 1px solid #FECACA; color: #991B1B; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 14px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <img src='{LogoUrl}' alt='DriveShare' class='logo'/>
+        </div>
+        <div class='content'>
+            <h2 style='text-align: center; color: #DC2626; margin-top: 0;'>Giao Dịch Thất Bại</h2>
+            <p>Xin chào <strong>{fullName}</strong>,</p>
+            <p>Chúng tôi nhận được yêu cầu nạp tiền của bạn nhưng hệ thống không thể xử lý. Vui lòng kiểm tra lại thông tin.</p>
+
+            <div class='warning-box'>
+                <strong>Lý do từ chối:</strong> {reason}
+            </div>
+
+            <ul>
+                <li><strong>Số tiền:</strong> {amount:N0} ₫</li>
+                <li><strong>Thời gian:</strong> {requestTime}</li>
+            </ul>
+
+            <p>Nếu bạn đã bị trừ tiền ngân hàng, vui lòng liên hệ bộ phận CSKH để được hoàn tiền.</p>
+        </div>
+    </div>
+</body>
+</html>";
+            await SendEmailAsync(email, subject, body);
+        }
+
+        // Trong EmailService.cs
+        public async Task SendDebtRecoveryEmailAsync(string email, string fullName, decimal recoveredAmount, decimal remainingDebt, decimal newBalance)
+        {
+            var subject = "💸 [DriveShare] Thông báo thu hồi nợ tự động";
+            var requestTime = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; }}
+        .container {{ max-width: 600px; margin: 20px auto; background-color: #FFF; border-radius: 12px; overflow: hidden; }}
+        .header {{ background: #D97706; padding: 24px; text-align: center; }} /* Màu Cam */
+        .content {{ padding: 30px; color: #374151; }}
+        .box {{ background-color: #FFF7ED; border: 1px solid #FFEDD5; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+        .label {{ font-size: 12px; color: #9A3412; font-weight: 700; text-transform: uppercase; }}
+        .value {{ font-size: 24px; font-weight: 800; color: #C2410C; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h2 style='color: white; margin:0;'>Thu Hồi Nợ Tự Động</h2>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{fullName}</strong>,</p>
+            <p>Hệ thống vừa thực hiện nạp tiền vào ví của bạn. Một phần số tiền đã được tự động trích ra để thanh toán khoản nợ tồn đọng.</p>
+
+            <div class='box'>
+                <div class='label'>SỐ TIỀN THU HỒI</div>
+                <div class='value'>-{recoveredAmount:N0} ₫</div>
+            </div>
+
+            <p><strong>Thông tin ví sau giao dịch:</strong></p>
+            <ul>
+                <li>Số dư hiện tại: <strong>{newBalance:N0} ₫</strong></li>
+                <li>Dư nợ còn lại: <strong style='color: #DC2626;'>{remainingDebt:N0} ₫</strong></li>
+            </ul>
+            <p>Thời gian: {requestTime}</p>
+        </div>
+    </div>
+</body>
+</html>";
+            await SendEmailAsync(email, subject, body);
+        }
+
+        // Trong EmailService.cs
+        public async Task SendDepositRefundEmailAsync(string email, string fullName, decimal amount, string tripCode, string reason)
+        {
+            var subject = $"💰 [DriveShare] Thông báo hoàn tiền cọc - Chuyến #{tripCode}";
+            var time = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F3F4F6; margin: 0; padding: 0; }}
+        .container {{ max-width: 600px; margin: 20px auto; background-color: #FFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
+        .header {{ background: #10B981; padding: 24px; text-align: center; }} /* Màu Xanh Emerald */
+        .content {{ padding: 30px; color: #374151; }}
+        .amount-box {{ background-color: #ECFDF5; border-left: 5px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        .label {{ font-size: 12px; color: #047857; font-weight: 700; text-transform: uppercase; }}
+        .value {{ font-size: 28px; font-weight: 800; color: #059669; margin-top: 5px; }}
+        .info-row {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #E5E7EB; }}
+        .info-val {{ font-weight: 600; color: #111827; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h2 style='color: white; margin:0;'>HOÀN TIỀN CỌC</h2>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{fullName}</strong>,</p>
+            <p>Hệ thống đã thực hiện hoàn trả tiền cọc cho chuyến đi của bạn. Chi tiết như sau:</p>
+
+            <div class='amount-box'>
+                <div class='label'>SỐ TIỀN HOÀN LẠI</div>
+                <div class='value'>+{amount:N0} ₫</div>
+            </div>
+
+            <div style='background: #F9FAFB; padding: 15px; border-radius: 8px;'>
+                <div class='info-row'>
+                    <span style='color:#6B7280;'>Mã chuyến đi</span>
+                    <span class='info-val'>#{tripCode}</span>
+                </div>
+                <div class='info-row'>
+                    <span style='color:#6B7280;'>Lý do hoàn</span>
+                    <span class='info-val'>{reason}</span>
+                </div>
+                <div class='info-row'>
+                    <span style='color:#6B7280;'>Thời gian</span>
+                    <span class='info-val'>{time}</span>
+                </div>
+            </div>
+
+            <p style='font-size: 13px; color: #6B7280; text-align: center; margin-top: 20px;'>
+                Số tiền đã được cộng vào Ví Driver của bạn.
+            </p>
+        </div>
+    </div>
+</body>
+</html>";
+
+            await SendEmailAsync(email, subject, body);
+        }
+
+        /// <summary>
+        /// Gửi Email thông báo Hủy chuyến & Bồi thường cho Provider
+        /// </summary>
+        public async Task SendCancellationCompensationEmailAsync(string email, string fullName, string tripCode, decimal amount, string reason, string ownerName)
+        {
+            var subject = $"⚠️ [DriveShare] Thông báo Hủy chuyến & Bồi thường - #{tripCode}";
+            var requestTime = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+
+            // Màu sắc
+            string amountColor = amount > 0 ? "#16A34A" : "#6B7280"; // Xanh lá nếu có tiền, Xám nếu 0đ
+            string amountSign = amount > 0 ? "+" : "";
+            string bgAmount = amount > 0 ? "#F0FDF4" : "#F3F4F6";
+
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: {BackgroundColor}; margin: 0; padding: 0; }}
+        .container {{ max-width: 600px; margin: 20px auto; background-color: {CardColor}; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
+        .header {{ background: #DC2626; padding: 24px; text-align: center; }} /* Màu Đỏ cảnh báo */
+        .logo {{ width: 48px; filter: brightness(0) invert(1); }}
+        .content {{ padding: 30px; color: {TextColor}; }}
+        
+        .amount-box {{ background-color: {bgAmount}; border-left: 5px solid {amountColor}; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        .label {{ font-size: 12px; color: #047857; font-weight: 700; text-transform: uppercase; }}
+        .value {{ font-size: 26px; font-weight: 800; color: {amountColor}; margin-top: 5px; }}
+        
+        .info-box {{ background-color: #FEF2F2; border: 1px dashed #FECACA; padding: 15px; border-radius: 8px; margin-bottom: 20px; }}
+        .info-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #FCA5A5; }}
+        .info-row:last-child {{ border-bottom: none; }}
+        .info-label {{ font-size: 14px; color: #7F1D1D; }}
+        .info-val {{ font-size: 14px; font-weight: 600; color: #991B1B; text-align: right; }}
+
+        .action-note {{ background-color: #EFF6FF; border: 1px solid #BFDBFE; padding: 15px; border-radius: 8px; color: #1E40AF; font-size: 14px; line-height: 1.5; margin-top: 20px; }}
+        
+        .footer {{ background-color: #F9FAFB; padding: 20px; text-align: center; font-size: 12px; color: #9CA3AF; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <img src='{LogoUrl}' alt='DriveShare' class='logo'/>
+        </div>
+        <div class='content'>
+            <h2 style='text-align: center; color: #DC2626; margin-top: 0;'>THÔNG BÁO HỦY CHUYẾN</h2>
+            <p>Xin chào <strong>{fullName}</strong>,</p>
+            <p>Chúng tôi rất tiếc phải thông báo chuyến đi của bạn đã bị hủy bởi Nhà xe.</p>
+
+            <div class='info-box'>
+                <div class='info-row'>
+                    <span class='info-label'>Mã chuyến</span>
+                    <span class='info-val'>#{tripCode}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>Nhà xe hủy</span>
+                    <span class='info-val'>{ownerName}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>Lý do / Vi phạm</span>
+                    <span class='info-val'>{reason}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>Thời gian</span>
+                    <span class='info-val'>{requestTime}</span>
+                </div>
+            </div>
+
+            <p style='margin-bottom: 10px; font-weight: 600;'>Thông tin bồi thường:</p>
+            <div class='amount-box'>
+                <div class='label' style='color:{amountColor}'>SỐ TIỀN NHẬN ĐƯỢC</div>
+                <div class='value'>{amountSign}{amount:N0} ₫</div>
+                <div style='font-size: 12px; color: #6B7280; margin-top: 5px;'>Đã cộng vào Ví PayBalance</div>
+            </div>
+
+            <div class='action-note'>
+                <strong>🔄 TỰ ĐỘNG MỞ LẠI ĐƠN HÀNG:</strong><br/>
+                Hệ thống đã tự động chuyển trạng thái bài đăng tìm xe của bạn sang <strong>OPEN</strong>. Các đối tác vận tải khác sẽ sớm nhìn thấy và gửi báo giá mới cho bạn.
+            </div>
+
+            <p style='font-size: 13px; color: #6B7280; text-align: center; margin-top: 20px;'>
+                Chúng tôi chân thành xin lỗi vì sự bất tiện này.
+            </p>
+        </div>
+        <div class='footer'>
+            &copy; {DateTime.Now.Year} DriveShare Logistics Platform.
+        </div>
+    </div>
+</body>
+</html>";
+
+            await SendEmailAsync(email, subject, body);
+        }
     }
 }

@@ -405,6 +405,8 @@ namespace BLL.Services.Impletement
                 // 6. Save Change (Transaction OTP + Record + Trip)
                 await _unitOfWork.SaveChangeAsync();
 
+
+
                 return new ResponseDTO("Delivery record signed successfully", 200, true);
             }
             catch (Exception ex)
@@ -773,7 +775,7 @@ namespace BLL.Services.Impletement
                             Unit = pkg.Unit,
                             WeightKg = pkg.WeightKg,
                             VolumeM3 = pkg.VolumeM3,
-                            HandlingAttributes = pkg.HandlingAttributes ?? new List<string>(),
+                           
 
                             // Map Item
                             Item = pkg.Item != null ? new ItemDetailForDriverDTO
@@ -932,7 +934,7 @@ namespace BLL.Services.Impletement
                             Unit = pkg.Unit,
                             WeightKg = pkg.WeightKg,
                             VolumeM3 = pkg.VolumeM3,
-                            HandlingAttributes = pkg.HandlingAttributes ?? new List<string>(),
+                           
 
                             // Map Item
                             Item = pkg.Item != null ? new ItemDetailForDriverDTO
