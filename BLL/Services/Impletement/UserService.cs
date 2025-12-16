@@ -44,6 +44,7 @@ namespace BLL.Services.Impletement
                 var query = _unitOfWork.BaseUserRepo.GetAll()
                     .AsNoTracking()
                     .Include(u => u.Role)
+                    .Include(u => u.UserDocuments)
                     .Where(u =>
                         u.Status != Common.Enums.Status.UserStatus.DELETED &&
                         allowedRoles.Contains(u.Role.RoleName)
@@ -274,18 +275,34 @@ namespace BLL.Services.Impletement
 
             // --- [LOGIC MỚI] CHECK CCCD (Citizen ID) ---
             // Kiểm tra trong danh sách UserDocuments xem có loại CCCD và Status là Verified chưa
-            if (user.UserDocuments != null)
+            if (user.UserDocuments != null && user.UserDocuments.Any())
             {
-                // Thay DocumentType.CitizenId bằng Enum thực tế của bạn
-                var cccd = user.UserDocuments.FirstOrDefault(d => d.DocumentType == DocumentType.CCCD);
+                if (user.UserDocuments.Any(d => d.Status == VerifileStatus.PENDING_REVIEW))
+                {
+                    dto.DocumentStatus = "PENDING_REVIEW";
+                }
+                else if (user.UserDocuments.Any(d => d.Status == VerifileStatus.REJECTED))
+                {
+                    dto.DocumentStatus = "REJECTED";
+                }
+                else if (user.UserDocuments.Any(d => d.Status == VerifileStatus.ACTIVE))
+                {
+                    dto.DocumentStatus = "ACTIVE";
+                }
+                else
+                {
+                    dto.DocumentStatus = "INACTIVE";
+                }
 
-                // Trả về true nếu tồn tại và đã được duyệt
-                dto.HasVerifiedCitizenId = (cccd != null && cccd.Status == VerifileStatus.ACTIVE);
+                dto.HasPendingDocumentRequest =
+                    user.UserDocuments.Any(d => d.Status == VerifileStatus.PENDING_REVIEW);
             }
             else
             {
-                dto.HasVerifiedCitizenId = false;
+                dto.DocumentStatus = "NONE";
+                dto.HasPendingDocumentRequest = false;
             }
+
 
             return dto;
         }

@@ -52,6 +52,8 @@ builder.AddAppConfiguration();
 builder.Services.AddAuthorizationPolicies();
 
 builder.Services.AddSignalR();
+builder.Services.AddCorsPolicy();
+
 
 
 // ======================================================================

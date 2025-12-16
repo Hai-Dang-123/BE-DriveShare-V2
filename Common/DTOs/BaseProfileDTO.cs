@@ -23,6 +23,10 @@ namespace Common.DTOs
 
         // [MỚI] Check xem đã có CCCD/CMND được duyệt chưa
         public bool HasVerifiedCitizenId { get; set; }
+
+        public bool HasPendingDocumentRequest { get; set; }
+        public string DocumentStatus { get; set; } = "NONE";
+
     }
 
 

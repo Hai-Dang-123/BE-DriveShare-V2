@@ -308,6 +308,44 @@ namespace BLL.Services.Impletement
             }
         }
 
+        public async Task<ResponseDTO> GetVehicleDocumentsByVehicleIdAsync(Guid vehicleId)
+        {
+            try
+            {
+                var documents = await _unitOfWork.VehicleDocumentRepo.GetAll()
+                    .AsNoTracking()
+                    .Where(d => d.VehicleId == vehicleId)
+                    .OrderByDescending(d => d.CreatedAt)
+                    .Select(d => new VehicleDocumentByVehicleDTO
+                    {
+                        VehicleDocumentId = d.VehicleDocumentId,
+
+                        DocumentType = (int)d.DocumentType,
+                        DocumentTypeName = d.DocumentType.ToString(),
+
+                        Status = (int)d.Status,
+                        StatusName = d.Status.ToString(),
+
+                        FrontDocumentUrl = d.FrontDocumentUrl,
+                        BackDocumentUrl = d.BackDocumentUrl,
+
+                        ExpirationDate = d.ExpirationDate,
+                        AdminNotes = d.AdminNotes,
+
+                        CreatedAt = d.CreatedAt,
+                        ProcessedAt = d.ProcessedAt
+                    })
+                    .ToListAsync();
+
+                return new ResponseDTO("Success", 200, true, documents);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO(ex.Message, 500, false);
+            }
+        }
+
+
         // =========================================================================
         // B. LẤY CHI TIẾT ĐỂ DUYỆT (DETAIL)
         // =========================================================================

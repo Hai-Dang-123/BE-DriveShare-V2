@@ -366,6 +366,7 @@ namespace BLL.Services.Impletement
             }
         }
 
+
         // =========================================================================
         // PRIVATE HELPERS (TÁI SỬ DỤNG LOGIC)
         // =========================================================================
@@ -402,12 +403,61 @@ namespace BLL.Services.Impletement
                 _ => query.OrderByDescending(v => v.CreatedAt) // Default
             };
         }
-
-        private VehicleDetailDTO MapToVehicleDetailDTO(Vehicle v)
+        private string ComputeVehicleDocumentStatus(IEnumerable<VehicleDocument> docs)
         {
-            // Logic check verify: Có Cà vẹt
-            bool isVerified = v.VehicleDocuments.Any(d => d.DocumentType == DocumentType.VEHICLE_LINCENSE);
+            if (docs == null || !docs.Any())
+                return "NONE";
 
+            if (docs.Any(d => d.Status == VerifileStatus.PENDING_REVIEW))
+                return VerifileStatus.PENDING_REVIEW.ToString();
+
+            if (docs.Any(d => d.Status == VerifileStatus.REJECTED))
+                return VerifileStatus.REJECTED.ToString();
+
+            if (docs.Any(d => d.Status == VerifileStatus.ACTIVE))
+                return VerifileStatus.ACTIVE.ToString();
+
+            return "NONE";
+        }
+
+       
+            // Logic check verify: Có Cà vẹt
+           private VehicleDetailDTO MapToVehicleDetailDTO(Vehicle v)
+        {
+            // ===============================
+            // 1️⃣ TÍNH DOCUMENT STATUS (GIỐNG USER)
+            // ===============================
+            string documentStatus = "NONE";
+            bool hasPending = false;
+
+            if (v.VehicleDocuments != null && v.VehicleDocuments.Any())
+            {
+                if (v.VehicleDocuments.Any(d => d.Status == VerifileStatus.PENDING_REVIEW))
+                {
+                    documentStatus = "PENDING_REVIEW";
+                    hasPending = true;
+                }
+                else if (v.VehicleDocuments.Any(d => d.Status == VerifileStatus.REJECTED))
+                {
+                    documentStatus = "REJECTED";
+                }
+                else if (v.VehicleDocuments.Any(d => d.Status == VerifileStatus.ACTIVE))
+                {
+                    documentStatus = "ACTIVE";
+                }
+            }
+
+            // ===============================
+            // 2️⃣ CHECK VERIFIED
+            // ===============================
+            bool isVerified = v.VehicleDocuments.Any(d =>
+                d.DocumentType == DocumentType.VEHICLE_LINCENSE &&
+                d.Status == VerifileStatus.ACTIVE
+            );
+
+            // ===============================
+            // 3️⃣ MAP DTO
+            // ===============================
             return new VehicleDetailDTO
             {
                 VehicleId = v.VehicleId,
@@ -419,6 +469,11 @@ namespace BLL.Services.Impletement
                 PayloadInKg = v.PayloadInKg,
                 VolumeInM3 = v.VolumeInM3,
                 Status = v.Status,
+
+                // 🔥 QUAN TRỌNG
+                DocumentStatus = documentStatus,
+                HasPendingDocumentRequest = hasPending,
+
                 IsVerified = isVerified,
 
                 VehicleType = v.VehicleType == null ? null : new VehicleTypeDTO
@@ -458,7 +513,7 @@ namespace BLL.Services.Impletement
             };
         }
 
-       
+
 
     }
 }

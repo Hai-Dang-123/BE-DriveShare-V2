@@ -1,4 +1,5 @@
-﻿using BLL.Services.Interface;
+﻿using BLL.Services.Impletement;
+using BLL.Services.Interface;
 using BLL.Utilities;
 using Common.DTOs;
 using Microsoft.AspNetCore.Authorization;
@@ -82,6 +83,15 @@ namespace DriverShareProject.Controllers
                 sortOrder
             );
             return StatusCode(response.StatusCode, response);
+        }
+
+        [HttpGet("vehicle/{vehicleId:guid}")]
+        public async Task<IActionResult> GetDocumentsByVehicleId(Guid vehicleId)
+        {
+            var result = await _service
+                .GetVehicleDocumentsByVehicleIdAsync(vehicleId);
+
+            return StatusCode(result.StatusCode, result);
         }
 
         /// <summary>

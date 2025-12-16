@@ -47,6 +47,9 @@ namespace Common.DTOs
         public decimal PayloadInKg { get; set; }
         public decimal VolumeInM3 { get; set; }
         public VehicleStatus Status { get; set; }
+
+        public string DocumentStatus { get; set; } = "NONE";
+        public bool HasPendingDocumentRequest { get; set; }
         public List<VehicleImageDetailDTO> ImageUrls { get; set; } = new();
         public List<VehicleDocumentDetailDTO> Documents { get; set; } = new();
         public VehicleTypeDTO VehicleType { get; set; }
@@ -69,4 +72,25 @@ namespace Common.DTOs
         public decimal VolumeInM3 { get; set; }
         public VehicleStatus Status { get; set; }
     }
+    public class VehicleDocumentByVehicleDTO
+    {
+        public Guid VehicleDocumentId { get; set; }
+
+        public int DocumentType { get; set; }          // INT (enum)
+        public string DocumentTypeName { get; set; }   // "VEHICLE_LINCENSE"
+
+        public int Status { get; set; }                // INT
+        public string StatusName { get; set; }         // "PENDING_REVIEW"
+
+        public string FrontDocumentUrl { get; set; }
+        public string BackDocumentUrl { get; set; }
+
+        public DateTime? ExpirationDate { get; set; }
+
+        public string? AdminNotes { get; set; }
+
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ProcessedAt { get; set; }
+    }
+
 }

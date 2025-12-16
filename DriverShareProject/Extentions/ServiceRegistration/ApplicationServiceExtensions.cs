@@ -35,8 +35,8 @@ namespace DriverShareProject.Extentions.ServiceRegistration
 
 
             services.AddScoped<UserUtility>();
-
-
+            services.AddScoped<IAdminservices, Adminservices>();
+            services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IItemService, ItemService>();
             services.AddScoped<IItemImagesService, ItemImagesService>();
             services.AddScoped<IPackageService, PackageService>();
