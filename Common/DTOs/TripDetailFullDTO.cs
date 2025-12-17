@@ -107,6 +107,7 @@ namespace Common.DTOs
 
     public class TripDriverAssignmentDTO
     {
+        public Guid AssignmentId { get; set; }
         public Guid DriverId { get; set; }
         public string FullName { get; set; }
         public string Type { get; set; } // PRIMARY / ASSISTANT

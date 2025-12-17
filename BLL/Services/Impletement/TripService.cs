@@ -673,6 +673,7 @@ namespace BLL.Services.Implement
                     .Where(d => d.TripId == tripId)
                     .Select(d => new TripDriverAssignmentDTO
                     {
+                        AssignmentId = d.TripDriverAssignmentId,
                         DriverId = d.DriverId,
                         FullName = d.Driver != null ? d.Driver.FullName : "N/A",
                         Type = d.Type.ToString(),
