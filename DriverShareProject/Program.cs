@@ -1,4 +1,5 @@
 ﻿using BLL.Hubs;
+using BLL.Services.Impletement;
 using Common.Settings;
 using DAL.Context;
 using DriverShareProject.Extentions.BuilderExtensions;
@@ -51,7 +52,10 @@ builder.AddAppConfiguration();
 // Add Authorization policies
 builder.Services.AddAuthorizationPolicies();
 
+// Đăng ký Singleton để dữ liệu tồn tại xuyên suốt ứng dụng chạy
+builder.Services.AddSingleton<LocationCacheService>();
 builder.Services.AddSignalR();
+
 builder.Services.AddCorsPolicy();
 
 

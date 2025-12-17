@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -23,20 +22,20 @@ namespace BLL.Services.Impletement
             _unitOfWork = unitOfWork;
         }
 
-        // 1. Hàm đăng ký Token (Dùng cho API gọi vào)
+        // =========================================================================
+        // PHẦN 1: GỬI & ĐĂNG KÝ (CORE LOGIC)
+        // =========================================================================
+
+        // 1. Đăng ký Token (API gọi)
         public async Task<bool> RegisterDeviceTokenAsync(Guid userId, string token, string platform)
         {
             try
             {
-                // Logic: 
-                // - 1 Token chỉ thuộc về 1 User tại 1 thời điểm.
-                // - Nếu Token đã có trong DB rồi -> Update UserId mới (trường hợp đăng nhập nick khác trên máy cũ)
-                // - Nếu chưa có -> Thêm mới.
-
                 var existingToken = await _unitOfWork.UserDeviceTokenRepo.GetByTokenAsync(token);
 
                 if (existingToken != null)
                 {
+                    // Update user sở hữu token này
                     existingToken.UserId = userId;
                     existingToken.LastUpdated = DateTime.UtcNow;
                     existingToken.Platform = platform;
@@ -44,6 +43,7 @@ namespace BLL.Services.Impletement
                 }
                 else
                 {
+                    // Tạo mới
                     var newToken = new UserDeviceToken
                     {
                         UserDeviceTokenId = Guid.NewGuid(),
@@ -60,32 +60,32 @@ namespace BLL.Services.Impletement
             }
             catch (Exception ex)
             {
-                // Log error here
+                Console.WriteLine($"Error registering token: {ex.Message}");
                 return false;
             }
         }
 
-        // 2. Gửi cho 1 User (Sửa lại)
+        // 2. Gửi cho 1 User (Đơn lẻ)
         public async Task SendToUserAsync(Guid userId, string title, string body, Dictionary<string, string> data = null)
         {
             try
             {
-                // --- BƯỚC A: LƯU VÀO DATABASE ---
+                // A. Lưu DB
                 var notiEntity = new DAL.Entities.Notification
                 {
                     NotificationId = Guid.NewGuid(),
                     UserId = userId,
                     Title = title,
                     Body = body,
-                    Data = data != null ? JsonSerializer.Serialize(data) : null, // Lưu data dạng chuỗi JSON
+                    Data = data != null ? JsonSerializer.Serialize(data) : null,
                     IsRead = false,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 await _unitOfWork.NotificationRepo.AddAsync(notiEntity);
-                await _unitOfWork.SaveChangeAsync(); // Lưu xong mới bắn noti để đảm bảo dữ liệu toàn vẹn
+                await _unitOfWork.SaveChangeAsync();
 
-                // --- BƯỚC B: GỬI FCM (Như cũ) ---
+                // B. Gửi Firebase
                 var tokens = await _unitOfWork.UserDeviceTokenRepo.GetAll()
                     .Where(t => t.UserId == userId)
                     .Select(t => t.DeviceToken)
@@ -96,41 +96,108 @@ namespace BLL.Services.Impletement
                     var message = new MulticastMessage()
                     {
                         Tokens = tokens,
-                        Notification = new FirebaseAdmin.Messaging.Notification()
+                        Notification = new FirebaseAdmin.Messaging.Notification
                         {
                             Title = title,
                             Body = body
                         },
                         Data = data
                     };
+                    // Bắn tin đi
                     await FirebaseMessaging.DefaultInstance.SendMulticastAsync(message);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving/sending notification: {ex.Message}");
+                Console.WriteLine($"Error sending notification to user {userId}: {ex.Message}");
             }
         }
 
-        // 3. Gửi cho Role (Sửa lại: Phải loop để lưu từng bản ghi cho từng người)
+        // 3. Gửi cho Role (Tối ưu hóa Bulk Insert & Batch Send)
         public async Task SendToRoleAsync(string roleName, string title, string body, Dictionary<string, string> data = null)
         {
-            // Lấy list UserID
-            var userIds = await _unitOfWork.BaseUserRepo.GetAll()
-                .Where(u => u.Role.RoleName == roleName && u.Status == UserStatus.ACTIVE)
-                .Select(u => u.UserId)
-                .ToListAsync();
-
-            // Loop để gọi hàm trên (Vừa lưu DB riêng cho từng người, vừa bắn Noti)
-            foreach (var uid in userIds)
+            try
             {
-                // Fire-and-forget từng task để chạy nhanh
-                _ = SendToUserAsync(uid, title, body, data);
+                // A. Lấy Data (Dùng AsNoTracking để nhanh)
+                var role = await _unitOfWork.RoleRepo.GetByName(roleName);
+                if (role == null) return;
+
+                // Lấy UserId và Token của user thuộc role đó (Active only)
+                var usersData = await _unitOfWork.BaseUserRepo.GetAll()
+                    .AsNoTracking()
+                    .Where(u => u.RoleId == role.RoleId && u.Status == UserStatus.ACTIVE)
+                    .Select(u => new
+                    {
+                        u.UserId,
+                        Tokens = _unitOfWork.UserDeviceTokenRepo.GetAll().Where(t => t.UserId == u.UserId).Select(t => t.DeviceToken).ToList()
+                    })
+                    .ToListAsync();
+
+                if (!usersData.Any()) return;
+
+                // B. Lưu DB (Bulk Insert - 1 lệnh duy nhất)
+                var notiList = new List<DAL.Entities.Notification>();
+                string jsonData = data != null ? JsonSerializer.Serialize(data) : null;
+                var now = DateTime.UtcNow;
+
+                foreach (var user in usersData)
+                {
+                    notiList.Add(new DAL.Entities.Notification
+                    {
+                        NotificationId = Guid.NewGuid(),
+                        UserId = user.UserId,
+                        Title = title,
+                        Body = body,
+                        Data = jsonData,
+                        IsRead = false,
+                        CreatedAt = now
+                    });
+                }
+
+                await _unitOfWork.NotificationRepo.AddRangeAsync(notiList);
+                await _unitOfWork.SaveChangeAsync();
+
+                // C. Gửi Firebase (Batch Send - Gửi chùm 500 cái)
+                var allTokens = usersData
+                    .SelectMany(u => u.Tokens)
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .Distinct()
+                    .ToList();
+
+                if (allTokens.Any())
+                {
+                    var batches = allTokens.Chunk(500).ToList();
+                    foreach (var batch in batches)
+                    {
+                        try
+                        {
+                            var message = new MulticastMessage()
+                            {
+                                Tokens = batch,
+                                Notification = new FirebaseAdmin.Messaging.Notification
+                                {
+                                    Title = title,
+                                    Body = body
+                                },
+                                Data = data
+                            };
+                            await FirebaseMessaging.DefaultInstance.SendMulticastAsync(message);
+                        }
+                        catch (Exception batchEx)
+                        {
+                            Console.WriteLine($"Error sending batch FCM: {batchEx.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in SendToRoleAsync: {ex.Message}");
             }
         }
 
         // =========================================================================
-        // PHẦN 2: CÁC HÀM MỚI (GET, PUT, DELETE)
+        // PHẦN 2: CRUD (GET, PUT, DELETE) - GIỮ NGUYÊN CODE CỦA BẠN (OK RỒI)
         // =========================================================================
 
         public async Task<ResponseDTO> GetMyNotificationsAsync(Guid userId, int pageNumber, int pageSize)
@@ -138,12 +205,9 @@ namespace BLL.Services.Impletement
             try
             {
                 var query = _unitOfWork.NotificationRepo.GetAll().Where(n => n.UserId == userId);
-
-                // Đếm tổng
                 var totalCount = await query.CountAsync();
                 var unreadCount = await query.CountAsync(n => !n.IsRead);
 
-                // Phân trang
                 var items = await query
                     .OrderByDescending(n => n.CreatedAt)
                     .Skip((pageNumber - 1) * pageSize)
@@ -168,10 +232,7 @@ namespace BLL.Services.Impletement
 
                 return new ResponseDTO("Success", 200, true, result);
             }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error: {ex.Message}", 500, false);
-            }
+            catch (Exception ex) { return new ResponseDTO($"Error: {ex.Message}", 500, false); }
         }
 
         public async Task<ResponseDTO> GetUnreadCountAsync(Guid userId)
@@ -181,13 +242,9 @@ namespace BLL.Services.Impletement
                 var count = await _unitOfWork.NotificationRepo.GetAll()
                     .Where(n => n.UserId == userId && !n.IsRead)
                     .CountAsync();
-
                 return new ResponseDTO("Success", 200, true, new { UnreadCount = count });
             }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error: {ex.Message}", 500, false);
-            }
+            catch (Exception ex) { return new ResponseDTO($"Error: {ex.Message}", 500, false); }
         }
 
         public async Task<ResponseDTO> MarkAsReadAsync(Guid notificationId, Guid userId)
@@ -195,12 +252,8 @@ namespace BLL.Services.Impletement
             try
             {
                 var noti = await _unitOfWork.NotificationRepo.GetByIdAsync(notificationId);
-
-                if (noti == null)
-                    return new ResponseDTO("Notification not found", 404, false);
-
-                if (noti.UserId != userId)
-                    return new ResponseDTO("Unauthorized", 403, false);
+                if (noti == null) return new ResponseDTO("Notification not found", 404, false);
+                if (noti.UserId != userId) return new ResponseDTO("Unauthorized", 403, false);
 
                 if (!noti.IsRead)
                 {
@@ -208,20 +261,15 @@ namespace BLL.Services.Impletement
                     await _unitOfWork.NotificationRepo.UpdateAsync(noti);
                     await _unitOfWork.SaveChangeAsync();
                 }
-
                 return new ResponseDTO("Marked as read", 200, true);
             }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error: {ex.Message}", 500, false);
-            }
+            catch (Exception ex) { return new ResponseDTO($"Error: {ex.Message}", 500, false); }
         }
 
         public async Task<ResponseDTO> MarkAllAsReadAsync(Guid userId)
         {
             try
             {
-                // Lấy tất cả tin chưa đọc của user
                 var unreadNotifications = await _unitOfWork.NotificationRepo.GetAll()
                     .Where(n => n.UserId == userId && !n.IsRead)
                     .ToListAsync();
@@ -231,18 +279,14 @@ namespace BLL.Services.Impletement
                     foreach (var noti in unreadNotifications)
                     {
                         noti.IsRead = true;
-                        // Không gọi SaveChangeAsync trong loop để tối ưu
+                        // Chỉ track change, không gọi Save trong loop
                         await _unitOfWork.NotificationRepo.UpdateAsync(noti);
                     }
                     await _unitOfWork.SaveChangeAsync();
                 }
-
                 return new ResponseDTO("All marked as read", 200, true);
             }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error: {ex.Message}", 500, false);
-            }
+            catch (Exception ex) { return new ResponseDTO($"Error: {ex.Message}", 500, false); }
         }
 
         public async Task<ResponseDTO> DeleteNotificationAsync(Guid notificationId, Guid userId)
@@ -250,22 +294,14 @@ namespace BLL.Services.Impletement
             try
             {
                 var noti = await _unitOfWork.NotificationRepo.GetByIdAsync(notificationId);
-
-                if (noti == null)
-                    return new ResponseDTO("Notification not found", 404, false);
-
-                if (noti.UserId != userId)
-                    return new ResponseDTO("Unauthorized", 403, false);
+                if (noti == null) return new ResponseDTO("Notification not found", 404, false);
+                if (noti.UserId != userId) return new ResponseDTO("Unauthorized", 403, false);
 
                 await _unitOfWork.NotificationRepo.DeleteAsync(noti.NotificationId);
                 await _unitOfWork.SaveChangeAsync();
-
                 return new ResponseDTO("Deleted successfully", 200, true);
             }
-            catch (Exception ex)
-            {
-                return new ResponseDTO($"Error: {ex.Message}", 500, false);
-            }
+            catch (Exception ex) { return new ResponseDTO($"Error: {ex.Message}", 500, false); }
         }
     }
 }

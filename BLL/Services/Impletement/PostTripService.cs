@@ -427,19 +427,17 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                 await _unitOfWork.SaveChangeAsync();
 
-                // 6. Commit Transaction
+                // 6. Commit Transaction (Lưu xong xuôi trạng thái bài đăng)
                 await transaction.CommitAsync();
 
                 // =======================================================================
-                // [LOGIC NOTIFICATION] CHỈ GỬI CHO DRIVER (TÀI XẾ)
+                // [LOGIC NOTIFICATION] CHỈ GỌI SERVICE LÀ ĐỦ
                 // =======================================================================
                 if (newStatus == PostStatus.OPEN)
                 {
                     try
                     {
-                        // A. Chuẩn bị nội dung
-                        string targetRole = "Driver"; // <--- CHỈ GỬI CHO TÀI XẾ
-
+                        string targetRole = "Driver"; // Gửi cho Tài xế
                         string title = "🚚 Kèo thơm! Có chuyến xe mới";
                         string ownerName = postTrip.Owner?.FullName ?? "Chủ xe";
                         string body = $"{ownerName} đang tìm tài xế cho lộ trình mới. Vào nhận chuyến ngay!";
@@ -449,47 +447,14 @@ namespace BLL.Services.Impletement
                     { "screen", "PostTripDetail" },
                     { "id", postTripId.ToString() }
                 };
-                        string jsonData = System.Text.Json.JsonSerializer.Serialize(dataDict);
 
-                        // B. Lấy Role Driver từ DB
-                        // Dùng trực tiếp _unitOfWork hiện tại (vì đã commit transaction trên rồi)
-                        var roleEntity = await _unitOfWork.RoleRepo.GetByName(targetRole);
-
-                        if (roleEntity != null)
-                        {
-                            // C. Lấy TẤT CẢ Driver đang hoạt động (Active)
-                            // Dùng AsNoTracking để tối ưu tốc độ đọc
-                            var targetUserIds = await _unitOfWork.BaseUserRepo.GetAll()
-                                .AsNoTracking()
-                                .Where(u => u.RoleId == roleEntity.RoleId && u.Status == UserStatus.ACTIVE)
-                                .Select(u => u.UserId)
-                                .ToListAsync();
-
-                            // D. Lưu Notification vào DB (Bulk Insert)
-                            if (targetUserIds.Any())
-                            {
-                                var notiEntities = targetUserIds.Select(targetId => new Notification
-                                {
-                                    NotificationId = Guid.NewGuid(),
-                                    UserId = targetId,
-                                    Title = title,
-                                    Body = body,
-                                    Data = jsonData,
-                                    IsRead = false,
-                                    CreatedAt = DateTime.UtcNow
-                                }).ToList();
-
-                                await _unitOfWork.NotificationRepo.AddRangeAsync(notiEntities);
-                                await _unitOfWork.SaveChangeAsync();
-                            }
-                        }
-
-                        // E. Gửi Push Notification (Firebase) tới Topic "Driver"
+                        // Chỉ cần gọi 1 dòng này thôi!
+                        // Service này đã lo việc: Lấy list Driver -> Lưu DB -> Bắn Firebase
                         await _notificationService.SendToRoleAsync(targetRole, title, body, dataDict);
                     }
                     catch (Exception notiEx)
                     {
-                        // Chỉ log lỗi, không throw ra ngoài để tránh báo lỗi giả cho người dùng
+                        // Chỉ log lỗi, không throw ra ngoài
                         Console.WriteLine($"⚠️ Lỗi gửi thông báo PostTrip cho Driver: {notiEx.Message}");
                     }
                 }

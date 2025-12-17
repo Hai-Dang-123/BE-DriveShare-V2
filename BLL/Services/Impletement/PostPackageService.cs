@@ -89,6 +89,7 @@ namespace BLL.Services.Impletement
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
+                // 1. Cập nhật trạng thái
                 var postPackage = await _unitOfWork.PostPackageRepo.GetByIdAsync(dto.PostPackageId);
                 if (postPackage == null) return new ResponseDTO("Post package not found.", 404, false);
 
@@ -98,17 +99,16 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                 await _unitOfWork.SaveChangeAsync();
 
-                // Commit transaction chính (Lưu trạng thái bài đăng trước)
+                // 2. Commit Transaction (Lưu xong xuôi trạng thái bài đăng)
                 await transaction.CommitAsync();
 
                 // =======================================================================
-                // [DEBUG MODE] CHẠY TRỰC TIẾP (KHÔNG DÙNG TASK.RUN)
+                // 3. GỬI THÔNG BÁO (GỌI SERVICE LÀ ĐỦ)
                 // =======================================================================
                 if (dto.NewStatus == PostStatus.OPEN)
                 {
                     try
                     {
-                        // 1. Định nghĩa nội dung
                         string title = "📦 Đơn hàng mới!";
                         string body = "Có một đơn hàng mới vừa được đăng tải. Vào xem ngay!";
                         var dataDict = new Dictionary<string, string>
@@ -116,51 +116,17 @@ namespace BLL.Services.Impletement
                     { "screen", "PostDetail" },
                     { "id", dto.PostPackageId.ToString() }
                 };
-                        string jsonData = System.Text.Json.JsonSerializer.Serialize(dataDict);
 
-                        // 2. Lấy danh sách Owner (Dùng trực tiếp _unitOfWork hiện tại)
-                        var ownerRoleId = (await _unitOfWork.RoleRepo.GetByName("Owner"))?.RoleId;
-
-                        if (ownerRoleId != null)
-                        {
-                            var owners = await _unitOfWork.BaseUserRepo.GetAll()
-                                .Where(u => u.RoleId == ownerRoleId && u.Status == UserStatus.ACTIVE)
-                                .Select(u => u.UserId)
-                                .ToListAsync();
-
-                            // 3. Tạo danh sách Notification
-                            var notiEntities = new List<Notification>();
-                            foreach (var userId in owners)
-                            {
-                                notiEntities.Add(new Notification
-                                {
-                                    NotificationId = Guid.NewGuid(),
-                                    UserId = userId,
-                                    Title = title,
-                                    Body = body,
-                                    Data = jsonData,
-                                    IsRead = false,
-                                    CreatedAt = DateTime.UtcNow
-                                });
-                            }
-
-                            // 4. Lưu xuống DB (Nằm ngoài transaction cũ nhưng vẫn an toàn)
-                            if (notiEntities.Any())
-                            {
-                                await _unitOfWork.NotificationRepo.AddRangeAsync(notiEntities);
-                                await _unitOfWork.SaveChangeAsync();
-                            }
-                        }
-
-                        // 5. Gửi Push Notification (Dùng trực tiếp _notificationService)
-                        // Nếu lỗi config Firebase, nó sẽ chết ngay tại dòng này
+                        // Chỉ cần gọi 1 dòng này thôi!
+                        // Service này đã lo việc: Lấy list user -> Lưu DB -> Bắn Firebase
                         await _notificationService.SendToRoleAsync("Owner", title, body, dataDict);
                     }
                     catch (Exception ex)
                     {
-                        // 🔥 QUAN TRỌNG: Ném lỗi ra ngoài để thấy ngay trên Postman
-                        // Bạn sẽ thấy lỗi 500 kèm chi tiết lỗi
-                        throw new Exception($"LỖI GỬI NOTI: {ex.Message} --- StackTrace: {ex.StackTrace}");
+                        // Log lỗi noti (Console/File) để biết đường sửa, nhưng ko làm fail request chính
+                        Console.WriteLine($"⚠️ Lỗi Noti: {ex.Message}");
+                        // Nếu muốn test lỗi trên Postman thì uncomment dòng dưới:
+                        // throw new Exception($"DEBUG ERROR: {ex.Message}");
                     }
                 }
                 // =======================================================================

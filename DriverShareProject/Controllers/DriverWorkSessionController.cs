@@ -37,6 +37,9 @@ namespace DriverShareProject.Controllers
         public async Task<IActionResult> EndSession([FromBody] EndSessionDTO dto)
         {
             var response = await _service.EndSessionAsync(dto);
+
+            // THÊM DÒNG NÀY: Xóa Cache vị trí
+
             return StatusCode(response.StatusCode, response);
         }
 

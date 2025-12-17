@@ -18,11 +18,13 @@ namespace BLL.Services.Impletement
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
+        private readonly LocationCacheService _locationCacheService;
 
-        public DriverWorkSessionService(IUnitOfWork unitOfWork, UserUtility userUtility)
+        public DriverWorkSessionService(IUnitOfWork unitOfWork, UserUtility userUtility, LocationCacheService locationCacheService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
+            _locationCacheService = locationCacheService;
         }
 
         // =========================================================================
@@ -185,6 +187,8 @@ namespace BLL.Services.Impletement
 
                 await _unitOfWork.DriverWorkSessionRepo.UpdateAsync(session);
                 await _unitOfWork.SaveChangeAsync();
+
+                _locationCacheService.RemoveLocation(session.TripId.Value);
 
                 return new ResponseDTO("Kết thúc lái xe thành công.", 200, true);
             }
