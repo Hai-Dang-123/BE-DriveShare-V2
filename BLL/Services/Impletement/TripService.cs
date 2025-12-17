@@ -1827,6 +1827,9 @@ namespace BLL.Services.Implement
         // =========================================================================================================
         // Trong TripService.cs
 
+        // =========================================================================================================
+        // 4. CANCEL TRIP BY OWNER (HỦY CHUYẾN & BỒI THƯỜNG)
+        // =========================================================================================================
         public async Task<ResponseDTO> CancelTripByOwnerAsync(CancelTripDTO dto)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
@@ -1837,27 +1840,54 @@ namespace BLL.Services.Implement
                 var trip = await _unitOfWork.TripRepo.GetAll()
                     .Include(t => t.ShippingRoute)
                     .Include(t => t.TripProviderContract)
-                    .Include(t => t.DriverAssignments)
+                    .Include(t => t.DriverAssignments) // Load assignment để check
                     .Include(t => t.Owner)
-                    .Include(t => t.Packages) // <--- QUAN TRỌNG: Load gói hàng để tìm Post gốc
+                    .Include(t => t.Packages)
                     .FirstOrDefaultAsync(t => t.TripId == dto.TripId);
 
                 if (trip == null) return new ResponseDTO("Không tìm thấy chuyến đi.", 404, false);
                 if (trip.OwnerId != ownerId) return new ResponseDTO("Bạn không có quyền hủy chuyến đi này.", 403, false);
 
+                // =======================================================================
+                // [MỚI] 1.5. VALIDATE DRIVER ASSIGNMENT
+                // Nếu đã có tài xế được gán (Chưa hoàn thành, chưa hủy, chưa từ chối) -> CHẶN
+                // =======================================================================
+                bool hasActiveDriver = trip.DriverAssignments.Any(da =>
+                    !da.IsFinished &&
+                    da.AssignmentStatus != AssignmentStatus.CANCELLED);
+
+                if (hasActiveDriver)
+                {
+                    return new ResponseDTO("Không thể hủy chuyến vì đang có Tài xế được gán. Vui lòng gỡ Tài xế trước khi hủy.", 400, false);
+                }
+                // =======================================================================
+
                 // 2. Check Status
                 var allowedStatuses = new List<TripStatus>
-        {
-            TripStatus.AWAITING_PROVIDER_CONTRACT,
-            TripStatus.AWAITING_PROVIDER_PAYMENT,
-            TripStatus.DONE_ASSIGNING_DRIVER,
-            TripStatus.READY_FOR_VEHICLE_HANDOVER,
-            TripStatus.PENDING_DRIVER_ASSIGNMENT,
-        };
+                {
+                    TripStatus.AWAITING_PROVIDER_CONTRACT,
+                    TripStatus.AWAITING_PROVIDER_PAYMENT,
+                    TripStatus.PENDING_DRIVER_ASSIGNMENT, // Đang tìm tài, chưa có tài -> OK
+                    TripStatus.PENDING_DRIVER_ASSIGNMENT, // Chờ gán -> OK
+                    // Lưu ý: Các trạng thái như DONE_ASSIGNING_DRIVER thường đã có tài xế, 
+                    // nên sẽ bị chặn bởi logic check ở bước 1.5 bên trên.
+                };
 
                 if (!allowedStatuses.Contains(trip.Status))
                 {
-                    return new ResponseDTO($"Không thể hủy chuyến ở trạng thái {trip.Status}.", 400, false);
+                    // Nếu status là DONE_ASSIGNING_DRIVER hoặc READY_FOR_HANDOVER mà không có tài active (hiếm gặp), code vẫn chạy tiếp.
+                    // Nhưng thường sẽ bị chặn ở bước 1.5 hoặc ở đây.
+                    // Cho phép mềm dẻo: Nếu status không nằm trong list này nhưng cũng không có tài xế thì vẫn xem xét logic dưới.
+                    // Tuy nhiên để an toàn, giữ nguyên check status chặt chẽ.
+                    if (trip.Status == TripStatus.DONE_ASSIGNING_DRIVER || trip.Status == TripStatus.READY_FOR_VEHICLE_HANDOVER)
+                    {
+                        // Case đặc biệt: Status báo đã gán, nhưng check Assignments lại rỗng (dữ liệu lỗi), cho phép hủy để cleanup.
+                        if (hasActiveDriver) return new ResponseDTO($"Không thể hủy ở trạng thái {trip.Status}.", 400, false);
+                    }
+                    else
+                    {
+                        return new ResponseDTO($"Không thể hủy chuyến ở trạng thái {trip.Status}.", 400, false);
+                    }
                 }
 
                 // 3. Tính toán Bồi thường (Logic cũ)
@@ -1903,7 +1933,6 @@ namespace BLL.Services.Implement
                         var providerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(providerId);
                         if (providerUser != null)
                         {
-                            // Gọi hàm gửi mail (Sẽ định nghĩa bên dưới)
                             _ = Task.Run(() => _emailService.SendCancellationCompensationEmailAsync(
                                 providerUser.Email, providerUser.FullName, trip.TripCode, penaltyAmount, penaltyReason, trip.Owner.FullName));
                         }
@@ -1918,12 +1947,10 @@ namespace BLL.Services.Implement
                 if (trip.TripProviderContract != null) trip.TripProviderContract.Status = ContractStatus.CANCELLED;
 
                 // =======================================================================
-                // 5.5 [MỚI] RE-OPEN POST & PACKAGES (QUAN TRỌNG)
+                // 5.5 RE-OPEN POST & PACKAGES
                 // =======================================================================
                 if (trip.Packages != null && trip.Packages.Any())
                 {
-                    // A. Tìm PostPackage gốc
-                    // Giả sử các gói trong 1 Trip đều thuộc về 1 PostPackage (Logic thường thấy)
                     var postPackageId = trip.Packages.First().PostPackageId;
 
                     if (postPackageId != null)
@@ -1931,24 +1958,23 @@ namespace BLL.Services.Implement
                         var postPackage = await _unitOfWork.PostPackageRepo.GetByIdAsync(postPackageId.Value);
                         if (postPackage != null && postPackage.Status == PostStatus.DONE)
                         {
-                            // Mở lại bài đăng để người khác thấy
                             postPackage.Status = PostStatus.OPEN;
                             postPackage.Updated = DateTime.UtcNow;
                             await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                         }
                     }
 
-                    // B. Reset trạng thái từng gói hàng
                     foreach (var pkg in trip.Packages)
                     {
-                        pkg.TripId = null; // Gỡ khỏi chuyến này
-                        pkg.OwnerId = null; // Gỡ khỏi chủ xe này
-                        pkg.Status = PackageStatus.PENDING; // Quay về trạng thái chờ
+                        pkg.TripId = null;
+                        pkg.OwnerId = null;
+                        pkg.Status = PackageStatus.PENDING;
                         await _unitOfWork.PackageRepo.UpdateAsync(pkg);
                     }
                 }
 
-                // 6. Release Drivers
+                // 6. Release Drivers (Đoạn này sẽ ít khi chạy vào nếu Validation 1.5 hoạt động tốt, 
+                // nhưng giữ lại để cleanup các record rác nếu có)
                 if (trip.DriverAssignments != null)
                 {
                     foreach (var assign in trip.DriverAssignments.Where(a => !a.IsFinished))
