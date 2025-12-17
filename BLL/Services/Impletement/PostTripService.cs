@@ -6,6 +6,7 @@ using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,13 +19,15 @@ namespace BLL.Services.Impletement
         private readonly UserUtility _userUtility;
         private readonly IUserDocumentService _userDocumentService;
         private readonly INotificationService _notificationService;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
 
-        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService, INotificationService notificationService)
+        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService, INotificationService notificationService, IServiceScopeFactory serviceScopeFactory)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _userDocumentService = userDocumentService;
             _notificationService = notificationService;
+            _serviceScopeFactory = serviceScopeFactory;
         }
 
         // =========================================================================
@@ -382,36 +385,40 @@ namespace BLL.Services.Impletement
 
         // Trong BLL/Services/Impletement/PostTripService.cs
 
+        // Đảm bảo class PostTripService đã có:
+        // private readonly IServiceScopeFactory _serviceScopeFactory;
+        // Và được inject trong Constructor.
+
+        // Trong PostTripService.cs
+
         public async Task<ResponseDTO> ChangePostTripStatusAsync(Guid postTripId, PostStatus newStatus)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 1. Validate User (Chỉ Owner mới được đổi trạng thái bài đăng của mình)
+                // 1. Validate User
                 var userId = _userUtility.GetUserIdFromToken();
                 if (userId == Guid.Empty)
                     return new ResponseDTO("Unauthorized", 401, false);
 
                 // 2. Lấy PostTrip
-                var postTrip = await _unitOfWork.PostTripRepo.GetByIdAsync(postTripId);
+                var postTrip = await _unitOfWork.PostTripRepo.GetAll()
+                    .Include(pt => pt.Owner)
+                    .FirstOrDefaultAsync(pt => pt.PostTripId == postTripId);
+
                 if (postTrip == null)
                     return new ResponseDTO("Post Trip not found", 404, false);
 
-                // 3. Validate Quyền sở hữu
+                // 3. Validate Quyền
                 if (postTrip.OwnerId != userId)
                     return new ResponseDTO("Forbidden: You do not own this post", 403, false);
 
-                // 4. Validate Logic chuyển trạng thái (Optional but Recommended)
-                // Ví dụ: Không thể chuyển từ DONE về OPEN
+                // 4. Validate Logic
                 if (postTrip.Status == PostStatus.DONE && newStatus == PostStatus.OPEN)
-                {
                     return new ResponseDTO("Cannot reopen a completed post.", 400, false);
-                }
 
-                // Ví dụ: Không thể chuyển từ DELETED về bất kỳ trạng thái nào
                 if (postTrip.Status == PostStatus.DELETED)
-                {
                     return new ResponseDTO("Cannot modify a deleted post.", 400, false);
-                }
 
                 // 5. Cập nhật
                 postTrip.Status = newStatus;
@@ -420,21 +427,79 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                 await _unitOfWork.SaveChangeAsync();
 
-                // [CHÈN VÀO ĐÂY]
+                // 6. Commit Transaction
+                await transaction.CommitAsync();
+
+                // =======================================================================
+                // [LOGIC NOTIFICATION] CHỈ GỬI CHO DRIVER (TÀI XẾ)
+                // =======================================================================
                 if (newStatus == PostStatus.OPEN)
                 {
-                    _ = Task.Run(() => _notificationService.SendToRoleAsync(
-                        "Driver", // Role name trong DB
-                        "🚚 Chuyến xe mới!",
-                        "Một chuyến xe mới đang chờ bạn. Nhận chuyến ngay!",
-                        new Dictionary<string, string> { { "screen", "TripDetail" }, { "id", postTripId.ToString() } }
-                    ));
+                    try
+                    {
+                        // A. Chuẩn bị nội dung
+                        string targetRole = "Driver"; // <--- CHỈ GỬI CHO TÀI XẾ
+
+                        string title = "🚚 Kèo thơm! Có chuyến xe mới";
+                        string ownerName = postTrip.Owner?.FullName ?? "Chủ xe";
+                        string body = $"{ownerName} đang tìm tài xế cho lộ trình mới. Vào nhận chuyến ngay!";
+
+                        var dataDict = new Dictionary<string, string>
+                {
+                    { "screen", "PostTripDetail" },
+                    { "id", postTripId.ToString() }
+                };
+                        string jsonData = System.Text.Json.JsonSerializer.Serialize(dataDict);
+
+                        // B. Lấy Role Driver từ DB
+                        // Dùng trực tiếp _unitOfWork hiện tại (vì đã commit transaction trên rồi)
+                        var roleEntity = await _unitOfWork.RoleRepo.GetByName(targetRole);
+
+                        if (roleEntity != null)
+                        {
+                            // C. Lấy TẤT CẢ Driver đang hoạt động (Active)
+                            // Dùng AsNoTracking để tối ưu tốc độ đọc
+                            var targetUserIds = await _unitOfWork.BaseUserRepo.GetAll()
+                                .AsNoTracking()
+                                .Where(u => u.RoleId == roleEntity.RoleId && u.Status == UserStatus.ACTIVE)
+                                .Select(u => u.UserId)
+                                .ToListAsync();
+
+                            // D. Lưu Notification vào DB (Bulk Insert)
+                            if (targetUserIds.Any())
+                            {
+                                var notiEntities = targetUserIds.Select(targetId => new Notification
+                                {
+                                    NotificationId = Guid.NewGuid(),
+                                    UserId = targetId,
+                                    Title = title,
+                                    Body = body,
+                                    Data = jsonData,
+                                    IsRead = false,
+                                    CreatedAt = DateTime.UtcNow
+                                }).ToList();
+
+                                await _unitOfWork.NotificationRepo.AddRangeAsync(notiEntities);
+                                await _unitOfWork.SaveChangeAsync();
+                            }
+                        }
+
+                        // E. Gửi Push Notification (Firebase) tới Topic "Driver"
+                        await _notificationService.SendToRoleAsync(targetRole, title, body, dataDict);
+                    }
+                    catch (Exception notiEx)
+                    {
+                        // Chỉ log lỗi, không throw ra ngoài để tránh báo lỗi giả cho người dùng
+                        Console.WriteLine($"⚠️ Lỗi gửi thông báo PostTrip cho Driver: {notiEx.Message}");
+                    }
                 }
+                // =======================================================================
 
                 return new ResponseDTO($"Status updated to {newStatus} successfully", 200, true);
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 return new ResponseDTO($"Error changing status: {ex.Message}", 500, false);
             }
         }

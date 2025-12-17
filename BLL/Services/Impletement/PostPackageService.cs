@@ -8,6 +8,7 @@ using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +27,8 @@ namespace BLL.Services.Impletement
         private readonly IOwnerDriverLinkService _ownerDriverLinkService;
         private readonly ITrafficRestrictionService _trafficRestrictionService;
         private readonly INotificationService _notificationService;
+        // 1. KHAI BÁO BIẾN NÀY
+        private readonly IServiceScopeFactory _serviceScopeFactory;
 
         public PostPackageService(
             IUnitOfWork unitOfWork,
@@ -36,7 +39,8 @@ namespace BLL.Services.Impletement
             IVietMapService vietMapService,
             IOwnerDriverLinkService ownerDriverLinkService,
             ITrafficRestrictionService trafficRestrictionService,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            IServiceScopeFactory serviceScopeFactory)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -47,6 +51,7 @@ namespace BLL.Services.Impletement
             _ownerDriverLinkService = ownerDriverLinkService;
             _trafficRestrictionService = trafficRestrictionService;
             _notificationService = notificationService;
+            _serviceScopeFactory = serviceScopeFactory;
         }
 
         // =============================================================================
@@ -76,9 +81,9 @@ namespace BLL.Services.Impletement
             }
         }
 
-        // =============================================================================
-        // 1. CHANGE STATUS
-        // =============================================================================
+        // Đảm bảo bạn đã inject IServiceScopeFactory vào Constructor
+        // private readonly IServiceScopeFactory _serviceScopeFactory;
+
         public async Task<ResponseDTO> ChangePostPackageStatusAsync(ChangePostPackageStatusDTO dto)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
@@ -93,18 +98,72 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                 await _unitOfWork.SaveChangeAsync();
 
+                // Commit transaction chính (Lưu trạng thái bài đăng trước)
                 await transaction.CommitAsync();
 
-                // [CHÈN VÀO ĐÂY]
+                // =======================================================================
+                // [DEBUG MODE] CHẠY TRỰC TIẾP (KHÔNG DÙNG TASK.RUN)
+                // =======================================================================
                 if (dto.NewStatus == PostStatus.OPEN)
                 {
-                    _ = Task.Run(() => _notificationService.SendToRoleAsync(
-                        "Owner", // Role name trong DB
-                        "📦 Đơn hàng mới!",
-                        "Có một đơn hàng mới vừa được đăng tải. Vào xem ngay!",
-                        new Dictionary<string, string> { { "screen", "PostDetail" }, { "id", dto.PostPackageId.ToString() } }
-                    ));
+                    try
+                    {
+                        // 1. Định nghĩa nội dung
+                        string title = "📦 Đơn hàng mới!";
+                        string body = "Có một đơn hàng mới vừa được đăng tải. Vào xem ngay!";
+                        var dataDict = new Dictionary<string, string>
+                {
+                    { "screen", "PostDetail" },
+                    { "id", dto.PostPackageId.ToString() }
+                };
+                        string jsonData = System.Text.Json.JsonSerializer.Serialize(dataDict);
+
+                        // 2. Lấy danh sách Owner (Dùng trực tiếp _unitOfWork hiện tại)
+                        var ownerRoleId = (await _unitOfWork.RoleRepo.GetByName("Owner"))?.RoleId;
+
+                        if (ownerRoleId != null)
+                        {
+                            var owners = await _unitOfWork.BaseUserRepo.GetAll()
+                                .Where(u => u.RoleId == ownerRoleId && u.Status == UserStatus.ACTIVE)
+                                .Select(u => u.UserId)
+                                .ToListAsync();
+
+                            // 3. Tạo danh sách Notification
+                            var notiEntities = new List<Notification>();
+                            foreach (var userId in owners)
+                            {
+                                notiEntities.Add(new Notification
+                                {
+                                    NotificationId = Guid.NewGuid(),
+                                    UserId = userId,
+                                    Title = title,
+                                    Body = body,
+                                    Data = jsonData,
+                                    IsRead = false,
+                                    CreatedAt = DateTime.UtcNow
+                                });
+                            }
+
+                            // 4. Lưu xuống DB (Nằm ngoài transaction cũ nhưng vẫn an toàn)
+                            if (notiEntities.Any())
+                            {
+                                await _unitOfWork.NotificationRepo.AddRangeAsync(notiEntities);
+                                await _unitOfWork.SaveChangeAsync();
+                            }
+                        }
+
+                        // 5. Gửi Push Notification (Dùng trực tiếp _notificationService)
+                        // Nếu lỗi config Firebase, nó sẽ chết ngay tại dòng này
+                        await _notificationService.SendToRoleAsync("Owner", title, body, dataDict);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 🔥 QUAN TRỌNG: Ném lỗi ra ngoài để thấy ngay trên Postman
+                        // Bạn sẽ thấy lỗi 500 kèm chi tiết lỗi
+                        throw new Exception($"LỖI GỬI NOTI: {ex.Message} --- StackTrace: {ex.StackTrace}");
+                    }
                 }
+                // =======================================================================
 
                 return new ResponseDTO("Change status successfully.", 200, true, postPackage);
             }

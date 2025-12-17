@@ -1868,7 +1868,6 @@ namespace BLL.Services.Implement
                     TripStatus.AWAITING_PROVIDER_CONTRACT,
                     TripStatus.AWAITING_PROVIDER_PAYMENT,
                     TripStatus.PENDING_DRIVER_ASSIGNMENT, // Đang tìm tài, chưa có tài -> OK
-                    TripStatus.PENDING_DRIVER_ASSIGNMENT, // Chờ gán -> OK
                     // Lưu ý: Các trạng thái như DONE_ASSIGNING_DRIVER thường đã có tài xế, 
                     // nên sẽ bị chặn bởi logic check ở bước 1.5 bên trên.
                 };
