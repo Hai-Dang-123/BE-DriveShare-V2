@@ -177,13 +177,19 @@ namespace BLL.Services.Impletement
             }
         }
 
-
         // ======================= REGISTER FOR ADMIN =======================
         public async Task<ResponseDTO> RegisterForAdmin(RegisterForAdminDTO dto)
         {
             if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password is not fit with confirm password", 400, false);
 
-            // [FIXED] TRANSACTION
+            // [ADDED] VALIDATE DATE OF BIRTH (Admin phải >= 18 tuổi)
+            if (dto.DateOfBirth >= DateTime.UtcNow) return new ResponseDTO("Date of birth cannot be in the future.", 400, false);
+            var today = DateTime.UtcNow;
+            var age = today.Year - dto.DateOfBirth.Year;
+            if (dto.DateOfBirth > today.AddYears(-age)) age--; // Chưa tới sinh nhật năm nay thì trừ 1 tuổi
+            if (age < 18) return new ResponseDTO("Admin must be at least 18 years old.", 400, false);
+            // -----------------------------------------------------
+
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
@@ -196,7 +202,6 @@ namespace BLL.Services.Impletement
                 var role = await _unitOfWork.RoleRepo.GetByName(dto.RoleName);
                 if (role == null)
                 {
-                    // Rollback và return
                     await transaction.RollbackAsync();
                     return new ResponseDTO("Critical error: Admin role not found.", 500, false);
                 }
@@ -215,6 +220,8 @@ namespace BLL.Services.Impletement
                     Status = UserStatus.ACTIVE,
                     CreatedAt = DateTime.UtcNow,
                     LastUpdatedAt = DateTime.UtcNow,
+                    // [ADDED] Bổ sung lưu ngày sinh cho Admin (Nếu trong DTO có)
+                    DateOfBirth = dto.DateOfBirth,
                     IsEmailVerified = true,
                     IsPhoneVerified = true,
                     Address = userAddress,
@@ -227,7 +234,7 @@ namespace BLL.Services.Impletement
                 }
 
                 await _unitOfWork.BaseUserRepo.AddAsync(newUser);
-                await _unitOfWork.SaveChangeAsync(); // Nhớ save trước khi commit
+                await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
                 return new ResponseDTO("Admin account created successfully.", 201, true, new { UserId = newUser.UserId });
@@ -244,11 +251,18 @@ namespace BLL.Services.Impletement
         {
             if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password does not match confirm password.", 400, false);
 
+            // [ADDED] VALIDATE DATE OF BIRTH (Tài xế phải >= 18 tuổi)
+            if (dto.DateOfBirth >= DateTime.UtcNow) return new ResponseDTO("Date of birth cannot be in the future.", 400, false);
+            var today = DateTime.UtcNow;
+            var age = today.Year - dto.DateOfBirth.Year;
+            if (dto.DateOfBirth > today.AddYears(-age)) age--;
+            if (age < 18) return new ResponseDTO("Driver must be at least 18 years old.", 400, false);
+            // -----------------------------------------------------
+
             Guid createdUserId = Guid.Empty;
             string createdEmail = string.Empty;
             string createdFullName = string.Empty;
 
-            // [FIXED] TRANSACTION
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
@@ -297,7 +311,6 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
-                // Lưu lại thông tin để gửi mail sau
                 createdUserId = newDriver.UserId;
                 createdEmail = newDriver.Email;
                 createdFullName = newDriver.FullName;
@@ -308,7 +321,6 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO("An error occurred during driver registration.", 500, false);
             }
 
-            // Gửi mail (Ngoài Transaction)
             if (createdUserId != Guid.Empty)
             {
                 try { await SendVerificationEmailPrivateAsync(createdUserId, createdEmail, createdFullName); }
@@ -323,11 +335,18 @@ namespace BLL.Services.Impletement
         {
             if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password does not match confirm password.", 400, false);
 
+            // [ADDED] VALIDATE DATE OF BIRTH (Chủ hàng/xe phải >= 18 tuổi)
+            if (dto.DateOfBirth >= DateTime.UtcNow) return new ResponseDTO("Date of birth cannot be in the future.", 400, false);
+            var today = DateTime.UtcNow;
+            var age = today.Year - dto.DateOfBirth.Year;
+            if (dto.DateOfBirth > today.AddYears(-age)) age--;
+            if (age < 18) return new ResponseDTO("Owner must be at least 18 years old.", 400, false);
+            // -----------------------------------------------------
+
             Guid createdUserId = Guid.Empty;
             string createdEmail = string.Empty;
             string createdFullName = string.Empty;
 
-            // [FIXED] TRANSACTION
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
@@ -412,11 +431,18 @@ namespace BLL.Services.Impletement
         {
             if (dto.Password != dto.ConfirmPassword) return new ResponseDTO("Password does not match confirm password.", 400, false);
 
+            // [ADDED] VALIDATE DATE OF BIRTH (Provider phải >= 18 tuổi)
+            if (dto.DateOfBirth >= DateTime.UtcNow) return new ResponseDTO("Date of birth cannot be in the future.", 400, false);
+            var today = DateTime.UtcNow;
+            var age = today.Year - dto.DateOfBirth.Year;
+            if (dto.DateOfBirth > today.AddYears(-age)) age--;
+            if (age < 18) return new ResponseDTO("Provider must be at least 18 years old.", 400, false);
+            // -----------------------------------------------------
+
             Guid createdUserId = Guid.Empty;
             string createdEmail = string.Empty;
             string createdFullName = string.Empty;
 
-            // [FIXED] TRANSACTION
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {

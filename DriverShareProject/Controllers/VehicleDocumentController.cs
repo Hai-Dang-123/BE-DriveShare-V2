@@ -110,7 +110,7 @@ namespace DriverShareProject.Controllers
         /// <summary>
         /// Xem lịch sử đăng kiểm của xe (Dành cho Owner hoặc Staff)
         /// </summary>
-        [HttpGet("vehicle/{vehicleId}")]
+        [HttpGet("vehicle/history/{vehicleId}")]
         //[Authorize]
         public async Task<IActionResult> GetHistory(Guid vehicleId)
         {
