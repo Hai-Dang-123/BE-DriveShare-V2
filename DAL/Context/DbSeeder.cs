@@ -42,6 +42,8 @@ namespace DAL.Context
         private static readonly Guid StaffWalletID = Guid.Parse("44444444-4444-4444-4444-444444444444");
         private static readonly Guid ProviderWalletID = Guid.Parse("55555555-5555-5555-5555-555555555555");
         private static readonly Guid DriverWalletID_2 = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        private static readonly Guid OwnerWalletID_2 = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        private static readonly Guid ProviderWalletID_02 = Guid.Parse("88888888-8888-8888-8888-888888888888");
 
 
         // ───────────────────────────────────────────────
@@ -116,19 +118,124 @@ namespace DAL.Context
             );
         }
 
+        //private static void SeedWallets(ModelBuilder modelBuilder)
+        //{
+        //    decimal initialBalance = 500000000m;
+        //    modelBuilder.Entity<Wallet>().HasData(
+        //        new Wallet { WalletId = AdminWalletID, UserId = AdminID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = DriverWalletID, UserId = DriverID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = OwnerWalletID, UserId = OwnerID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = StaffWalletID, UserId = StaffID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = ProviderWalletID, UserId = ProviderID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
+        //        new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow }
+
+        //    );
+        //}
         private static void SeedWallets(ModelBuilder modelBuilder)
         {
-            decimal initialBalance = 500000000m;
+            decimal initialBalance = 500_000_000m;
+            var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
             modelBuilder.Entity<Wallet>().HasData(
-                new Wallet { WalletId = AdminWalletID, UserId = AdminID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = DriverWalletID, UserId = DriverID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = OwnerWalletID, UserId = OwnerID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = StaffWalletID, UserId = StaffID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = ProviderWalletID, UserId = ProviderID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-                new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow }
+                // ADMIN
+                new Wallet
+                {
+                    WalletId = AdminWalletID,
+                    UserId = AdminID,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // STAFF
+                new Wallet
+                {
+                    WalletId = StaffWalletID,
+                    UserId = StaffID,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // DRIVER 1
+                new Wallet
+                {
+                    WalletId = DriverWalletID,
+                    UserId = DriverID,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // DRIVER 2
+                new Wallet
+                {
+                    WalletId = DriverWalletID_2,
+                    UserId = DriverID_2,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // OWNER 1
+                new Wallet
+                {
+                    WalletId = OwnerWalletID,
+                    UserId = OwnerID,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // OWNER 2
+                new Wallet
+                {
+                    WalletId = OwnerWalletID_2,
+                    UserId = OwnerID_2,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // PROVIDER 1
+                new Wallet
+                {
+                    WalletId = ProviderWalletID,
+                    UserId = ProviderID,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                },
+
+                // PROVIDER 2
+                new Wallet
+                {
+                    WalletId = ProviderWalletID_02,
+                    UserId = ProviderID_02,
+                    Balance = initialBalance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = seedTime,
+                    LastUpdatedAt = seedTime
+                }
             );
         }
-
         private static void SeedDriver(ModelBuilder modelBuilder)
         {
             string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
