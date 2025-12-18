@@ -533,20 +533,18 @@ namespace BLL.Services.Impletement
                     doc.RejectionReason = null;
                     doc.IsDocumentReal = true; // Override AI/Default
 
-                    // Đồng bộ dữ liệu sang bảng Driver nếu là GPLX hoặc GKSK (active)
+                    // Đồng bộ dữ liệu sang bảng Driver nếu là GPLX
                     if (doc.DocumentType == DocumentType.DRIVER_LINCENSE)
                     {
-                        var driver = await _unitOfWork.DriverRepo.GetByIdAsync(doc.UserId);
-                        if (driver != null)
+                        var driverInfo = await _unitOfWork.DriverRepo.GetByIdAsync(doc.UserId);
+                        if (driverInfo != null)
                         {
-                            // Nếu OCR fail trước đó, giờ admin nhập tay hoặc trust OCR cũ
-                            if (!string.IsNullOrEmpty(doc.IdentityNumber)) driver.LicenseNumber = doc.IdentityNumber;
-                            if (!string.IsNullOrEmpty(doc.LicenseClass)) driver.LicenseClass = doc.LicenseClass;
-                            driver.IsLicenseVerified = true;
-                            await _unitOfWork.DriverRepo.UpdateAsync(driver);
+                            if (!string.IsNullOrEmpty(doc.IdentityNumber)) driverInfo.LicenseNumber = doc.IdentityNumber;
+                            if (!string.IsNullOrEmpty(doc.LicenseClass)) driverInfo.LicenseClass = doc.LicenseClass;
+                            driverInfo.IsLicenseVerified = true;
+                            await _unitOfWork.DriverRepo.UpdateAsync(driverInfo);
                         }
                     }
-                    // GKSK: Chỉ cần status active là đủ điều kiện, không cần map field nào cụ thể
                 }
                 else
                 {
@@ -558,12 +556,78 @@ namespace BLL.Services.Impletement
                 }
 
                 await _unitOfWork.UserDocumentRepo.UpdateAsync(doc);
+                // LƯU Ý QUAN TRỌNG: SaveChange ở đây để trạng thái Document được cập nhật xuống DB trước khi check bên dưới
                 await _unitOfWork.SaveChangeAsync();
+
+                // ==========================================================================================
+                // [LOGIC MỚI] AUTO-ACTIVATE USER STATUS
+                // Tự động kích hoạt tài khoản nếu đủ điều kiện sau khi duyệt giấy tờ
+                // ==========================================================================================
+                if (dto.IsApproved)
+                {
+                    // 1. Lấy thông tin User và Role
+                    var user = await _unitOfWork.BaseUserRepo.GetAll()
+                        .Include(u => u.Role)
+                        .FirstOrDefaultAsync(u => u.UserId == doc.UserId);
+
+                    if (user != null && user.Status != UserStatus.ACTIVE) // Chỉ xử lý nếu user chưa Active
+                    {
+                        // 2. Lấy danh sách các loại giấy tờ ĐÃ ACTIVE của user này
+                        var activeDocTypes = await _unitOfWork.UserDocumentRepo.GetAll()
+                            .Where(d => d.UserId == doc.UserId && d.Status == VerifileStatus.ACTIVE)
+                            .Select(d => d.DocumentType)
+                            .ToListAsync();
+
+                        bool hasCCCD = activeDocTypes.Contains(DocumentType.CCCD);
+                        bool shouldActivate = false;
+
+                        // 3. Kiểm tra theo Role
+                        if (user.Role.RoleName == "Owner" || user.Role.RoleName == "Provider")
+                        {
+                            // --- OWNER / PROVIDER: Chỉ cần CCCD ---
+                            if (hasCCCD)
+                            {
+                                shouldActivate = true;
+                            }
+                        }
+                        else if (user.Role.RoleName == "Driver")
+                        {
+                            // --- DRIVER: Cần CCCD + GPLX + GKSK + HasDeclaredInitialHistory ---
+                            bool hasGPLX = activeDocTypes.Contains(DocumentType.DRIVER_LINCENSE);
+                            bool hasGKSK = activeDocTypes.Contains(DocumentType.HEALTH_CHECK);
+
+                            // Lấy thêm thông tin Driver để check HasDeclaredInitialHistory
+                            var driverDetail = await _unitOfWork.DriverRepo.GetByIdAsync(doc.UserId);
+
+                            if (driverDetail != null &&
+                                hasCCCD && hasGPLX && hasGKSK &&
+                                driverDetail.HasDeclaredInitialHistory)
+                            {
+                                shouldActivate = true;
+
+                                // Cập nhật luôn Status trong bảng Driver (nếu có trường Status riêng)
+                                driverDetail.Status = UserStatus.ACTIVE;
+                                await _unitOfWork.DriverRepo.UpdateAsync(driverDetail);
+                            }
+                        }
+
+                        // 4. Kích hoạt User nếu đủ điều kiện
+                        if (shouldActivate)
+                        {
+                            user.Status = UserStatus.ACTIVE;
+                            user.LastUpdatedAt = DateTime.UtcNow;
+                            await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                            await _unitOfWork.SaveChangeAsync(); // Lưu trạng thái User
+                        }
+                    }
+                }
+                // ==========================================================================================
+
                 await transaction.CommitAsync();
 
                 // Send Notification Logic here if needed
 
-                return new ResponseDTO(dto.IsApproved ? "Đã duyệt." : "Đã từ chối.", 200, true, MapToDetailDTO(doc));
+                return new ResponseDTO(dto.IsApproved ? "Đã duyệt và cập nhật trạng thái hồ sơ." : "Đã từ chối.", 200, true, MapToDetailDTO(doc));
             }
             catch (Exception ex)
             {

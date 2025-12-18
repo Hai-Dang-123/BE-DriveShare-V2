@@ -55,6 +55,9 @@ namespace BLL.Services.Implement
         // =========================================================================================================
         // 1. CREATE TRIP FROM POST (NHẬN CHUYẾN TỪ BÀI ĐĂNG)
         // =========================================================================================================
+        // =========================================================================================================
+        // 1. CREATE TRIP FROM POST (NHẬN CHUYẾN TỪ BÀI ĐĂNG)
+        // =========================================================================================================
         public async Task<ResponseDTO> CreateTripFromPostAsync(TripCreateFromPostDTO dto)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
@@ -73,7 +76,8 @@ namespace BLL.Services.Implement
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
                     .Include(p => p.PostContacts)
                     .Include(p => p.Provider)
-                    .Include(p => p.Packages)
+                    // [CẬP NHẬT] Include thêm HandlingDetail để check tính chất hàng
+                    .Include(p => p.Packages).ThenInclude(pkg => pkg.HandlingDetail)
                     .FirstOrDefaultAsync(p => p.PostPackageId == dto.PostPackageId);
 
                 if (postPackage == null) return new ResponseDTO("Không tìm thấy Bài đăng.", 404, false);
@@ -88,7 +92,28 @@ namespace BLL.Services.Implement
 
                 if (vehicle == null) return new ResponseDTO("Xe không tìm thấy hoặc không thuộc về bạn.", 404, false);
 
-                // 2.1. VALIDATE SỨC CHỨA
+                // =======================================================================
+                // [MỚI THÊM] 2.1. VALIDATE XE ĐÔNG LẠNH (Check theo yêu cầu)
+                // =======================================================================
+                bool requiresRefrigeration = postPackage.Packages
+                    .Any(p => p.HandlingDetail != null && p.HandlingDetail.IsRefrigerated);
+
+                if (requiresRefrigeration)
+                {
+                    // Kiểm tra tên loại xe có chứa từ khóa liên quan đến lạnh không
+                    // (Ví dụ: "Xe tải thùng lạnh", "Xe đông lạnh")
+                    bool isRefrigeratedVehicle = vehicle.VehicleType != null &&
+                                                 (vehicle.VehicleType.VehicleTypeName.ToLower().Contains("lạnh") ||
+                                                  vehicle.VehicleType.VehicleTypeName.ToLower().Contains("đông"));
+
+                    if (!isRefrigeratedVehicle)
+                    {
+                        return new ResponseDTO("Đơn hàng yêu cầu bảo quản lạnh (đông lạnh) nhưng xe bạn chọn không phải là xe thùng lạnh.", 400, false);
+                    }
+                }
+                // =======================================================================
+
+                // 2.2. VALIDATE SỨC CHỨA (Đã đổi số thứ tự từ 2.1 sang 2.2)
                 var capacityCheck = ValidateVehicleCapacity(vehicle, postPackage.Packages);
                 if (!capacityCheck.IsSuccess)
                 {

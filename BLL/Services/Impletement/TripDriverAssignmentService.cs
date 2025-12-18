@@ -87,14 +87,38 @@ namespace BLL.Services.Impletement
                 var driver = await _unitOfWork.DriverRepo.GetByIdAsync(dto.DriverId);
                 if (driver == null) return new ResponseDTO("Driver not found.", 404, false);
 
+                // --- [MỚI] CHECK 3.1: STATUS ACTIVE ---
+                if (driver.Status != UserStatus.ACTIVE)
+                {
+                    return new ResponseDTO("Tài khoản tài xế đang bị khóa hoặc chưa kích hoạt (Status != ACTIVE).", 403, false);
+                }
+
+                // --- [MỚI] CHECK 3.2: LỊCH SỬ LÁI XE ---
                 if (!driver.HasDeclaredInitialHistory)
                 {
                     return new ResponseDTO(
-                        "Bạn cần cập nhật lịch sử lái xe trong tuần hiện tại trước khi nhận chuyến đi đầu tiên.",
+                        "Tài xế cần cập nhật lịch sử lái xe trong tuần hiện tại trước khi nhận chuyến đi đầu tiên.",
                         428,
                         false
                     );
                 }
+
+                // --- [MỚI] CHECK 3.3: GIẤY TỜ (CCCD, GPLX, GKSK) ---
+                // Lấy danh sách loại giấy tờ ĐÃ ĐƯỢC DUYỆT (Active) của tài xế này
+                var verifiedDocTypes = await _unitOfWork.UserDocumentRepo.GetAll()
+                    .Where(d => d.UserId == dto.DriverId && d.Status == VerifileStatus.ACTIVE)
+                    .Select(d => d.DocumentType)
+                    .ToListAsync();
+
+                bool hasCCCD = verifiedDocTypes.Contains(DocumentType.CCCD);
+                bool hasGPLX = verifiedDocTypes.Contains(DocumentType.DRIVER_LINCENSE);
+                bool hasGKSK = verifiedDocTypes.Contains(DocumentType.HEALTH_CHECK); // Giấy khám sức khỏe
+
+                if (!hasCCCD || !hasGPLX || !hasGKSK)
+                {
+                    return new ResponseDTO($"Tài xế chưa xác thực đủ giấy tờ bắt buộc. (CCCD: {hasCCCD}, GPLX: {hasGPLX}, GKSK: {hasGKSK})", 403, false);
+                }
+                // -------------------------------------------------------------
 
                 if (await _transactionService.IsUserRestrictedDueToDebtAsync(driver.UserId))
                 {
@@ -229,18 +253,37 @@ namespace BLL.Services.Impletement
                 var driver = await _unitOfWork.DriverRepo.GetByIdAsync(driverId);
                 if (driver == null) return new ResponseDTO("Driver not found.", 404, false);
 
-                if (await _transactionService.IsUserRestrictedDueToDebtAsync(driver.UserId))
+                // --- [MỚI] CHECK 1.1: STATUS ACTIVE ---
+                if (driver.Status != UserStatus.ACTIVE)
                 {
-                    return new ResponseDTO("Tài khoản đang bị hạn chế do dư nợ hoặc không đủ số dư tối thiểu.", 403, false);
+                    return new ResponseDTO("Tài khoản của bạn đang bị khóa hoặc chưa kích hoạt.", 403, false);
                 }
 
-                //// --- BƯỚC 0: CHECK GIẤY TỜ ---
-                var verifyCheck = await _userDocumentService.ValidateUserDocumentsAsync(driverId);
-                if (!verifyCheck.IsValid) return new ResponseDTO(verifyCheck.Message, 403, false);
-
+                // --- [MỚI] CHECK 1.2: LỊCH SỬ LÁI XE ---
                 if (!driver.HasDeclaredInitialHistory)
                 {
                     return new ResponseDTO("Bạn cần cập nhật lịch sử lái xe trong tuần hiện tại trước khi nhận chuyến đi đầu tiên.", 428, false);
+                }
+
+                // --- [MỚI] CHECK 1.3: GIẤY TỜ (CCCD, GPLX, GKSK) ---
+                var verifiedDocTypes = await _unitOfWork.UserDocumentRepo.GetAll()
+                    .Where(d => d.UserId == driverId && d.Status == VerifileStatus.ACTIVE)
+                    .Select(d => d.DocumentType)
+                    .ToListAsync();
+
+                bool hasCCCD = verifiedDocTypes.Contains(DocumentType.CCCD);
+                bool hasGPLX = verifiedDocTypes.Contains(DocumentType.DRIVER_LINCENSE);
+                bool hasGKSK = verifiedDocTypes.Contains(DocumentType.HEALTH_CHECK);
+
+                if (!hasCCCD || !hasGPLX || !hasGKSK)
+                {
+                    return new ResponseDTO($"Bạn chưa xác thực đủ giấy tờ. (CCCD: {hasCCCD}, GPLX: {hasGPLX}, GKSK: {hasGKSK})", 403, false);
+                }
+                // -------------------------------------------------------------
+
+                if (await _transactionService.IsUserRestrictedDueToDebtAsync(driver.UserId))
+                {
+                    return new ResponseDTO("Tài khoản đang bị hạn chế do dư nợ hoặc không đủ số dư tối thiểu.", 403, false);
                 }
 
                 var availability = await _driverWorkSessionService.CheckDriverAvailabilityAsync(driverId);
@@ -248,7 +291,6 @@ namespace BLL.Services.Impletement
                 {
                     return new ResponseDTO($"Bạn không thể nhận chuyến do đã quá giờ lái quy định. {availability.Message}", 400, false);
                 }
-
 
                 // ------------------------------------------------
 

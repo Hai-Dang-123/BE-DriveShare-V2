@@ -12,7 +12,7 @@ namespace DAL.Context
     public class DbSeeder
     {
         // ───────────────────────────────────────────────
-        // 🔹 ROLE IDs
+        // 🔹 1. ROLE IDs
         // ───────────────────────────────────────────────
         private static readonly Guid AdminRole = Guid.Parse("D4DAB1C3-6D48-4B23-8369-2D1C9C828F22");
         private static readonly Guid DriverRole = Guid.Parse("A1DAB1C3-6D48-4B23-8369-2D1C9C828F22");
@@ -21,83 +21,73 @@ namespace DAL.Context
         private static readonly Guid ProviderRole = Guid.Parse("F5DAB1C3-6D48-4B23-8369-2D1C9C828F22");
 
         // ───────────────────────────────────────────────
-        // 🔹 USER IDs
+        // 🔹 2. USER IDs
         // ───────────────────────────────────────────────
-        private static readonly Guid AdminID = Guid.Parse("12345678-90AB-CDEF-1234-567890ABCDEF");
-        private static readonly Guid DriverID = Guid.Parse("22345678-90AB-CDEF-1234-567890ABCDEF");
-        private static readonly Guid OwnerID = Guid.Parse("32345678-90AB-CDEF-1234-567890ABCDEF");
-        private static readonly Guid OwnerID_2 = Guid.Parse("69cf944d-7eee-4b23-ab1a-7f8412081635");
-        private static readonly Guid StaffID = Guid.Parse("42345678-90AB-CDEF-1234-567890ABCDEF");
-        private static readonly Guid ProviderID = Guid.Parse("62345678-90AB-CDEF-1234-567890ABCDEF");
-        private static readonly Guid ProviderID_02 = Guid.Parse("13f2b6c3-6bc0-48ef-877f-1c2e0c244c9c");
+        private static readonly Guid AdminID = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        private static readonly Guid StaffID = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
-        private static readonly Guid DriverID_2 = Guid.Parse("22345678-90AB-CDEF-0002-567890ABCDEF");
+        // --- SPECIFIC USERS (Theo yêu cầu) ---
+        private static readonly Guid Driver_DangLaiKP_ID = Guid.Parse("33333333-3333-3333-3333-333333333301");
+        private static readonly Guid Driver_DangLVH_ID = Guid.Parse("33333333-3333-3333-3333-333333333302");
+        private static readonly Guid Owner_VoLuong_ID = Guid.Parse("44444444-4444-4444-4444-444444444401");
+        private static readonly Guid Provider_HoangPM_ID = Guid.Parse("55555555-5555-5555-5555-555555555501");
 
-        // ───────────────────────────────────────────────
-        // 🔹 WALLET IDs
-        // ───────────────────────────────────────────────
-        private static readonly Guid AdminWalletID = Guid.Parse("11111111-1111-1111-1111-111111111111");
-        private static readonly Guid DriverWalletID = Guid.Parse("22222222-2222-2222-2222-222222222222");
-        private static readonly Guid OwnerWalletID = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        private static readonly Guid StaffWalletID = Guid.Parse("44444444-4444-4444-4444-444444444444");
-        private static readonly Guid ProviderWalletID = Guid.Parse("55555555-5555-5555-5555-555555555555");
-        private static readonly Guid DriverWalletID_2 = Guid.Parse("66666666-6666-6666-6666-666666666666");
-        private static readonly Guid OwnerWalletID_2 = Guid.Parse("77777777-7777-7777-7777-777777777777");
-        private static readonly Guid ProviderWalletID_02 = Guid.Parse("88888888-8888-8888-8888-888888888888");
-
+        // --- SAMPLE USERS (Mẫu) ---
+        private static readonly Guid Driver_Sample1_ID = Guid.Parse("33333333-3333-3333-3333-333333333311"); // Link Owner Approved
+        private static readonly Guid Driver_Sample2_ID = Guid.Parse("33333333-3333-3333-3333-333333333312"); // Link Owner Pending
+        private static readonly Guid Owner_Sample1_ID = Guid.Parse("44444444-4444-4444-4444-444444444411");
+        private static readonly Guid Owner_Sample2_ID = Guid.Parse("44444444-4444-4444-4444-444444444412");
+        private static readonly Guid Provider_Sample1_ID = Guid.Parse("55555555-5555-5555-5555-555555555511");
+        private static readonly Guid Provider_Sample2_ID = Guid.Parse("55555555-5555-5555-5555-555555555512");
 
         // ───────────────────────────────────────────────
-        // 🔹 TEMPLATE IDs (CONTRACT)
+        // 🔹 3. WALLET IDs (Tương ứng với User)
+        // ───────────────────────────────────────────────
+        // ... (Generated dựa trên logic UserID để code gọn hơn, xem hàm SeedWallets)
+
+        // ───────────────────────────────────────────────
+        // 🔹 4. TEMPLATE IDs
         // ───────────────────────────────────────────────
         private static readonly Guid ProviderContractTemplateID = Guid.Parse("C0100001-0001-0000-0000-000000000001");
         private static readonly Guid DriverContractTemplateID = Guid.Parse("C0200001-0002-0000-0000-000000000001");
-
-        // ───────────────────────────────────────────────
-        // 🔹 TEMPLATE IDs (DELIVERY RECORD - HÀNG HÓA)
-        // ───────────────────────────────────────────────
         private static readonly Guid PickupRecordTemplateID = Guid.Parse("D0100001-0003-0000-0000-000000000001");
         private static readonly Guid DropoffRecordTemplateID = Guid.Parse("D0200001-0004-0000-0000-000000000001");
-
-        // ───────────────────────────────────────────────
-        // 🔹 TEMPLATE IDs (VEHICLE HANDOVER - XE)  <-- MỚI THÊM
-        // ───────────────────────────────────────────────
-        // Dùng Guid khác biệt để dễ nhận diện (D03, D04)
         private static readonly Guid VehiclePickupTemplateID = Guid.Parse("D0300001-0005-0000-0000-000000000001");
         private static readonly Guid VehicleDropoffTemplateID = Guid.Parse("D0400001-0006-0000-0000-000000000001");
 
         // ───────────────────────────────────────────────
-        // 🔹 VEHICLE TYPE IDs
+        // 🔹 5. VEHICLE TYPE IDs
         // ───────────────────────────────────────────────
-        private static readonly Guid VehicleTypeID_1T5 = Guid.Parse("A0000001-0001-0000-0000-000000000001");
-        private static readonly Guid VehicleTypeID_8T = Guid.Parse("A0000002-0002-0000-0000-000000000001");
-        private static readonly Guid VehicleTypeID_Container = Guid.Parse("A0000003-0003-0000-0000-000000000001");
-        private static readonly Guid VehicleTypeID_Refrigerated = Guid.Parse("A0000004-0004-0000-0000-000000000001");
-
+        private static readonly Guid VT_1T5 = Guid.Parse("A0000001-0000-0000-0000-000000000001");
+        private static readonly Guid VT_2T5 = Guid.Parse("A0000002-0000-0000-0000-000000000001");
+        private static readonly Guid VT_5T = Guid.Parse("A0000003-0000-0000-0000-000000000001");
+        private static readonly Guid VT_8T = Guid.Parse("A0000004-0000-0000-0000-000000000001");
+        private static readonly Guid VT_Container = Guid.Parse("A0000005-0000-0000-0000-000000000001");
 
         // ───────────────────────────────────────────────
-        // 🔹 HÀM SEED CHÍNH
+        // 🔹 MAIN SEED METHOD
         // ───────────────────────────────────────────────
         public static void Seed(ModelBuilder modelBuilder)
         {
             SeedRole(modelBuilder);
             SeedUser(modelBuilder);
-            SeedWallets(modelBuilder);
+            SeedWallets(modelBuilder); // Setup tiền theo yêu cầu
             SeedDriver(modelBuilder);
             SeedOwner(modelBuilder);
             SeedProvider(modelBuilder);
 
-            SeedContractTemplates(modelBuilder);
-            SeedDeliveryRecordTemplates(modelBuilder); // Đã cập nhật thêm Xe
+            SeedContractTemplates(modelBuilder); // Nhiều term hơn
+            SeedDeliveryRecordTemplates(modelBuilder);
+            SeedVehicleType(modelBuilder); // Chỉ xe tải
 
-            SeedVehicleType(modelBuilder);
-
-            // [NEW] Seed Giấy tờ tùy thân
-            SeedUserDocuments(modelBuilder);
-            SeedOwnerDriverLinks(modelBuilder);
+            SeedUserDocuments(modelBuilder); // Full xác thực (CCCD, GPLX, GKSK)
+            SeedOwnerDriverLinks(modelBuilder); // Link Driver mẫu với Owner VoLuong
         }
 
-        // ... (Các hàm SeedRole, SeedUser, SeedWallets, SeedDriver, SeedOwner, SeedProvider, SeedContractTemplates giữ nguyên như cũ) ...
-        // Tôi ẩn bớt code cũ để tập trung vào phần thay đổi bên dưới
+        // ───────────────────────────────────────────────
+        // 🔹 SEED IMPLEMENTATION
+        // ───────────────────────────────────────────────
+
         private static void SeedRole(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Role>().HasData(
@@ -111,461 +101,543 @@ namespace DAL.Context
 
         private static void SeedUser(ModelBuilder modelBuilder)
         {
-            string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm"; // "123"
+            string pass = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm"; // Pass: "123"
+            var now = DateTime.UtcNow;
+
+            // ───────────────────────────────────────────────
+            // 1. ADMIN & STAFF (Trụ sở chính)
+            // ───────────────────────────────────────────────
             modelBuilder.Entity<BaseUser>().HasData(
-                new BaseUser { UserId = AdminID, FullName = "Admin_Name", Email = "admin@example.com", RoleId = AdminRole, PasswordHash = fixedHashedPassword, PhoneNumber = "0123456789", Status = UserStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, IsEmailVerified = true, IsPhoneVerified = true },
-                new BaseUser { UserId = StaffID, FullName = "Staff_Name", Email = "staff@example.com", RoleId = StaffRole, PasswordHash = fixedHashedPassword, PhoneNumber = "0445566777", Status = UserStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, IsEmailVerified = true, IsPhoneVerified = true }
-            );
-        }
-
-        //private static void SeedWallets(ModelBuilder modelBuilder)
-        //{
-        //    decimal initialBalance = 500000000m;
-        //    modelBuilder.Entity<Wallet>().HasData(
-        //        new Wallet { WalletId = AdminWalletID, UserId = AdminID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = DriverWalletID, UserId = DriverID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = OwnerWalletID, UserId = OwnerID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = StaffWalletID, UserId = StaffID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = ProviderWalletID, UserId = ProviderID, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow },
-        //        new Wallet { WalletId = DriverWalletID_2, UserId = DriverID_2, Balance = initialBalance, Currency = "VND", Status = WalletStatus.ACTIVE, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow }
-
-        //    );
-        //}
-        private static void SeedWallets(ModelBuilder modelBuilder)
-        {
-            decimal initialBalance = 500_000_000m;
-            var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-            modelBuilder.Entity<Wallet>().HasData(
-                // ADMIN
-                new Wallet
+                new BaseUser
                 {
-                    WalletId = AdminWalletID,
                     UserId = AdminID,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    FullName = "System Admin",
+                    Email = "admin@system.com",
+                    RoleId = AdminRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0909000999",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    LastUpdatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Khu Công Nghệ Cao, Q9
+                    Address = new Location("Lô E2a-7, Đường D1, Khu Công Nghệ Cao, P.Long Thạnh Mỹ, TP.Thủ Đức, TP.HCM", 10.855323, 106.785243)
                 },
-
-                // STAFF
-                new Wallet
+                new BaseUser
                 {
-                    WalletId = StaffWalletID,
                     UserId = StaffID,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
-                },
+                    FullName = "Support Staff",
+                    Email = "staff@system.com",
+                    RoleId = StaffRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0909000888",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    LastUpdatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Văn phòng đại diện Q1
+                    Address = new Location("Tòa nhà Bitexco, số 2 Hải Triều, Bến Nghé, Quận 1, TP.HCM", 10.771587, 106.704257)
+                }
+            );
 
-                // DRIVER 1
-                new Wallet
+            // ───────────────────────────────────────────────
+            // 2. DRIVERS (Tài xế)
+            // ───────────────────────────────────────────────
+            modelBuilder.Entity<BaseUser>().HasData(
+                // CỤ THỂ 1: Đặng Lai KP
+                new BaseUser
                 {
-                    WalletId = DriverWalletID,
-                    UserId = DriverID,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    UserId = Driver_DangLaiKP_ID,
+                    FullName = "Đặng Lai KP",
+                    Email = "danglaikp@gmail.com",
+                    RoleId = DriverRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0988111222",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Khu vực bến xe Miền Tây (Bình Tân)
+                    Address = new Location("395 Kinh Dương Vương, An Lạc, Bình Tân, TP.HCM", 10.742353, 106.615654)
                 },
-
-                // DRIVER 2
-                new Wallet
+                // CỤ THỂ 2: Đặng LVH
+                new BaseUser
                 {
-                    WalletId = DriverWalletID_2,
-                    UserId = DriverID_2,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    UserId = Driver_DangLVH_ID,
+                    FullName = "Đặng LVH",
+                    Email = "danglvhse151369@fpt.edu.vn",
+                    RoleId = DriverRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0988111333",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Khu vực Ngã 4 Thủ Đức
+                    Address = new Location("102 Lê Văn Việt, Hiệp Phú, TP.Thủ Đức, TP.HCM", 10.846512, 106.774921)
                 },
-
-                // OWNER 1
-                new Wallet
+                // MẪU 1
+                new BaseUser
                 {
-                    WalletId = OwnerWalletID,
-                    UserId = OwnerID,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    UserId = Driver_Sample1_ID,
+                    FullName = "Tài xế Mẫu 1",
+                    Email = "driver1@gmail.com",
+                    RoleId = DriverRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0988000001",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Bến xe An Sương
+                    Address = new Location("QL22, Bà Điểm, Hóc Môn, TP.HCM", 10.843940, 106.612883)
                 },
-
-                // OWNER 2
-                new Wallet
+                // MẪU 2
+                new BaseUser
                 {
-                    WalletId = OwnerWalletID_2,
-                    UserId = OwnerID_2,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    UserId = Driver_Sample2_ID,
+                    FullName = "Tài xế Mẫu 2",
+                    Email = "driver2@gmail.com",
+                    RoleId = DriverRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0988000002",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Khu công nghiệp Tân Bình
+                    Address = new Location("Lô II, Đường số 2, KCN Tân Bình, Tây Thạnh, Tân Phú, TP.HCM", 10.806623, 106.626354)
+                }
+            );
+
+            // ───────────────────────────────────────────────
+            // 3. OWNERS (Chủ xe)
+            // ───────────────────────────────────────────────
+            modelBuilder.Entity<BaseUser>().HasData(
+                // CỤ THỂ: Võ Lương Nhựt Tiến
+                new BaseUser
+                {
+                    UserId = Owner_VoLuong_ID,
+                    FullName = "Võ Lương Nhựt Tiến",
+                    Email = "voluongnhuttien@gmail.com",
+                    RoleId = OwnerRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0911222333",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Gần Cảng Cát Lái (Khu vực nhiều chủ xe)
+                    Address = new Location("1295 Nguyễn Thị Định, Cát Lái, TP.Thủ Đức, TP.HCM", 10.767895, 106.775874)
                 },
-
-                // PROVIDER 1
-                new Wallet
+                // MẪU 1
+                new BaseUser
                 {
-                    WalletId = ProviderWalletID,
-                    UserId = ProviderID,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    UserId = Owner_Sample1_ID,
+                    FullName = "Chủ xe Mẫu 1",
+                    Email = "owner1@gmail.com",
+                    RoleId = OwnerRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0911000001",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Khu vực Quận 7
+                    Address = new Location("456 Nguyễn Văn Linh, Tân Phú, Quận 7, TP.HCM", 10.729355, 106.721833)
                 },
-
-                // PROVIDER 2
-                new Wallet
+                // MẪU 2
+                new BaseUser
                 {
-                    WalletId = ProviderWalletID_02,
-                    UserId = ProviderID_02,
-                    Balance = initialBalance,
-                    Currency = "VND",
-                    Status = WalletStatus.ACTIVE,
-                    CreatedAt = seedTime,
-                    LastUpdatedAt = seedTime
+                    UserId = Owner_Sample2_ID,
+                    FullName = "Chủ xe Mẫu 2",
+                    Email = "owner2@gmail.com",
+                    RoleId = OwnerRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0911000002",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Bình Dương
+                    Address = new Location("Đại lộ Bình Dương, Phú Thọ, Thủ Dầu Một, Bình Dương", 10.980645, 106.674391)
+                }
+            );
+
+            // ───────────────────────────────────────────────
+            // 4. PROVIDERS (Chủ hàng / Nhà cung cấp)
+            // ───────────────────────────────────────────────
+            modelBuilder.Entity<BaseUser>().HasData(
+                // CỤ THỂ: Hoàng PM
+                new BaseUser
+                {
+                    UserId = Provider_HoangPM_ID,
+                    FullName = "Hoàng PM",
+                    Email = "hoangpmse171847@fpt.edu.vn",
+                    RoleId = ProviderRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0933444555",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Chợ Đầu Mối Nông Sản Thủ Đức (Phù hợp với Provider)
+                    Address = new Location("QL1A, Tam Bình, TP.Thủ Đức, TP.HCM", 10.868743, 106.745421)
+                },
+                // MẪU 1
+                new BaseUser
+                {
+                    UserId = Provider_Sample1_ID,
+                    FullName = "Nhà cung cấp Mẫu 1",
+                    Email = "provider1@gmail.com",
+                    RoleId = ProviderRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0933000001",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: KCN Sóng Thần
+                    Address = new Location("Đại lộ Độc Lập, An Bình, Dĩ An, Bình Dương", 10.902621, 106.747388)
+                },
+                // MẪU 2
+                new BaseUser
+                {
+                    UserId = Provider_Sample2_ID,
+                    FullName = "Nhà cung cấp Mẫu 2",
+                    Email = "provider2@gmail.com",
+                    RoleId = ProviderRole,
+                    PasswordHash = pass,
+                    PhoneNumber = "0933000002",
+                    Status = UserStatus.ACTIVE,
+                    CreatedAt = now,
+                    IsEmailVerified = true,
+                    IsPhoneVerified = true,
+                    AvatarUrl = null,
+                    // Địa chỉ: Chợ Bình Điền
+                    Address = new Location("Đại lộ Nguyễn Văn Linh, Khu Phố 6, Quận 8, TP.HCM", 10.716321, 106.626743)
                 }
             );
         }
+
+        private static void SeedWallets(ModelBuilder modelBuilder)
+        {
+            var now = DateTime.UtcNow;
+            decimal defaultBalance = 500_000_000m; // 500 triệu
+            decimal providerSpecialBalance = 14_900_000m; // 14 triệu 900
+
+            var wallets = new List<Wallet>();
+
+            // Helper function
+            void AddWallet(Guid userId, decimal balance)
+            {
+                wallets.Add(new Wallet
+                {
+                    WalletId = Guid.NewGuid(),
+                    UserId = userId,
+                    Balance = balance,
+                    Currency = "VND",
+                    Status = WalletStatus.ACTIVE,
+                    CreatedAt = now,
+                    LastUpdatedAt = now
+                });
+            }
+
+            // Add Wallets
+            AddWallet(AdminID, defaultBalance);
+            AddWallet(StaffID, defaultBalance);
+
+            // Drivers
+            AddWallet(Driver_DangLaiKP_ID, defaultBalance);
+            AddWallet(Driver_DangLVH_ID, defaultBalance);
+            AddWallet(Driver_Sample1_ID, defaultBalance);
+            AddWallet(Driver_Sample2_ID, defaultBalance);
+
+            // Owners
+            AddWallet(Owner_VoLuong_ID, defaultBalance);
+            AddWallet(Owner_Sample1_ID, defaultBalance);
+            AddWallet(Owner_Sample2_ID, defaultBalance);
+
+            // Providers
+            AddWallet(Provider_HoangPM_ID, providerSpecialBalance); // <-- 14.900.000
+            AddWallet(Provider_Sample1_ID, defaultBalance);
+            AddWallet(Provider_Sample2_ID, defaultBalance);
+
+            modelBuilder.Entity<Wallet>().HasData(wallets);
+        }
+
         private static void SeedDriver(ModelBuilder modelBuilder)
         {
-            string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
-            modelBuilder.Entity<Driver>().HasData(
-                new Driver { UserId = DriverID, FullName = "Tài xế Văn A", Email = "tienvo5668@gmail.com", PhoneNumber = "0987654321", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1990, 5, 15), IsEmailVerified = true, IsPhoneVerified = true, RoleId = DriverRole, LicenseNumber = "GPLX12345", LicenseClass = "B2", LicenseExpiryDate = DateTime.UtcNow.AddYears(5), IsLicenseVerified = true, DriverStatus = DriverStatus.AVAILABLE, HasDeclaredInitialHistory = true },
-                new Driver { UserId = DriverID_2, FullName = "Tài xế Văn B", Email = "driver2@example.com", PhoneNumber = "0987111222", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1995, 1, 1), IsEmailVerified = true, IsPhoneVerified = true, RoleId = DriverRole, LicenseNumber = "GPLX67890", LicenseClass = "C", LicenseExpiryDate = DateTime.UtcNow.AddYears(3), IsLicenseVerified = true, DriverStatus = DriverStatus.AVAILABLE , HasDeclaredInitialHistory = true}
-            );
+            var drivers = new List<Driver>
+            {
+                CreateDriverEntity(Driver_DangLaiKP_ID, "GPLX_DLKP", "C"),
+                CreateDriverEntity(Driver_DangLVH_ID, "GPLX_DLVH", "C"),
+                CreateDriverEntity(Driver_Sample1_ID, "GPLX_S1", "C"),
+                CreateDriverEntity(Driver_Sample2_ID, "GPLX_S2", "B2")
+            };
+            modelBuilder.Entity<Driver>().HasData(drivers);
+        }
+
+        private static Driver CreateDriverEntity(Guid userId, string license, string cls)
+        {
+            return new Driver
+            {
+                UserId = userId,
+                DateOfBirth = new DateTime(1995, 1, 1),
+                LicenseNumber = license,
+                LicenseClass = cls,
+                LicenseExpiryDate = DateTime.UtcNow.AddYears(5),
+                IsLicenseVerified = true, // Đã xác thực
+                DriverStatus = DriverStatus.AVAILABLE,
+                HasDeclaredInitialHistory = true
+            };
         }
 
         private static void SeedOwner(ModelBuilder modelBuilder)
         {
-            string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
-            modelBuilder.Entity<Owner>().HasData(
-                new Owner { UserId = OwnerID, FullName = "Owner_Name", Email = "trangphse171412@fpt.edu.vn", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m },
-                new Owner { UserId = OwnerID_2, FullName = "Owner_Name_2", Email = "voluongnhuttien@gmail.com", PhoneNumber = "0112233445", PasswordHash = fixedHashedPassword, CreatedAt = DateTime.UtcNow, LastUpdatedAt = DateTime.UtcNow, Status = UserStatus.ACTIVE, DateOfBirth = new DateTime(1985, 10, 20), IsEmailVerified = true, IsPhoneVerified = true, RoleId = OwnerRole, CompanyName = "Công ty Vận Tải ABC", TaxCode = "0312345678", AverageRating = 4.5m }
+            var owners = new List<Owner>
+            {
+                CreateOwnerEntity(Owner_VoLuong_ID, "Công ty Vận tải Võ Lương", "MST001"),
+                CreateOwnerEntity(Owner_Sample1_ID, "Vận tải Mẫu 1", "MST002"),
+                CreateOwnerEntity(Owner_Sample2_ID, "Vận tải Mẫu 2", "MST003")
+            };
+            modelBuilder.Entity<Owner>().HasData(owners);
+        }
 
-            );
+        private static Owner CreateOwnerEntity(Guid userId, string company, string tax)
+        {
+            return new Owner
+            {
+                UserId = userId,
+                DateOfBirth = new DateTime(1985, 1, 1),
+                CompanyName = company,
+                TaxCode = tax,
+                AverageRating = 5.0m
+            };
         }
 
         private static void SeedProvider(ModelBuilder modelBuilder)
         {
-            string fixedHashedPassword = "$2a$11$rTz6DZiEeBqhVrzF25CgTOBPf41jpn2Tg/nnIqnX8KS6uIerB/1dm";
-            modelBuilder.Entity<Provider>().HasData(
-                new Provider
-                {
-                    // --- BaseUser Fields ---
-                    UserId = ProviderID,
-                    FullName = "Provider_Name",
-                    Email = "danglvhse151369@fpt.edu.vn",
-                    PhoneNumber = "0556677889",
-                    PasswordHash = fixedHashedPassword,
-                    CreatedAt = DateTime.UtcNow,
-                    LastUpdatedAt = DateTime.UtcNow,
-                    Status = UserStatus.ACTIVE,
-                    DateOfBirth = new DateTime(1988, 3, 1),
-                    IsEmailVerified = true,
-                    IsPhoneVerified = true,
-                    RoleId = ProviderRole,
+            var providers = new List<Provider>
+            {
+                CreateProviderEntity(Provider_HoangPM_ID, "Nông sản Hoàng PM", "MST_P001"),
+                CreateProviderEntity(Provider_Sample1_ID, "Kho hàng Mẫu 1", "MST_P002"),
+                CreateProviderEntity(Provider_Sample2_ID, "Kho hàng Mẫu 2", "MST_P003")
+            };
+            modelBuilder.Entity<Provider>().HasData(providers);
+        }
 
-                    // --- Provider Specific Fields ---
-                    CompanyName = "Nhà cung cấp XYZ",
-                    TaxCode = "0401234567",
-                    AverageRating = 4.8m
-                },
-                 new Provider
-                 {
-                     // --- BaseUser Fields ---
-                     UserId = ProviderID_02,
-                     FullName = "Provider_Name_2",
-                     Email = "tienvlnse172689@fpt.edu.vn",
-                     PhoneNumber = "094792002",
-                     PasswordHash = fixedHashedPassword,
-                     CreatedAt = DateTime.UtcNow,
-                     LastUpdatedAt = DateTime.UtcNow,
-                     Status = UserStatus.ACTIVE,
-                     DateOfBirth = new DateTime(1988, 3, 1),
-                     IsEmailVerified = true,
-                     IsPhoneVerified = true,
-                     RoleId = ProviderRole,
-
-                     // --- Provider Specific Fields ---
-                     CompanyName = "Nhà cung cấp XYZ",
-                     TaxCode = "0401234567",
-                     AverageRating = 4.8m
-                 }
-            );
+        private static Provider CreateProviderEntity(Guid userId, string company, string tax)
+        {
+            return new Provider
+            {
+                UserId = userId,
+                DateOfBirth = new DateTime(1990, 5, 5),
+                CompanyName = company,
+                TaxCode = tax,
+                AverageRating = 4.9m
+            };
         }
 
         private static void SeedContractTemplates(ModelBuilder modelBuilder)
         {
-            var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var now = DateTime.UtcNow;
+
+            // 1. PROVIDER CONTRACT (Owner - Provider)
             modelBuilder.Entity<ContractTemplate>().HasData(
-                new ContractTemplate { ContractTemplateId = ProviderContractTemplateID, ContractTemplateName = "Hợp đồng Vận chuyển (Owner-Provider)", Version = "1.0", Type = ContractType.PROVIDER_CONTRACT, CreatedAt = seedTime },
-                new ContractTemplate { ContractTemplateId = DriverContractTemplateID, ContractTemplateName = "Hợp đồng Thuê Tài xế (Owner-Driver)", Version = "1.0", Type = ContractType.DRIVER_CONTRACT, CreatedAt = seedTime }
+                new ContractTemplate { ContractTemplateId = ProviderContractTemplateID, ContractTemplateName = "Hợp đồng Vận chuyển Hàng hóa", Version = "2.0 VN", Type = ContractType.PROVIDER_CONTRACT, CreatedAt = now }
             );
+
             modelBuilder.Entity<ContractTerm>().HasData(
-                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 1, Content = "Bên A (Chủ xe) đồng ý cung cấp dịch vụ vận tải theo các điều khoản đã thỏa thuận." },
-                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 2, Content = "Bên B (Chủ hàng/Provider) đồng ý thanh toán cước phí vận chuyển đúng hạn." },
-                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 3, Content = "Trách nhiệm bồi thường thiệt hại sẽ được áp dụng theo quy định hiện hành nếu hàng hóa bị hư hỏng, mất mát do lỗi của Bên A." },
-                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 4, Content = "Hợp đồng có hiệu lực kể từ thời điểm cả hai bên xác nhận ký." },
-                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 1, Content = "Bên A (Chủ xe) đồng ý thuê Bên B (Tài xế) để thực hiện các chuyến vận chuyển được chỉ định." },
-                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 2, Content = "Bên B (Tài xế) có trách nhiệm bảo quản phương tiện, hàng hóa và tuân thủ các quy định về an toàn giao thông." }
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 1, Content = "Điều 1: Bên A (Chủ xe) cam kết cung cấp phương tiện vận tải đúng chủng loại, tải trọng và thời gian theo yêu cầu của Bên B (Chủ hàng)." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 2, Content = "Điều 2: Bên B có trách nhiệm đóng gói hàng hóa đúng quy cách, đảm bảo an toàn trong quá trình vận chuyển và bốc dỡ." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 3, Content = "Điều 3: Cước phí vận chuyển được tính dựa trên báo giá trên hệ thống tại thời điểm chốt đơn. Bên B thanh toán 100% qua ví điện tử sau khi hoàn tất giao hàng." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 4, Content = "Điều 4: Trong trường hợp bất khả kháng (thiên tai, dịch bệnh, cấm đường), hai bên sẽ thương lượng để gia hạn thời gian hoặc hủy bỏ chuyến hàng mà không phạt vi phạm." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = ProviderContractTemplateID, Order = 5, Content = "Điều 5: Bên A chịu trách nhiệm bồi thường 100% giá trị hàng hóa nếu xảy ra mất mát, hư hỏng do lỗi chủ quan của tài xế." }
+            );
+
+            // 2. DRIVER CONTRACT (Owner - Driver)
+            modelBuilder.Entity<ContractTemplate>().HasData(
+                new ContractTemplate { ContractTemplateId = DriverContractTemplateID, ContractTemplateName = "Hợp đồng Hợp tác Lái xe", Version = "2.0 VN", Type = ContractType.DRIVER_CONTRACT, CreatedAt = now }
+            );
+
+            modelBuilder.Entity<ContractTerm>().HasData(
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 1, Content = "Điều 1: Bên A (Chủ xe) đồng ý giao phương tiện cho Bên B (Tài xế) để khai thác dịch vụ vận tải." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 2, Content = "Điều 2: Bên B cam kết có đầy đủ giấy phép lái xe hợp lệ, đủ sức khỏe và không sử dụng chất kích thích trong quá trình làm việc." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 3, Content = "Điều 3: Bên B có trách nhiệm bảo quản, giữ gìn vệ sinh và bảo dưỡng xe định kỳ theo quy định của Bên A." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 4, Content = "Điều 4: Thu nhập của Bên B được chia sẻ theo tỷ lệ phần trăm doanh thu chuyến xe hoặc lương cố định tùy theo thỏa thuận cụ thể trên ứng dụng." },
+                new ContractTerm { ContractTermId = Guid.NewGuid(), ContractTemplateId = DriverContractTemplateID, Order = 5, Content = "Điều 5: Mọi hành vi gian lận, trộm cắp nhiên liệu hoặc hàng hóa sẽ bị chấm dứt hợp đồng ngay lập tức và truy cứu trách nhiệm hình sự." }
             );
         }
 
-        // ───────────────────────────────────────────────
-        // 🔹 DELIVERY RECORD TEMPLATES (CẬP NHẬT THÊM XE)
-        // ───────────────────────────────────────────────
         private static void SeedDeliveryRecordTemplates(ModelBuilder modelBuilder)
         {
-            var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var now = DateTime.UtcNow;
 
+            // --- HÀNG HÓA ---
             modelBuilder.Entity<DeliveryRecordTemplate>().HasData(
-                // --- 1. MẪU GIAO NHẬN HÀNG HÓA (CARGO) ---
-                new DeliveryRecordTemplate
-                {
-                    DeliveryRecordTemplateId = PickupRecordTemplateID,
-                    TemplateName = "Biên bản Giao hàng (Tài xế nhận hàng)",
-                    Version = "1.0",
-                    Type = DeliveryRecordType.PICKUP, // Loại PICKUP
-                    Status = DeliveryRecordTemplateStatus.ACTIVE,
-                    CreatedAt = seedTime
-                },
-                new DeliveryRecordTemplate
-                {
-                    DeliveryRecordTemplateId = DropoffRecordTemplateID,
-                    TemplateName = "Biên bản Trả hàng (Tài xế trả hàng)",
-                    Version = "1.0",
-                    Type = DeliveryRecordType.DROPOFF, // Loại DROPOFF
-                    Status = DeliveryRecordTemplateStatus.ACTIVE,
-                    CreatedAt = seedTime
-                },
-
-                // --- 2. MẪU GIAO NHẬN XE (VEHICLE HANDOVER) - MỚI ---
-                new DeliveryRecordTemplate
-                {
-                    DeliveryRecordTemplateId = VehiclePickupTemplateID,
-                    TemplateName = "Biên bản Bàn Giao Xe (Chủ xe -> Tài xế)",
-                    Version = "1.0",
-                    Type = DeliveryRecordType.HANDOVER, // Vẫn dùng PICKUP nhưng context là Xe
-                    Status = DeliveryRecordTemplateStatus.ACTIVE,
-                    CreatedAt = seedTime
-                },
-                new DeliveryRecordTemplate
-                {
-                    DeliveryRecordTemplateId = VehicleDropoffTemplateID,
-                    TemplateName = "Biên bản Thu Hồi Xe (Tài xế -> Chủ xe)",
-                    Version = "1.0",
-                    Type = DeliveryRecordType.RETURN, // Vẫn dùng DROPOFF nhưng context là Xe
-                    Status = DeliveryRecordTemplateStatus.ACTIVE,
-                    CreatedAt = seedTime
-                }
+                new DeliveryRecordTemplate { DeliveryRecordTemplateId = PickupRecordTemplateID, TemplateName = "Biên bản Giao nhận Hàng (Pickup)", Version = "1.0", Type = DeliveryRecordType.PICKUP, Status = DeliveryRecordTemplateStatus.ACTIVE, CreatedAt = now },
+                new DeliveryRecordTemplate { DeliveryRecordTemplateId = DropoffRecordTemplateID, TemplateName = "Biên bản Bàn giao Hàng (Dropoff)", Version = "1.0", Type = DeliveryRecordType.DROPOFF, Status = DeliveryRecordTemplateStatus.ACTIVE, CreatedAt = now }
             );
 
-            // --- TERMS (ĐIỀU KHOẢN CHI TIẾT) ---
+            // Terms Hàng hóa (Giữ nguyên hoặc thêm nếm tùy ý, ở đây giữ cơ bản cho gọn)
             modelBuilder.Entity<DeliveryRecordTerm>().HasData(
-                // A. Terms cho GIAO HÀNG (CARGO PICKUP)
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 1, Content = "Tài xế đã xác nhận số lượng, chủng loại hàng hóa đúng với thông tin trên ứng dụng." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 2, Content = "Tình trạng hàng hóa bên ngoài nguyên vẹn, không móp méo, ướt, hoặc rách vỡ." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 3, Content = "Tài xế đã chụp ảnh xác nhận tình trạng hàng hóa khi nhận." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = PickupRecordTemplateID, DisplayOrder = 1, Content = "Đã kiểm tra số lượng và ngoại quan hàng hóa." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 1, Content = "Đã nhận đủ hàng, bao bì nguyên vẹn." }
+            );
 
-                // B. Terms cho TRẢ HÀNG (CARGO DROPOFF)
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 1, Content = "Người nhận đã xác nhận số lượng, chủng loại hàng hóa đúng với thông tin trên ứng dụng." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 2, Content = "Tình trạng hàng hóa bên ngoài nguyên vẹn. Người nhận không có khiếu nại về tình trạng bên ngoài của hàng hóa." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = DropoffRecordTemplateID, DisplayOrder = 3, Content = "Người nhận đã ký tên/chụp ảnh xác nhận đã nhận hàng." },
+            // --- XE (HANDOVER) ---
+            modelBuilder.Entity<DeliveryRecordTemplate>().HasData(
+                new DeliveryRecordTemplate { DeliveryRecordTemplateId = VehiclePickupTemplateID, TemplateName = "Biên bản Giao Xe (Cho tài xế)", Version = "1.0", Type = DeliveryRecordType.HANDOVER, Status = DeliveryRecordTemplateStatus.ACTIVE, CreatedAt = now },
+                new DeliveryRecordTemplate { DeliveryRecordTemplateId = VehicleDropoffTemplateID, TemplateName = "Biên bản Thu Hồi Xe", Version = "1.0", Type = DeliveryRecordType.RETURN, Status = DeliveryRecordTemplateStatus.ACTIVE, CreatedAt = now }
+            );
 
-                // C. Terms cho GIAO XE (VEHICLE PICKUP - Giao cho tài xế)
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 1, Content = "Giấy tờ xe đầy đủ (Đăng ký, Đăng kiểm, Bảo hiểm bắt buộc)." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 2, Content = "Hệ thống đèn (Pha, cos, xi-nhan, phanh) và còi hoạt động bình thường." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 3, Content = "Lốp xe (bao gồm lốp dự phòng) đủ áp suất, gai lốp còn tốt." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 4, Content = "Ngoại thất xe sạch sẽ, các vết trầy xước cũ (nếu có) đã được ghi nhận." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 5, Content = "Nội thất xe sạch sẽ, không có mùi lạ, điều hòa hoạt động tốt." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 6, Content = "Mức nhiên liệu và số Odometer đã được ghi nhận chính xác trên ứng dụng." },
-
-                // D. Terms cho TRẢ XE (VEHICLE DROPOFF - Nhận lại từ tài xế)
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehicleDropoffTemplateID, DisplayOrder = 1, Content = "Ngoại thất xe nguyên vẹn như lúc nhận (không phát sinh vết trầy xước/móp méo mới)." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehicleDropoffTemplateID, DisplayOrder = 2, Content = "Nội thất xe sạch sẽ, tài xế đã dọn dẹp rác cá nhân." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehicleDropoffTemplateID, DisplayOrder = 3, Content = "Tài xế bàn giao đầy đủ chìa khóa và giấy tờ xe gốc." },
-                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehicleDropoffTemplateID, DisplayOrder = 4, Content = "Mức nhiên liệu khi trả tương đương hoặc đúng theo thỏa thuận so với lúc nhận." }
+            // Terms Xe
+            modelBuilder.Entity<DeliveryRecordTerm>().HasData(
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 1, Content = "Giấy tờ xe (Đăng ký, Bảo hiểm) đầy đủ." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehiclePickupTemplateID, DisplayOrder = 2, Content = "Tình trạng lốp, đèn, còi hoạt động tốt." },
+                new DeliveryRecordTerm { DeliveryRecordTermId = Guid.NewGuid(), DeliveryRecordTemplateId = VehicleDropoffTemplateID, DisplayOrder = 1, Content = "Xe sạch sẽ, không phát sinh va quẹt mới." }
             );
         }
 
         private static void SeedVehicleType(ModelBuilder modelBuilder)
         {
+            // Chỉ tập trung vào xe tải
             modelBuilder.Entity<VehicleType>().HasData(
-                new VehicleType { VehicleTypeId = VehicleTypeID_1T5, VehicleTypeName = "Xe tải 1.5 tấn", Description = "Xe tải hạng nhẹ, phù hợp chở hàng nội thành." },
-                new VehicleType { VehicleTypeId = VehicleTypeID_8T, VehicleTypeName = "Xe tải 8 tấn", Description = "Xe tải hạng trung (2 chân), chở hàng liên tỉnh." },
-                new VehicleType { VehicleTypeId = VehicleTypeID_Container, VehicleTypeName = "Xe đầu kéo", Description = "Xe đầu kéo chuyên dụng chở container 20ft hoặc 40ft." },
-                new VehicleType { VehicleTypeId = VehicleTypeID_Refrigerated, VehicleTypeName = "Xe tải thùng lạnh", Description = "Xe tải chuyên dụng có thùng giữ nhiệt, chở hàng đông lạnh." }
+                new VehicleType { VehicleTypeId = VT_1T5, VehicleTypeName = "Xe tải 1.5 Tấn", Description = "Xe tải nhẹ chạy nội thành, kích thước nhỏ gọn." },
+                new VehicleType { VehicleTypeId = VT_2T5, VehicleTypeName = "Xe tải 2.5 Tấn", Description = "Xe tải nhẹ, phù hợp chuyển nhà hoặc hàng tiêu dùng." },
+                new VehicleType { VehicleTypeId = VT_5T, VehicleTypeName = "Xe tải 5 Tấn", Description = "Xe tải trung, thùng dài 6m." },
+                new VehicleType { VehicleTypeId = VT_8T, VehicleTypeName = "Xe tải 8 Tấn", Description = "Xe tải hạng nặng 2 chân, chuyên chạy liên tỉnh." },
+                new VehicleType
+                {
+                    VehicleTypeId = VT_Container, // (Giữ nguyên ID cũ hoặc đổi tên biến tùy bạn)
+                    VehicleTypeName = "Xe đông lạnh", // Tên có chữ "lạnh" -> Hợp lệ với logic check
+                    Description = "Xe tải chuyên dụng có hệ thống làm lạnh bảo quản thực phẩm tươi sống."
+                }
             );
         }
 
         // ───────────────────────────────────────────────
-        // 🔹 USER DOCUMENTS (EKYC DATA) - [NEW]
+        // 🔹 SEED DOCUMENTS (FULL CCCD + DRIVER DOCS)
         // ───────────────────────────────────────────────
         private static void SeedUserDocuments(ModelBuilder modelBuilder)
         {
-            var seedTime = new DateTime(2025, 1, 15, 10, 30, 0, DateTimeKind.Utc);
+            var docs = new List<UserDocument>();
+            var now = DateTime.UtcNow;
 
-            modelBuilder.Entity<UserDocument>().HasData(
-                // 1. DRIVER 1: Đã xác thực đầy đủ (CCCD + GPLX)
-                new UserDocument
+            // List tất cả User cần tạo CCCD
+            var allUsers = new List<(Guid Id, string Name)>
+            {
+                (Driver_DangLaiKP_ID, "DANG LAI KP"), (Driver_DangLVH_ID, "DANG LVH"),
+                (Driver_Sample1_ID, "TAI XE MAU 1"), (Driver_Sample2_ID, "TAI XE MAU 2"),
+                (Owner_VoLuong_ID, "VO LUONG NHUT TIEN"), (Owner_Sample1_ID, "CHU XE MAU 1"), (Owner_Sample2_ID, "CHU XE MAU 2"),
+                (Provider_HoangPM_ID, "HOANG PM"), (Provider_Sample1_ID, "PROVIDER MAU 1"), (Provider_Sample2_ID, "PROVIDER MAU 2")
+            };
+
+            // 1. Tạo CCCD cho TẤT CẢ mọi người
+            foreach (var user in allUsers)
+            {
+                docs.Add(new UserDocument
                 {
                     UserDocumentId = Guid.NewGuid(),
-                    UserId = DriverID, // Tài xế Văn A
+                    UserId = user.Id,
                     DocumentType = DocumentType.CCCD,
-                    Status = VerifileStatus.ACTIVE,
-                    IdentityNumber = "079090001234",
-                    FullName = "TÀI XẾ VĂN A",
-                    DateOfBirth = new DateTime(1990, 5, 15),
-                    PlaceOfOrigin = "Hồ Chí Minh",
-                    PlaceOfResidence = "123 Lê Lợi, Q1, TP.HCM",
-                    IssueDate = new DateTime(2021, 5, 15),
-                    ExpiryDate = new DateTime(2041, 5, 15),
-                    IssuePlace = "Cục Cảnh sát QLHC về TTXH",
-                    FrontImageUrl = "https://example.com/driver1_cccd_front.jpg",
-                    BackImageUrl = "https://example.com/driver1_cccd_back.jpg",
-                    PortraitImageUrl = "https://example.com/driver1_face.jpg",
+                    Status = VerifileStatus.ACTIVE, // Đã xác thực
+                    IdentityNumber = "07909" + new Random().Next(1000000, 9999999),
+                    FullName = user.Name,
+                    DateOfBirth = new DateTime(1990, 1, 1),
+                    IssueDate = now.AddYears(-2),
+                    ExpiryDate = now.AddYears(10),
+                    FrontImageUrl = "https://img.vn/cccd_front.jpg",
+                    BackImageUrl = "https://img.vn/cccd_back.jpg",
                     IsDocumentReal = true,
-                    FaceMatchScore = 98.5,
-                    CreatedAt = seedTime,
-                    VerifiedAt = seedTime
-                },
-                new UserDocument
+                    FaceMatchScore = 99.9,
+                    VerifiedAt = now
+                });
+            }
+
+            // 2. Tạo GPLX & GKSK cho TẤT CẢ DRIVER
+            var drivers = new List<Guid> { Driver_DangLaiKP_ID, Driver_DangLVH_ID, Driver_Sample1_ID, Driver_Sample2_ID };
+
+            foreach (var drvId in drivers)
+            {
+                // GPLX (Driver License)
+                docs.Add(new UserDocument
                 {
                     UserDocumentId = Guid.NewGuid(),
-                    UserId = DriverID,
+                    UserId = drvId,
                     DocumentType = DocumentType.DRIVER_LINCENSE,
                     Status = VerifileStatus.ACTIVE,
-                    IdentityNumber = "790123456789", // Số bằng lái
-                    FullName = "TÀI XẾ VĂN A",
-                    DateOfBirth = new DateTime(1990, 5, 15),
-                    LicenseClass = "C", // Bằng C
-                    IssueDate = new DateTime(2020, 1, 10),
-                    ExpiryDate = new DateTime(2025, 1, 10),
-                    IssuePlace = "Sở GTVT TP.HCM",
-                    FrontImageUrl = "https://example.com/driver1_license_front.jpg",
-                    BackImageUrl = "https://example.com/driver1_license_back.jpg",
+                    IdentityNumber = "GPLX" + new Random().Next(100000, 999999),
+                    IssueDate = now.AddYears(-1),
+                    ExpiryDate = now.AddYears(4),
+                    FrontImageUrl = "https://img.vn/gplx_front.jpg",
+                    BackImageUrl = "https://img.vn/gplx_back.jpg",
                     IsDocumentReal = true,
-                    CreatedAt = seedTime,
-                    VerifiedAt = seedTime
-                },
+                    VerifiedAt = now
+                });
 
-                // 2. DRIVER 2: Mới đăng ký, chưa xác thực (Để test luồng verify)
-                // (Không seed data cho DriverID_2 để giả lập trường hợp chưa có gì)
-
-                // 3. OWNER 1: Đã xác thực CCCD (Owner chỉ cần CCCD)
-                new UserDocument
+                // GKSK (Health Check) - Giả sử Enum có HEALTH_CHECK, nếu chưa có bạn cần thêm vào Enum
+                docs.Add(new UserDocument
                 {
                     UserDocumentId = Guid.NewGuid(),
-                    UserId = OwnerID, // Owner Name
-                    DocumentType = DocumentType.CCCD,
+                    UserId = drvId,
+                    DocumentType = DocumentType.HEALTH_CHECK, // Cần đảm bảo Enum có cái này
                     Status = VerifileStatus.ACTIVE,
-                    IdentityNumber = "079085005678",
-                    FullName = "OWNER NAME",
-                    DateOfBirth = new DateTime(1985, 10, 20),
-                    PlaceOfOrigin = "Hà Nội",
-                    PlaceOfResidence = "456 Nguyễn Huệ, Q1, TP.HCM",
-                    IssueDate = new DateTime(2018, 10, 20),
-                    ExpiryDate = new DateTime(2038, 10, 20),
-                    IssuePlace = "Cục Cảnh sát ĐKQL cư trú và DLQG về dân cư",
-                    FrontImageUrl = "https://example.com/owner1_cccd_front.jpg",
-                    BackImageUrl = "https://example.com/owner1_cccd_back.jpg",
-                    PortraitImageUrl = "https://example.com/owner1_face.jpg",
+                    IssueDate = now.AddMonths(-1), // Mới khám
+                    ExpiryDate = now.AddMonths(5), // Hết hạn sau 6 tháng
+                    FrontImageUrl = "https://img.vn/health_check.jpg",
                     IsDocumentReal = true,
-                    FaceMatchScore = 95.0,
-                    CreatedAt = seedTime,
-                    VerifiedAt = seedTime
-                },
+                    VerifiedAt = now
+                });
+            }
 
-                // 4. OWNER 2: Bị từ chối (Để test luồng Rejection / Manual Review)
-                new UserDocument
-                {
-                    UserDocumentId = Guid.NewGuid(),
-                    UserId = OwnerID_2, // Owner Name 2
-                    DocumentType = DocumentType.CCCD,
-                    Status = VerifileStatus.REJECTED, // Bị từ chối
-                    RejectionReason = "Ảnh mờ, không nhìn rõ số CMND; Nghi vấn chỉnh sửa ảnh.",
-                    FrontImageUrl = "https://example.com/owner2_cccd_front_blur.jpg",
-                    BackImageUrl = "https://example.com/owner2_cccd_back.jpg",
-                    CreatedAt = DateTime.UtcNow.AddDays(-1), // Tạo hôm qua
-                    LastUpdatedAt = DateTime.UtcNow
-                },
+            modelBuilder.Entity<UserDocument>().HasData(docs);
+        }
 
-                // 5. PROVIDER 1: Đã xác thực
-                new UserDocument
-                {
-                    UserDocumentId = Guid.NewGuid(),
-                    UserId = ProviderID,
-                    DocumentType = DocumentType.CCCD,
-                    Status = VerifileStatus.ACTIVE,
-                    IdentityNumber = "079088009999",
-                    FullName = "PROVIDER NAME",
-                    DateOfBirth = new DateTime(1988, 3, 1),
-                    PlaceOfOrigin = "Đà Nẵng",
-                    IssueDate = new DateTime(2019, 1, 1),
-                    ExpiryDate = new DateTime(2039, 1, 1),
-                    FrontImageUrl = "https://example.com/provider_cccd.jpg",
-                    IsDocumentReal = true,
-                    FaceMatchScore = 92.0,
-                    CreatedAt = seedTime,
-                    VerifiedAt = seedTime
-                }
-            );
-        } 
-        
-
-    // ───────────────────────────────────────────────
-        // 🔹 OWNER DRIVER LINKS (SEED ĐỘI XE) - [NEW]
+        // ───────────────────────────────────────────────
+        // 🔹 SEED OWNER-DRIVER LINKS
         // ───────────────────────────────────────────────
         private static void SeedOwnerDriverLinks(ModelBuilder modelBuilder)
         {
-            var seedTime = new DateTime(2025, 1, 15, 10, 30, 0, DateTimeKind.Utc);
+            var now = DateTime.UtcNow;
 
             modelBuilder.Entity<OwnerDriverLink>().HasData(
-                // 1. Mối quan hệ ĐÃ DUYỆT (Tài xế Văn A thuộc đội của Owner Name)
+                // 1. Driver Mẫu 1 -> Owner VoLuong: APPROVED (Được duyệt)
                 new OwnerDriverLink
                 {
                     OwnerDriverLinkId = Guid.NewGuid(),
-                    OwnerId = OwnerID,
-                    DriverId = DriverID, // Tài xế Văn A
-                    Status = FleetJoinStatus.APPROVED, // Đã gia nhập thành công
-                    RequestedAt = seedTime.AddDays(-10), // Gửi yêu cầu 10 ngày trước
-                    ApprovedAt = seedTime.AddDays(-9)    // Được duyệt 9 ngày trước
+                    OwnerId = Owner_VoLuong_ID,
+                    DriverId = Driver_Sample1_ID,
+                    Status = FleetJoinStatus.APPROVED,
+                    RequestedAt = now.AddDays(-10),
+                    ApprovedAt = now.AddDays(-9)
                 },
 
-                // 2. Mối quan hệ ĐANG CHỜ (Tài xế Văn B xin vào đội của Owner Name)
+                // 2. Driver Mẫu 2 -> Owner VoLuong: PENDING (Chưa duyệt)
                 new OwnerDriverLink
                 {
                     OwnerDriverLinkId = Guid.NewGuid(),
-                    OwnerId = OwnerID,
-                    DriverId = DriverID_2, // Tài xế Văn B
-                    Status = FleetJoinStatus.PENDING, // Đang chờ duyệt
-                    RequestedAt = DateTime.UtcNow.AddHours(-2), // Mới gửi yêu cầu 2 tiếng trước
-                    ApprovedAt = null
-                },
-
-                // 3. (Optional) Mối quan hệ của Owner 2 với Tài xế Văn A (Một tài xế có thể thuộc nhiều đội? Tùy logic nghiệp vụ)
-                // Giả sử logic là 1 tài xế chỉ thuộc 1 đội tại 1 thời điểm thì không nên seed cái này.
-                // Nhưng nếu logic là Many-to-Many (Cộng tác viên) thì OK.
-                new OwnerDriverLink
-                {
-                    OwnerDriverLinkId = Guid.NewGuid(),
-                    OwnerId = OwnerID_2, // Owner Name 2
-                    DriverId = DriverID, // Tài xế Văn A cũng đang pending bên này
+                    OwnerId = Owner_VoLuong_ID,
+                    DriverId = Driver_Sample2_ID,
                     Status = FleetJoinStatus.PENDING,
-                    RequestedAt = DateTime.UtcNow.AddHours(-5),
+                    RequestedAt = now.AddHours(-2),
                     ApprovedAt = null
                 }
             );
         }
     }
-    }
+}
