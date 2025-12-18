@@ -1,11 +1,8 @@
 ﻿using Common.Constants;
 using Microsoft.AspNetCore.Http;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BLL.Utilities
 {
@@ -17,22 +14,23 @@ namespace BLL.Utilities
         {
             _httpContextAccessor = httpContextAccessor;
         }
-        //public Guid GetUserIdFromToken()
-        //{
-        //    var userIdClaim = _httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == "userId" || c.Type == "sub");
-        //    if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out Guid userId))
-        //    {
-        //        return userId;
-        //    }
-        //    return Guid.Empty;
-        //}
 
+        // --- METHOD 1: Lấy UserID ---
+
+        // Cách dùng cũ (Cho Controller): Tự lấy từ HttpContext
         public Guid GetUserIdFromToken()
         {
-            // Cập nhật để dùng hằng số (nhất quán với LoginAsync)
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c =>
+            return GetUserId(_httpContextAccessor.HttpContext?.User);
+        }
+
+        // Cách dùng mới (Cho SignalR): Truyền Context.User vào
+        public Guid GetUserId(ClaimsPrincipal? user)
+        {
+            if (user == null) return Guid.Empty;
+
+            var userIdClaim = user.Claims.FirstOrDefault(c =>
                 c.Type == JwtConstant.KeyClaim.userId ||
-                c.Type == ClaimTypes.NameIdentifier || // Fallback tiêu chuẩn
+                c.Type == ClaimTypes.NameIdentifier ||
                 c.Type == "sub");
 
             if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out Guid userId))
@@ -42,18 +40,33 @@ namespace BLL.Utilities
             return Guid.Empty;
         }
 
+        // --- METHOD 2: Lấy Role ---
+
+        // Cách dùng cũ (Cho Controller)
         public string? GetUserRoleFromToken()
         {
-            // Đọc claim Role dựa trên hằng số bạn đã set khi Login
-            var roleClaim = _httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c =>
-                c.Type == JwtConstant.KeyClaim.Role ||
-                c.Type == ClaimTypes.Role); // Fallback tiêu chuẩn
+            return GetUserRole(_httpContextAccessor.HttpContext?.User);
+        }
 
-            if (roleClaim != null)
-            {
-                return roleClaim.Value;
-            }
-            return null; // Không tìm thấy Role
+        // Cách dùng mới (Cho SignalR)
+        public string? GetUserRole(ClaimsPrincipal? user)
+        {
+            if (user == null) return null;
+
+            var roleClaim = user.Claims.FirstOrDefault(c =>
+                c.Type == JwtConstant.KeyClaim.Role ||
+                c.Type == ClaimTypes.Role);
+
+            return roleClaim?.Value;
+        }
+
+        // --- METHOD 3: Lấy Name (Tiện ích thêm cho Hub) ---
+        public string GetUserName(ClaimsPrincipal? user, string defaultName = "Tài xế")
+        {
+            if (user == null) return defaultName;
+            return user.FindFirst(ClaimTypes.Name)?.Value
+                ?? user.Identity?.Name
+                ?? defaultName;
         }
     }
 }

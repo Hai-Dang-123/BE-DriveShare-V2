@@ -68,7 +68,6 @@ namespace BLL.Services.Implement
                 if (!verifyCheck.IsValid) return new ResponseDTO(verifyCheck.Message, 403, false);
 
                 // 1. VALIDATE POST PACKAGE
-                // Include: ShippingRoute, PostContacts, Provider, Packages
                 var postPackage = await _unitOfWork.PostPackageRepo.GetAllQueryable()
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.StartLocation)
                     .Include(p => p.ShippingRoute).ThenInclude(sr => sr.EndLocation)
@@ -83,29 +82,72 @@ namespace BLL.Services.Implement
                 if (postPackage.Provider == null) return new ResponseDTO("Bài đăng thiếu thông tin Nhà cung cấp.", 400, false);
 
                 // 2. VALIDATE VEHICLE
-                // Include: VehicleType
                 var vehicle = await _unitOfWork.VehicleRepo.GetAll()
                     .Include(v => v.VehicleType)
                     .FirstOrDefaultAsync(v => v.VehicleId == dto.VehicleId && v.OwnerId == ownerId);
 
                 if (vehicle == null) return new ResponseDTO("Xe không tìm thấy hoặc không thuộc về bạn.", 404, false);
 
-                // =======================================================================
-                // [THÊM MỚI] 2.1. VALIDATE SỨC CHỨA (TẢI TRỌNG & THỂ TÍCH)
-                // =======================================================================
+                // 2.1. VALIDATE SỨC CHỨA
                 var capacityCheck = ValidateVehicleCapacity(vehicle, postPackage.Packages);
                 if (!capacityCheck.IsSuccess)
                 {
-                    // Trả về lỗi nếu xe không chở nổi
                     return capacityCheck;
                 }
-                // =======================================================================
 
-                // 3. CHECK SCHEDULE CONFLICT (TRÙNG LỊCH)
+                // 3. CHECK SCHEDULE CONFLICT
+                // Lưu ý: Check dựa trên thời gian của Route gốc
                 await ValidateVehicleScheduleAsync(dto.VehicleId, postPackage.ShippingRoute);
 
+                // =======================================================================
+                // [FIX QUAN TRỌNG] 3.5. CLONE SHIPPING ROUTE
+                // Để tránh lỗi 1-1 Constraint khi Trip cũ đã bị hủy nhưng vẫn giữ Route cũ
+                // =======================================================================
+                var originalRoute = postPackage.ShippingRoute;
+
+                var clonedShippingRoute = new ShippingRoute
+                {
+                    ShippingRouteId = Guid.NewGuid(),
+
+                    // Clone Value Objects (Tạo instance mới để tránh reference cũ)
+                    StartLocation = new Common.ValueObjects.Location(
+                        originalRoute.StartLocation.Address,
+                        originalRoute.StartLocation.Latitude ?? 0,
+                        originalRoute.StartLocation.Longitude ?? 0),
+
+                    EndLocation = new Common.ValueObjects.Location(
+                        originalRoute.EndLocation.Address,
+                        originalRoute.EndLocation.Latitude ?? 0,
+                        originalRoute.EndLocation.Longitude ?? 0),
+
+                    // Copy Data
+                    ExpectedPickupDate = originalRoute.ExpectedPickupDate,
+                    ExpectedDeliveryDate = originalRoute.ExpectedDeliveryDate,
+
+                    // Clone TimeWindow
+                    PickupTimeWindow = new Common.ValueObjects.TimeWindow(
+                        originalRoute.PickupTimeWindow?.StartTime,
+                        originalRoute.PickupTimeWindow?.EndTime),
+
+                    DeliveryTimeWindow = new Common.ValueObjects.TimeWindow(
+                        originalRoute.DeliveryTimeWindow?.StartTime,
+                        originalRoute.DeliveryTimeWindow?.EndTime),
+
+                    // Copy Stats
+                    EstimatedDistanceKm = originalRoute.EstimatedDistanceKm,
+                    EstimatedDurationHours = originalRoute.EstimatedDurationHours,
+                    TravelTimeHours = originalRoute.TravelTimeHours,
+                    WaitTimeHours = originalRoute.WaitTimeHours,
+                    RestrictionNote = originalRoute.RestrictionNote
+                };
+
+                // Lưu Route mới vào DB (Cần có Repo cho ShippingRoute, hoặc Add qua Generic)
+                await _unitOfWork.ShippingRouteRepo.AddAsync(clonedShippingRoute);
+                // =======================================================================
+
                 // 4. TẠO TRIP ROUTE (GỌI VIETMAP)
-                var newTripRoute = await _tripRouteService.CreateAndAddTripRouteAsync(postPackage.ShippingRoute, vehicle);
+                // Dùng clonedRoute để tính toán và liên kết
+                var newTripRoute = await _tripRouteService.CreateAndAddTripRouteAsync(clonedShippingRoute, vehicle);
 
                 // 5. TẠO TRIP
                 var trip = new Trip
@@ -119,11 +161,13 @@ namespace BLL.Services.Implement
                     VehicleId = dto.VehicleId,
                     OwnerId = ownerId,
                     TripRouteId = newTripRoute.TripRouteId,
-                    ShippingRouteId = postPackage.ShippingRoute.ShippingRouteId,
+
+                    // [QUAN TRỌNG]: Dùng ID của Route mới vừa Clone, KHÔNG dùng postPackage.ShippingRouteId
+                    ShippingRouteId = clonedShippingRoute.ShippingRouteId,
+
                     TotalFare = postPackage.OfferedPrice,
                     ActualDistanceKm = newTripRoute.DistanceKm,
                     ActualDuration = newTripRoute.Duration,
-                    // ActualPickupTime, ActualCompletedTime để null
                 };
                 await _unitOfWork.TripRepo.AddAsync(trip);
 
