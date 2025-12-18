@@ -26,5 +26,11 @@ namespace BLL.Services.Interface
             string search = null,
             string sortField = null,
             string sortDirection = "ASC");
+
+        // 5. UPDATE PROFILE (Dùng chung cho cả Admin sửa User và User tự sửa)
+        Task<ResponseDTO> UpdateProfileAsync(Guid userId, UpdateUserProfileDTO model);
+
+        // 6. DELETE USER (Soft Delete)
+        Task<ResponseDTO> DeleteUserAsync(Guid userId);
     }
 }

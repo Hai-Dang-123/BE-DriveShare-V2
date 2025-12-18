@@ -3,6 +3,7 @@ using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
 using Common.Enums.Type;
+using Common.ValueObjects;
 using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.AspNetCore.Http;
@@ -301,6 +302,24 @@ namespace BLL.Services.Impletement
             {
                 dto.DocumentStatus = "NONE";
                 dto.HasPendingDocumentRequest = false;
+            }
+
+            // --- [LOGIC MỚI] CHECK CCCD ---
+            var cccd = user.UserDocuments?.FirstOrDefault(d => d.DocumentType == DocumentType.CCCD);
+
+            if (cccd != null)
+            {
+                // Set trạng thái chung của document dựa trên CCCD
+                dto.DocumentStatus = cccd.Status.ToString();
+                dto.HasPendingDocumentRequest = cccd.Status == VerifileStatus.PENDING_REVIEW;
+                dto.HasVerifiedCitizenId = cccd.Status == VerifileStatus.ACTIVE;
+            }
+            else
+            {
+                // Nếu chưa có CCCD thì coi như chưa verify gì cả
+                dto.DocumentStatus = "NONE";
+                dto.HasPendingDocumentRequest = false;
+                dto.HasVerifiedCitizenId = false;
             }
 
 
@@ -669,6 +688,193 @@ namespace BLL.Services.Impletement
             catch (Exception ex)
             {
                 return new ResponseDTO($"Error getting users by role: {ex.Message}", 500, false);
+            }
+        }
+
+        // =========================================================
+        // 🔹 6. UPDATE PROFILE (Logic Update khác nhau theo Role)
+        // =========================================================
+        public async Task<ResponseDTO> UpdateProfileAsync(Guid userId, UpdateUserProfileDTO model)
+        {
+            try
+            {
+                // 1. Lấy Base User để check Role trước
+                var baseUser = await _unitOfWork.BaseUserRepo.GetAll()
+                    .AsNoTracking()
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.UserId == userId);
+
+                if (baseUser == null)
+                    return new ResponseDTO("User not found", 404, false);
+
+                var roleName = baseUser.Role?.RoleName ?? "Unknown";
+
+                // 2. Logic cập nhật theo từng Role
+                switch (roleName)
+                {
+                    case "Driver":
+                        return await UpdateDriverProfileAsync(userId, model);
+
+                    case "Owner":
+                        return await UpdateOwnerProfileAsync(userId, model);
+
+                    case "Provider":
+                        return await UpdateProviderProfileAsync(userId, model);
+
+                    default:
+                        // Các role khác (Admin/Staff)
+                        return await UpdateBaseUserProfileAsync(baseUser.UserId, model);
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error updating profile: {ex.Message}", 500, false);
+            }
+        }
+
+        // --- Helper: Update Driver ---
+        private async Task<ResponseDTO> UpdateDriverProfileAsync(Guid userId, UpdateUserProfileDTO model)
+        {
+            var driver = await _unitOfWork.DriverRepo.GetByIdAsync(userId);
+            if (driver == null) return new ResponseDTO("Driver not found", 404, false);
+
+            // Update thông tin chung
+            MapBaseUserUpdate(driver, model);
+
+            // Update thông tin riêng của Driver
+            if (!string.IsNullOrEmpty(model.LicenseNumber)) driver.LicenseNumber = model.LicenseNumber;
+            if (!string.IsNullOrEmpty(model.LicenseClass)) driver.LicenseClass = model.LicenseClass;
+            if (model.LicenseExpiryDate.HasValue) driver.LicenseExpiryDate = model.LicenseExpiryDate.Value;
+
+            // Logic nghiệp vụ: Nếu đổi bằng lái -> Reset verified về false để bắt xác thực lại
+            if (!string.IsNullOrEmpty(model.LicenseNumber) && model.LicenseNumber != driver.LicenseNumber)
+            {
+                driver.IsLicenseVerified = false;
+            }
+
+            await _unitOfWork.DriverRepo.UpdateAsync(driver);
+            await _unitOfWork.SaveChangeAsync();
+
+            return new ResponseDTO("Driver profile updated successfully", 200, true);
+        }
+
+        // --- Helper: Update Owner ---
+        private async Task<ResponseDTO> UpdateOwnerProfileAsync(Guid userId, UpdateUserProfileDTO model)
+        {
+            var owner = await _unitOfWork.OwnerRepo.GetByIdAsync(userId);
+            if (owner == null) return new ResponseDTO("Owner not found", 404, false);
+
+            MapBaseUserUpdate(owner, model);
+
+            if (!string.IsNullOrEmpty(model.CompanyName)) owner.CompanyName = model.CompanyName;
+            if (!string.IsNullOrEmpty(model.TaxCode)) owner.TaxCode = model.TaxCode;
+
+            // Update Location (BusinessAddress) sử dụng class Location mới
+            if (model.BusinessAddress != null)
+            {
+                owner.BusinessAddress = new Location
+                {
+                    Address = model.BusinessAddress.Address,
+                    Latitude = model.BusinessAddress.Latitude,
+                    Longitude = model.BusinessAddress.Longitude
+                };
+            }
+
+            await _unitOfWork.OwnerRepo.UpdateAsync(owner);
+            await _unitOfWork.SaveChangeAsync();
+
+            return new ResponseDTO("Owner profile updated successfully", 200, true);
+        }
+
+        // --- Helper: Update Provider ---
+        private async Task<ResponseDTO> UpdateProviderProfileAsync(Guid userId, UpdateUserProfileDTO model)
+        {
+            var provider = await _unitOfWork.ProviderRepo.GetByIdAsync(userId);
+            if (provider == null) return new ResponseDTO("Provider not found", 404, false);
+
+            MapBaseUserUpdate(provider, model);
+
+            if (!string.IsNullOrEmpty(model.CompanyName)) provider.CompanyName = model.CompanyName;
+            if (!string.IsNullOrEmpty(model.TaxCode)) provider.TaxCode = model.TaxCode;
+
+            // Update Location (BusinessAddress) sử dụng class Location mới
+            if (model.BusinessAddress != null)
+            {
+                provider.BusinessAddress = new Location
+                {
+                    Address = model.BusinessAddress.Address,
+                    Latitude = model.BusinessAddress.Latitude,
+                    Longitude = model.BusinessAddress.Longitude
+                };
+            }
+
+            await _unitOfWork.ProviderRepo.UpdateAsync(provider);
+            await _unitOfWork.SaveChangeAsync();
+
+            return new ResponseDTO("Provider profile updated successfully", 200, true);
+        }
+
+        // --- Helper: Update Base User ---
+        private async Task<ResponseDTO> UpdateBaseUserProfileAsync(Guid userId, UpdateUserProfileDTO model)
+        {
+            var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+            if (user == null) return new ResponseDTO("User not found", 404, false);
+
+            MapBaseUserUpdate(user, model);
+            await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+            await _unitOfWork.SaveChangeAsync();
+            return new ResponseDTO("Profile updated successfully", 200, true);
+        }
+
+        // --- Helper: Map Common Fields (Dùng cấu trúc Location mới) ---
+        private void MapBaseUserUpdate(BaseUser user, UpdateUserProfileDTO model)
+        {
+            if (!string.IsNullOrEmpty(model.FullName)) user.FullName = model.FullName;
+            if (!string.IsNullOrEmpty(model.AvatarUrl)) user.AvatarUrl = model.AvatarUrl;
+            if (model.DateOfBirth.HasValue) user.DateOfBirth = model.DateOfBirth.Value;
+
+            // Update Address (Location)
+            if (model.Address != null)
+            {
+                user.Address = new Location
+                {
+                    Address = model.Address.Address,
+                    Latitude = model.Address.Latitude,
+                    Longitude = model.Address.Longitude
+                };
+            }
+
+            user.LastUpdatedAt = DateTime.UtcNow;
+        }
+
+        // =========================================================
+        // 🔹 7. DELETE USER (Soft Delete)
+        // =========================================================
+        public async Task<ResponseDTO> DeleteUserAsync(Guid userId)
+        {
+            try
+            {
+                var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+                if (user == null || user.Status == UserStatus.DELETED)
+                {
+                    return new ResponseDTO("User not found or already deleted", 404, false);
+                }
+
+                // Thực hiện Soft Delete
+                user.Status = UserStatus.DELETED;
+                user.LastUpdatedAt = DateTime.UtcNow;
+
+                // (Optional) Hủy token nếu cần:
+                // if (user.UserTokens != null) _unitOfWork.UserTokenRepo.RemoveRange(user.UserTokens);
+
+                await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                await _unitOfWork.SaveChangeAsync();
+
+                return new ResponseDTO("User deleted successfully (Soft Delete)", 200, true);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Error deleting user: {ex.Message}", 500, false);
             }
         }
     }

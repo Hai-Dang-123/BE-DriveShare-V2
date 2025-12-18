@@ -89,7 +89,6 @@ namespace BLL.Services.Impletement
 
                 if (!driver.HasDeclaredInitialHistory)
                 {
-                    // Trả về mã lỗi đặc biệt (VD: 428 Precondition Required) để Frontend biết đường hiển thị Popup
                     return new ResponseDTO(
                         "Bạn cần cập nhật lịch sử lái xe trong tuần hiện tại trước khi nhận chuyến đi đầu tiên.",
                         428,
@@ -101,28 +100,20 @@ namespace BLL.Services.Impletement
                 {
                     return new ResponseDTO("Tài khoản đang bị hạn chế do dư nợ hoặc không đủ số dư tối thiểu.", 403, false);
                 }
-                // ----------------------------------------
 
-                // --- [MỚI] CHECK VALIDATE GIỜ LÁI (SOLO/TEAM) ---
-                var hoursCheck = await ValidateDriverHoursForTripAsync(dto.DriverId, dto.TripId, null); // Null PostTripId
+                // --- CHECK VALIDATE GIỜ LÁI (SOLO/TEAM) ---
+                var hoursCheck = await ValidateDriverHoursForTripAsync(dto.DriverId, dto.TripId, null);
                 if (!hoursCheck.IsValid)
                 {
                     return new ResponseDTO(hoursCheck.ErrorMsg, 400, false);
                 }
-                // ------------------------------------------------
 
-                // --- [MỚI] CHECK 2: QUY ĐỊNH 10H/48H ---
-                // Gọi Service để tính toán giờ lái của tài xế này
+                // --- CHECK 2: QUY ĐỊNH 10H/48H ---
                 var availability = await _driverWorkSessionService.CheckDriverAvailabilityAsync(dto.DriverId);
                 if (!availability.CanDrive)
                 {
-                    return new ResponseDTO(
-                        $"Không thể gán: Tài xế đã hết giờ lái. {availability.Message}",
-                        400,
-                        false
-                    );
+                    return new ResponseDTO($"Không thể gán: Tài xế đã hết giờ lái. {availability.Message}", 400, false);
                 }
-                // ----------------------------------------
 
                 // 4. Check Duplicate
                 bool isDriverAlreadyInTrip = await _unitOfWork.TripDriverAssignmentRepo.AnyAsync(
@@ -144,7 +135,7 @@ namespace BLL.Services.Impletement
                 var startLocationObj = await _vietMapService.GeocodeAsync(dto.StartLocation) ?? new Common.ValueObjects.Location(dto.StartLocation, 0, 0);
                 var endLocationObj = await _vietMapService.GeocodeAsync(dto.EndLocation) ?? new Common.ValueObjects.Location(dto.EndLocation, 0, 0);
 
-                // 7. Tạo Assignment (Trạng thái OFFERED - Chờ tài xế accept & đóng cọc)
+                // 7. Tạo Assignment
                 var newAssignment = new TripDriverAssignment
                 {
                     TripDriverAssignmentId = Guid.NewGuid(),
@@ -158,37 +149,61 @@ namespace BLL.Services.Impletement
                     StartLocation = startLocationObj,
                     EndLocation = endLocationObj,
 
-                    // [QUAN TRỌNG] Set là OFFERED vì tài xế chưa đồng ý
                     AssignmentStatus = AssignmentStatus.ACCEPTED,
                     PaymentStatus = DriverPaymentStatus.UN_PAID,
 
-                    // [NEW] KHỞI TẠO CÁC TRƯỜNG CHECK-IN / CHECK-OUT (Mặc định chưa làm gì cả)
                     IsOnBoard = false,
                     OnBoardTime = null,
                     OnBoardLocation = null,
                     OnBoardImage = null,
                     CheckInNote = null,
-
                     IsFinished = false,
                     OffBoardTime = null,
                     OffBoardLocation = null,
                     OffBoardImage = null,
                     CheckOutNote = null,
 
-                    // [TIỀN CỌC] Set là PENDING
                     DepositAmount = 0,
                     DepositStatus = DepositStatus.NOT_REQUIRED
                 };
 
                 await _unitOfWork.TripDriverAssignmentRepo.AddAsync(newAssignment);
 
-                // 8. (Optional) Gửi Notification cho Driver tại đây
-                // await _notificationService.SendAsync(dto.DriverId, "Lời mời chuyến đi", $"Bạn được mời chạy chuyến {trip.TripCode}. Cọc: {dto.DepositAmount:N0}đ");
+                // -------------------------------------------------------------------------
+                // [LOGIC MỚI BỔ SUNG]
+                // Kiểm tra Nội bộ & Cập nhật trạng thái Trip nếu là Main Driver
+                // -------------------------------------------------------------------------
+                bool isInternalDriver = await _unitOfWork.OwnerDriverLinkRepo.CheckLinkExistsAsync(trip.OwnerId, dto.DriverId, FleetJoinStatus.APPROVED);
+
+                // Nếu KHÔNG PHẢI nội bộ -> Vẫn phải tạo hợp đồng (nếu Owner gán tài xế ngoài)
+                if (!isInternalDriver)
+                {
+                    // Logic tạo hợp đồng cho tài xế ngoài (nếu business cho phép Owner gán tài xế ngoài)
+                    await _tripDriverContractService.CreateContractInternalAsync(trip.TripId, trip.OwnerId, dto.DriverId, dto.BaseAmount);
+                }
+
+                // Nếu LÀ TÀI XẾ CHÍNH (Primary)
+                if (isMainDriver)
+                {
+                    // 1. Tạo bản ghi main driver record (Logic cũ của bạn)
+                    trip.UpdateAt = DateTime.UtcNow;
+                    await CreateRecordsForMainDriver(trip.TripId, dto.DriverId, trip.OwnerId);
+
+                    // 2. [UPDATE] Nếu là Nội bộ -> Chốt chuyến luôn (Done Assign)
+                    if (isInternalDriver)
+                    {
+                        trip.Status = TripStatus.DONE_ASSIGNING_DRIVER; // Cập nhật trạng thái đã có tài xế
+                    }
+
+                    // Lưu update trip
+                    await _unitOfWork.TripRepo.UpdateAsync(trip);
+                }
+                // -------------------------------------------------------------------------
 
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
-                return new ResponseDTO("Đã gửi lời mời cho tài xế.", 201, true, new { assignmentId = newAssignment.TripDriverAssignmentId });
+                return new ResponseDTO("Đã gán tài xế thành công.", 201, true, new { assignmentId = newAssignment.TripDriverAssignmentId });
             }
             catch (Exception ex)
             {
@@ -197,6 +212,9 @@ namespace BLL.Services.Impletement
             }
         }
 
+        // =========================================================================================================
+        // 2. TÀI XẾ ỨNG TUYỂN (ASSIGNMENT BY POST TRIP)
+        // =========================================================================================================
         public async Task<ResponseDTO> CreateAssignmentByPostTripAsync(CreateAssignmentByPostTripDTO dto)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
@@ -231,7 +249,7 @@ namespace BLL.Services.Impletement
                     return new ResponseDTO($"Bạn không thể nhận chuyến do đã quá giờ lái quy định. {availability.Message}", 400, false);
                 }
 
-                
+
                 // ------------------------------------------------
 
                 // =========================================================================
@@ -477,10 +495,26 @@ namespace BLL.Services.Impletement
                 // Update Slot Counts
                 postDetail.RequiredCount -= 1;
                 bool isAllSlotsFilled = postTrip.PostTripDetails.All(d => d.RequiredCount <= 0);
-                if (isAllSlotsFilled) postTrip.Status = PostStatus.DONE;
+
+                if (isAllSlotsFilled)
+                {
+                    postTrip.Status = PostStatus.DONE;
+
+                    // --- [LOGIC MỚI] CHECK NỘI BỘ + ĐỦ NGƯỜI THÌ DONE ASSIGN ---
+                    if (isInternalDriver)
+                    {
+                        // Nếu người ứng tuyển cuối cùng là Nội bộ -> Chốt chuyến luôn, không cần ký hợp đồng
+                        // (Giả định TripStatus.ASSIGNED là trạng thái đã chốt tài xế)
+                        trip.Status = TripStatus.DONE_ASSIGNING_DRIVER;
+                        trip.UpdateAt = DateTime.UtcNow;
+                        await _unitOfWork.TripRepo.UpdateAsync(trip);
+                    }
+                    // ------------------------------------------------------------
+                }
 
                 postTrip.UpdateAt = DateTime.UtcNow;
                 await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
+
 
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
