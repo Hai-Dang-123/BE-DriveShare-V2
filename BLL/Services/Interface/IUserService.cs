@@ -32,5 +32,10 @@ namespace BLL.Services.Interface
 
         // 6. DELETE USER (Soft Delete)
         Task<ResponseDTO> DeleteUserAsync(Guid userId);
+        // [NEW] Gửi yêu cầu kích hoạt lại tài khoản
+        Task<ResponseDTO> RequestAccountActivationAsync();
+
+        // [NEW] Admin duyệt yêu cầu kích hoạt
+        Task<ResponseDTO> ApproveAccountActivationAsync(Guid userId, bool isApproved);
     }
 }

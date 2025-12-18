@@ -877,5 +877,100 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Error deleting user: {ex.Message}", 500, false);
             }
         }
+
+        // =========================================================
+        // 🔹 8. REQUEST ACCOUNT ACTIVATION (User gửi yêu cầu)
+        // =========================================================
+        public async Task<ResponseDTO> RequestAccountActivationAsync()
+        {
+            try
+            {
+                var userId = _userUtility.GetUserIdFromToken();
+                if (userId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
+                var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+                if (user == null) return new ResponseDTO("User not found", 404, false);
+
+                // 1. Kiểm tra trạng thái hiện tại
+                if (user.Status == UserStatus.ACTIVE)
+                {
+                    return new ResponseDTO("Tài khoản của bạn đang hoạt động bình thường.", 400, false);
+                }
+
+                if (user.Status == UserStatus.PENDING_ACTIVATION)
+                {
+                    return new ResponseDTO("Yêu cầu của bạn đang được chờ duyệt. Vui lòng kiên nhẫn.", 400, false);
+                }
+
+                if (user.Status == UserStatus.DELETED)
+                {
+                    return new ResponseDTO("Tài khoản đã bị xóa vĩnh viễn, không thể khôi phục.", 400, false);
+                }
+
+                // 2. Cập nhật trạng thái sang Chờ Duyệt
+                // Chỉ cho phép nếu đang INACTIVE hoặc BANNED
+                user.Status = UserStatus.PENDING_ACTIVATION;
+                user.LastUpdatedAt = DateTime.UtcNow;
+
+                await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                await _unitOfWork.SaveChangeAsync();
+
+                return new ResponseDTO("Gửi yêu cầu mở khóa thành công. Vui lòng chờ Admin xét duyệt.", 200, true);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi gửi yêu cầu: {ex.Message}", 500, false);
+            }
+        }
+
+        // =========================================================
+        // 🔹 9. APPROVE ACCOUNT ACTIVATION (Admin duyệt)
+        // =========================================================
+        public async Task<ResponseDTO> ApproveAccountActivationAsync(Guid userId, bool isApproved)
+        {
+            try
+            {
+                // Validate quyền Admin
+                var currentRole = _userUtility.GetUserRoleFromToken();
+                if (currentRole != "Admin")
+                    return new ResponseDTO("Forbidden: Chỉ Admin mới có quyền thực hiện.", 403, false);
+
+                var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
+                if (user == null) return new ResponseDTO("User not found", 404, false);
+
+                // Chỉ xử lý những user đang có trạng thái Chờ Duyệt
+                if (user.Status != UserStatus.PENDING_ACTIVATION)
+                {
+                    return new ResponseDTO($"User này không có yêu cầu chờ duyệt (Trạng thái hiện tại: {user.Status}).", 400, false);
+                }
+
+                if (isApproved)
+                {
+                    // A. NẾU DUYỆT -> ACTIVE
+                    user.Status = UserStatus.ACTIVE;
+                    user.LastUpdatedAt = DateTime.UtcNow;
+
+                    await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                    await _unitOfWork.SaveChangeAsync();
+
+                    return new ResponseDTO($"Đã kích hoạt thành công tài khoản: {user.FullName}", 200, true);
+                }
+                else
+                {
+                    // B. NẾU TỪ CHỐI -> QUAY VỀ INACTIVE (HOẶC BANNED)
+                    user.Status = UserStatus.INACTIVE; // Hoặc UserStatus.BANNED tùy logic bạn muốn
+                    user.LastUpdatedAt = DateTime.UtcNow;
+
+                    await _unitOfWork.BaseUserRepo.UpdateAsync(user);
+                    await _unitOfWork.SaveChangeAsync();
+
+                    return new ResponseDTO($"Đã từ chối yêu cầu của user: {user.FullName}. Trạng thái chuyển về INACTIVE.", 200, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO($"Lỗi xử lý yêu cầu: {ex.Message}", 500, false);
+            }
+        }
     }
 }

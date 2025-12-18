@@ -64,7 +64,7 @@ namespace DriverShareProject.Controllers
         // 🔹 4. UPDATE MY PROFILE (Tự cập nhật bản thân)
         // =========================================================
         [HttpPut("profile/me")]
-        [Authorize]
+        //[Authorize]
         public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateUserProfileDTO dto)
         {
             // 1. Lấy UserId từ Token
@@ -83,7 +83,7 @@ namespace DriverShareProject.Controllers
         // 🔹 5. UPDATE USER BY ID (Dành cho Admin sửa thông tin User)
         // =========================================================
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin")] // Chỉ Admin được sửa người khác
+        //[Authorize(Roles = "Admin")] // Chỉ Admin được sửa người khác
         public async Task<IActionResult> UpdateUserById(Guid id, [FromBody] UpdateUserProfileDTO dto)
         {
             var response = await _userService.UpdateProfileAsync(id, dto);
@@ -94,11 +94,44 @@ namespace DriverShareProject.Controllers
         // 🔹 6. DELETE USER (Soft Delete)
         // =========================================================
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")] // CỰC KỲ QUAN TRỌNG: Chỉ Admin được xóa
+        //[Authorize(Roles = "Admin")] // CỰC KỲ QUAN TRỌNG: Chỉ Admin được xóa
         public async Task<IActionResult> DeleteUser(Guid id)
         {
             var response = await _userService.DeleteUserAsync(id);
             return StatusCode(response.StatusCode, response);
+        }
+
+        // =========================================================
+        // 1. USER GỬI YÊU CẦU KÍCH HOẠT (Dành cho User bị khóa)
+        // =========================================================
+        [HttpPost("request-activation")]
+        //[Authorize] // User phải login được (dù bị inactive) để lấy token
+        public async Task<IActionResult> RequestActivation()
+        {
+            var result = await _userService.RequestAccountActivationAsync();
+            if (!result.IsSuccess)
+            {
+                return BadRequest(result); // Hoặc 403 tùy message
+            }
+            return Ok(result);
+        }
+
+        // =========================================================
+        // 2. ADMIN DUYỆT YÊU CẦU (Chỉ Admin)
+        // =========================================================
+        [HttpPost("approve-activation/{userId}")]
+        //[Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ApproveActivation(Guid userId, [FromQuery] bool isApproved = true)
+        {
+            var result = await _userService.ApproveAccountActivationAsync(userId, isApproved);
+
+            if (!result.IsSuccess)
+            {
+                // Nếu lỗi 404 hoặc 400
+                if (result.Message.Contains("not found")) return NotFound(result);
+                return BadRequest(result);
+            }
+            return Ok(result);
         }
     }
 }

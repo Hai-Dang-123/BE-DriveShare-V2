@@ -81,6 +81,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             services.AddScoped<IAIService, AIService>();
             services.AddScoped<ITrafficRestrictionService, TrafficRestrictionService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IDriverActivityLogService, DriverActivityLogService>();
 
             services.AddScoped<IVietMapService, VietMapService>();
             services.AddScoped<IFirebaseUploadService, FirebaseUploadService>();

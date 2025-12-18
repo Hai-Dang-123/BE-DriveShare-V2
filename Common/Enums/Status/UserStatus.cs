@@ -11,5 +11,7 @@ namespace Common.Enums.Status
         ACTIVE,
         INACTIVE,
         DELETED,
+        BANNED,
+        PENDING_ACTIVATION
     }
 }

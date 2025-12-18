@@ -82,22 +82,40 @@ namespace BLL.Services.Impletement
         // =========================================================================
         public async Task<ResponseDTO> StartSessionAsync(StartSessionDTO dto)
         {
+            var currentDriverId = _userUtility.GetUserIdFromToken();
+            if (currentDriverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
             try
             {
-                var currentDriverId = _userUtility.GetUserIdFromToken();
-                if (currentDriverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+                // 0. CHECK STATUS TÀI KHOẢN (Đã bị Ban chưa?)
+                var driver = await _unitOfWork.DriverRepo.GetByIdAsync(currentDriverId);
+                if (driver == null) return new ResponseDTO("Tài khoản không tồn tại.", 404, false);
+
+                if (driver.Status == UserStatus.INACTIVE)
+                {
+                    await LogDriverActivityAsync(currentDriverId, "Cố gắng bắt đầu chuyến khi tài khoản đang bị KHÓA.", "Warning");
+                    return new ResponseDTO("Tài khoản của bạn đã bị KHÓA do vi phạm quy định an toàn.", 403, false);
+                }
 
                 // 1. Kiểm tra quyền của TÔI
                 var myAssignment = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
                     .FirstOrDefaultAsync(a => a.TripId == dto.TripId && a.DriverId == currentDriverId && a.AssignmentStatus == AssignmentStatus.ACCEPTED);
 
-                if (myAssignment == null) return new ResponseDTO("Bạn không được phân công chạy chuyến này.", 403, false);
+                if (myAssignment == null)
+                {
+                    await LogDriverActivityAsync(currentDriverId, "Thất bại: Không có quyền chạy chuyến này.", "Warning");
+                    return new ResponseDTO("Bạn không được phân công chạy chuyến này.", 403, false);
+                }
 
                 // 2. Kiểm tra chính tôi có đang kẹt chuyến khác không
                 var myActiveSession = await _unitOfWork.DriverWorkSessionRepo.GetAll()
                     .FirstOrDefaultAsync(x => x.DriverId == currentDriverId && x.Status == WorkSessionStatus.IN_PROGRESS);
 
-                if (myActiveSession != null) return new ResponseDTO($"Bạn đang chạy dở chuyến khác (ID: {myActiveSession.TripId}).", 400, false);
+                if (myActiveSession != null)
+                {
+                    await LogDriverActivityAsync(currentDriverId, $"Thất bại: Đang kẹt chuyến ID {myActiveSession.TripId}.", "Warning");
+                    return new ResponseDTO($"Bạn đang chạy dở chuyến khác (ID: {myActiveSession.TripId}).", 400, false);
+                }
 
                 // 3. KIỂM TRA XUNG ĐỘT (CÓ AI KHÁC ĐANG LÁI KHÔNG?)
                 var runningSession = await _unitOfWork.DriverWorkSessionRepo.GetAll()
@@ -114,30 +132,31 @@ namespace BLL.Services.Impletement
 
                     string roleName = runningDriverType == DriverType.PRIMARY ? "Tài Chính" : "Tài Phụ";
                     string driverName = runningSession.Driver?.FullName ?? "Ẩn danh";
-                    string driverPhone = runningSession.Driver?.PhoneNumber ?? "N/A";
                     string plateNumber = runningSession.Trip?.Vehicle?.PlateNumber ?? "N/A";
+
+                    string errorMsg = $"KHÔNG THỂ BẮT ĐẦU: Xe {plateNumber} đang được lái bởi {roleName} - {driverName}.";
+
+                    await LogDriverActivityAsync(currentDriverId, $"Xung đột tài xế: {errorMsg}", "Warning");
 
                     var conflictDto = new DriverConflictDTO
                     {
                         ConflictDriverId = runningSession.DriverId,
                         ConflictDriverName = driverName,
-                        ConflictDriverPhone = driverPhone,
                         ConflictDriverRole = roleName,
                         SessionStartTime = runningSession.StartTime,
                         LicensePlate = plateNumber
                     };
-
-                    return new ResponseDTO(
-                        $"KHÔNG THỂ BẮT ĐẦU: Xe {plateNumber} đang được lái bởi {roleName} - {driverName}.",
-                        409,
-                        false,
-                        conflictDto
-                    );
+                    return new ResponseDTO(errorMsg, 409, false, conflictDto);
                 }
 
-                // 4. Kiểm tra luật 10h/48h
-                var eligibility = await CalculateDriverHoursAsync(currentDriverId);
-                if (!eligibility.CanDrive) return new ResponseDTO($"Không thể nhận chuyến: {eligibility.Message}", 403, false);
+                // 4. KIỂM TRA LUẬT 4H / 10H / 48H (CHECK AN TOÀN)
+                // Hàm này sẽ tự động Ban nếu vi phạm quá nặng
+                var safetyCheck = await CheckAndBanIfSevereAsync(currentDriverId);
+                if (!safetyCheck.IsValid)
+                {
+                    // Nếu không Valid, lý do đã được log bên trong hàm helper rồi
+                    return new ResponseDTO(safetyCheck.Message, 403, false);
+                }
 
                 // 5. Tạo phiên làm việc
                 var newSession = new DriverWorkSession
@@ -151,6 +170,10 @@ namespace BLL.Services.Impletement
                 };
 
                 await _unitOfWork.DriverWorkSessionRepo.AddAsync(newSession);
+
+                // Log Info
+                await LogDriverActivityAsync(currentDriverId, $"Bắt đầu lái xe chuyến {dto.TripId}.", "Info");
+
                 await _unitOfWork.SaveChangeAsync();
 
                 var successDto = new StartSessionSuccessDTO
@@ -165,6 +188,8 @@ namespace BLL.Services.Impletement
             }
             catch (Exception ex)
             {
+                await LogDriverActivityAsync(currentDriverId, $"Lỗi hệ thống StartSession: {ex.Message}", "Critical");
+                await _unitOfWork.SaveChangeAsync(); // Cố gắng lưu log lỗi
                 return new ResponseDTO("Lỗi hệ thống: " + ex.Message, 500, false);
             }
         }
@@ -174,28 +199,195 @@ namespace BLL.Services.Impletement
         // =========================================================================
         public async Task<ResponseDTO> EndSessionAsync(EndSessionDTO dto)
         {
+            var currentDriverId = _userUtility.GetUserIdFromToken();
+            if (currentDriverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
+
             try
             {
-                var currentDriverId = _userUtility.GetUserIdFromToken();
                 var session = await _unitOfWork.DriverWorkSessionRepo.GetByIdAsync(dto.DriverWorkSessionId);
 
-                if (session == null) return new ResponseDTO("Không tìm thấy phiên làm việc.", 404, false);
-                if (session.DriverId != currentDriverId) return new ResponseDTO("Forbidden.", 403, false);
-                if (session.Status == WorkSessionStatus.COMPLETED) return new ResponseDTO("Phiên đã kết thúc.", 400, false);
+                if (session == null)
+                {
+                    await LogDriverActivityAsync(currentDriverId, "Thất bại EndSession: Không tìm thấy Session.", "Warning");
+                    return new ResponseDTO("Không tìm thấy phiên làm việc.", 404, false);
+                }
+                if (session.DriverId != currentDriverId)
+                {
+                    await LogDriverActivityAsync(currentDriverId, "Thất bại EndSession: Forbidden.", "Warning");
+                    return new ResponseDTO("Forbidden.", 403, false);
+                }
+                if (session.Status == WorkSessionStatus.COMPLETED)
+                {
+                    return new ResponseDTO("Phiên đã kết thúc.", 400, false);
+                }
 
-                session.CompleteSession();
+                // Kết thúc phiên
+                session.EndTime = DateTime.UtcNow;
+                session.Status = WorkSessionStatus.COMPLETED;
 
                 await _unitOfWork.DriverWorkSessionRepo.UpdateAsync(session);
+                await _unitOfWork.SaveChangeAsync(); // Lưu trước để có dữ liệu tính toán
+
+                // --- QUAN TRỌNG: KIỂM TRA NGAY SAU KHI CHẠY ---
+                // Chuyến vừa rồi có thể đã làm lố giờ -> Cần Ban ngay lập tức nếu vi phạm nặng
+                var safetyCheck = await CheckAndBanIfSevereAsync(currentDriverId);
+
+                string warningMsg = "";
+                if (!safetyCheck.IsValid)
+                {
+                    warningMsg = $" CẢNH BÁO: {safetyCheck.Message}";
+                }
+
+                // Ghi Log thời gian chạy
+                double duration = (session.EndTime.Value - session.StartTime).TotalHours;
+                await LogDriverActivityAsync(currentDriverId, $"Kết thúc lái xe. Thời gian: {duration:F2}h.{warningMsg}", "Info");
                 await _unitOfWork.SaveChangeAsync();
 
                 _locationCacheService.RemoveLocation(session.TripId.Value);
 
-                return new ResponseDTO("Kết thúc lái xe thành công.", 200, true);
+                return new ResponseDTO($"Kết thúc lái xe thành công.{warningMsg}", 200, true);
             }
             catch (Exception ex)
             {
+                await LogDriverActivityAsync(currentDriverId, $"Lỗi hệ thống EndSession: {ex.Message}", "Critical");
+                await _unitOfWork.SaveChangeAsync();
                 return new ResponseDTO("Lỗi hệ thống: " + ex.Message, 500, false);
             }
+        }
+
+        // =========================================================================
+        // 3. CORE LOGIC: KIỂM TRA LUẬT 4/10/48 & AUTO-BAN
+        // =========================================================================
+        private async Task<(bool IsValid, string Message)> CheckAndBanIfSevereAsync(Guid driverId)
+        {
+            var now = DateTime.UtcNow;
+            var todayStart = now.Date;
+
+            // Tính đầu tuần (Thứ 2)
+            int diff = (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7;
+            var weekStart = now.Date.AddDays(-1 * diff);
+
+            // Lấy lịch sử lái xe (đã hoàn thành) trong tuần
+            var recentSessions = await _unitOfWork.DriverWorkSessionRepo.GetAll()
+                .Where(s => s.DriverId == driverId
+                         && s.Status == WorkSessionStatus.COMPLETED
+                         && s.EndTime >= weekStart)
+                .OrderByDescending(s => s.EndTime)
+                .ToListAsync();
+
+            // --- A. TÍNH TOÁN CÁC CHỈ SỐ ---
+
+            // 1. Tổng giờ tuần (48h)
+            double weekHours = recentSessions.Sum(s => (s.EndTime.Value - s.StartTime).TotalHours);
+
+            // 2. Tổng giờ ngày (10h)
+            double dayHours = recentSessions
+                .Where(s => s.EndTime >= todayStart)
+                .Sum(s => (s.EndTime.Value - s.StartTime).TotalHours);
+
+            // 3. Giờ liên tục (4h) - Cộng dồn lùi về quá khứ nếu nghỉ < 15p
+            double continuousHours = 0;
+            var lastBreakTime = now;
+            foreach (var s in recentSessions)
+            {
+                var breakMinutes = (lastBreakTime - s.EndTime.Value).TotalMinutes;
+                // Nếu thời gian nghỉ giữa 2 chuyến < 15 phút => Vẫn tính là lái liên tục
+                if (breakMinutes < 15)
+                {
+                    continuousHours += (s.EndTime.Value - s.StartTime).TotalHours;
+                    lastBreakTime = s.StartTime;
+                }
+                else
+                {
+                    break; // Đã nghỉ đủ, dừng cộng
+                }
+            }
+
+            // --- B. ĐỊNH NGHĨA NGƯỠNG "BAN" (SEVERE LIMITS - VI PHẠM NẶNG) ---
+            // Nếu vượt qua mức này, Ban luôn không cần cảnh báo
+            const double BAN_LIMIT_CONTINUOUS = 5.5;  // Cho phép lố 1.5h
+            const double BAN_LIMIT_DAY = 13.0;        // Cho phép lố 3h
+            const double BAN_LIMIT_WEEK = 60.0;       // Cho phép lố 12h
+
+            string banReason = null;
+
+            if (continuousHours >= BAN_LIMIT_CONTINUOUS)
+                banReason = $"Lái liên tục {continuousHours:F1}h (Ngưỡng Ban: {BAN_LIMIT_CONTINUOUS}h)";
+            else if (dayHours >= BAN_LIMIT_DAY)
+                banReason = $"Lái {dayHours:F1}h/ngày (Ngưỡng Ban: {BAN_LIMIT_DAY}h)";
+            else if (weekHours >= BAN_LIMIT_WEEK)
+                banReason = $"Lái {weekHours:F1}h/tuần (Ngưỡng Ban: {BAN_LIMIT_WEEK}h)";
+
+            // NẾU VI PHẠM NẶNG -> THỰC HIỆN BAN NGAY LẬP TỨC
+            if (banReason != null)
+            {
+                await BanDriverNowAsync(driverId, banReason);
+                return (false, $"Tài khoản đã bị KHÓA vĩnh viễn. Lý do: {banReason}");
+            }
+
+            // --- C. KIỂM TRA THƯỜNG (WARNING/BLOCK SESSION) ---
+            // Nếu chưa đến mức Ban nhưng vi phạm luật thường -> Chặn không cho chạy tiếp
+            if (continuousHours >= 4.0)
+            {
+                await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái liên tục {continuousHours:F1}h (Luật 4h).", "Warning");
+                return (false, $"Bạn đã lái liên tục {continuousHours:F1}h (Luật: 4h). Vui lòng nghỉ ngơi 15p.");
+            }
+            if (dayHours >= 10.0)
+            {
+                await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái {dayHours:F1}h hôm nay (Luật 10h).", "Warning");
+                return (false, $"Bạn đã lái {dayHours:F1}h hôm nay (Luật: 10h). Vui lòng nghỉ ngơi đến ngày mai.");
+            }
+            if (weekHours >= 48.0)
+            {
+                await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái {weekHours:F1}h tuần này (Luật 48h).", "Warning");
+                return (false, $"Bạn đã lái {weekHours:F1}h tuần này (Luật: 48h). Vui lòng nghỉ ngơi.");
+            }
+
+            return (true, "OK");
+        }
+
+        // =========================================================================
+        // 4. HELPER: BAN USER VÀO DB
+        // =========================================================================
+        private async Task BanDriverNowAsync(Guid driverId, string reason)
+        {
+            var driver = await _unitOfWork.DriverRepo.GetByIdAsync(driverId);
+            // Chỉ Ban nếu đang Active
+            if (driver != null && driver.Status != UserStatus.BANNED)
+            {
+                // 1. Đổi trạng thái User
+                driver.Status = UserStatus.BANNED;
+                driver.LastUpdatedAt = DateTime.UtcNow;
+
+                await _unitOfWork.DriverRepo.UpdateAsync(driver);
+
+                // 2. Ghi Log Critical
+                await LogDriverActivityAsync(driverId, $"HỆ THỐNG BAN TÀI KHOẢN: {reason}", "Critical");
+
+                // 3. Commit ngay lập tức
+                await _unitOfWork.SaveChangeAsync();
+            }
+        }
+
+        // =========================================================================
+        // 5. HELPER: GHI LOG (Info, Warning, Critical)
+        // =========================================================================
+        private async Task LogDriverActivityAsync(Guid driverId, string message, string level = "Info")
+        {
+            try
+            {
+                var log = new DriverActivityLog
+                {
+                    DriverActivityLogId = Guid.NewGuid(),
+                    DriverId = driverId,
+                    Description = message,
+                    LogLevel = level,
+                    CreateAt = DateTime.UtcNow
+                };
+                await _unitOfWork.DriverActivityLogRepo.AddAsync(log);
+                // Lưu ý: Không gọi SaveChangeAsync ở đây để flexible cho transaction bên ngoài
+            }
+            catch { /* Fail silent */ }
         }
 
         // =========================================================================
