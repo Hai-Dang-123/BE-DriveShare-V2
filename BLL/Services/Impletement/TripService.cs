@@ -93,6 +93,13 @@ namespace BLL.Services.Implement
                 if (vehicle == null) return new ResponseDTO("Xe không tìm thấy hoặc không thuộc về bạn.", 404, false);
 
                 // =======================================================================
+                // 2.1. CHANGE STATUS CỦA XE
+                // =======================================================================
+
+                vehicle.Status = VehicleStatus.IN_USE;
+                await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
+
+                // =======================================================================
                 // [MỚI THÊM] 2.1. VALIDATE XE ĐÔNG LẠNH (Check theo yêu cầu)
                 // =======================================================================
                 bool requiresRefrigeration = postPackage.Packages
@@ -1413,6 +1420,14 @@ namespace BLL.Services.Implement
 
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
 
+                // CHANGE STATUS VEHICLE TRỜ LẠI
+                var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(trip.VehicleId);
+                if (vehicle != null)
+                {
+                    vehicle.Status = VehicleStatus.ACTIVE;
+                    await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
+                }
+
                 // Lưu toàn bộ thay đổi (Trip + Wallet + Transaction)
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
@@ -1431,12 +1446,15 @@ namespace BLL.Services.Implement
         }
 
 
-       
+
         // =========================================================================================================
         // 3. CORE LOGIC: TÍNH TOÁN TIỀN NONG & QUYẾT TOÁN (LIQUIDATION)
         // =========================================================================================================
         private async Task<(bool Success, LiquidationResultModel Result, string Message)> ProcessTripLiquidationAsync(Guid tripId)
         {
+            // CẤU HÌNH HARDCODE ID ADMIN (Dùng để hứng tiền phí sàn)
+            var SystemAdminId = Guid.Parse("D4DAB1C3-6D48-4B23-8369-2D1C9C828F22");
+
             var result = new LiquidationResultModel();
             try
             {
@@ -1455,7 +1473,7 @@ namespace BLL.Services.Implement
                 result.TripCode = trip.TripCode;
 
                 // ==========================================================================
-                // 2. LẤY WALLET & USER
+                // 2. LẤY WALLET & USER (Provider, Owner, ADMIN)
                 // ==========================================================================
                 Guid providerId = trip.TripProviderContract?.CounterpartyId ?? trip.Packages.FirstOrDefault()?.ProviderId ?? Guid.Empty;
                 var providerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(providerId);
@@ -1464,7 +1482,11 @@ namespace BLL.Services.Implement
                 var ownerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(trip.OwnerId);
                 var ownerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == trip.OwnerId);
 
+                // [MỚI] Lấy ví Admin Hệ Thống
+                var adminWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == SystemAdminId);
+
                 if (providerWallet == null || ownerWallet == null) return (false, null, "Lỗi: Không tìm thấy ví Provider hoặc Owner.");
+                // Lưu ý: Nếu adminWallet == null, code bên dưới sẽ bỏ qua việc cộng phí sàn (để tránh lỗi crash)
 
                 var ownerReport = new ParticipantFinancialReport { UserId = trip.OwnerId, FullName = ownerUser.FullName, Email = ownerUser.Email, Role = "Owner" };
                 var providerReport = new ParticipantFinancialReport { UserId = providerId, FullName = providerUser.FullName, Email = providerUser.Email, Role = "Provider" };
@@ -1580,15 +1602,40 @@ namespace BLL.Services.Implement
                 }
 
                 // ==========================================================================
-                // PHẦN B: TÍNH CHO OWNER
+                // PHẦN B: TÍNH CHO OWNER & ADMIN (PLATFORM FEE)
                 // ==========================================================================
 
-                // B1. Cộng Doanh thu
-                decimal grossRevenue = trip.TotalFare; // Có thể trừ phí sàn tại đây
-                ownerReport.AddItem("Doanh thu", grossRevenue, false);
+                // B1. Cộng Doanh thu & Tính Phí Sàn (Logic: Chỉ trừ phí nếu có doanh thu dương)
+                decimal originalFare = trip.TotalFare;
+                decimal platformFee = 0;
 
-                ownerWallet.Balance += grossRevenue;
-                await CreateIncomeTransactionAsync(ownerWallet, tripId, grossRevenue, TransactionType.OWNER_PAYOUT, "Doanh thu vận hành");
+                // YÊU CẦU: Nếu tiền nhận <= 0 thì KHỎI SÀN (Phí = 0)
+                if (originalFare > 0)
+                {
+                    platformFee = originalFare * 0.10m; // 10% phí sàn
+                }
+
+                // Số tiền thực tế Owner nhận được sau khi trừ phí
+                decimal netRevenue = originalFare - platformFee;
+
+                // Log Report Owner
+                ownerReport.AddItem("Doanh thu chuyến", originalFare, false);
+
+                if (platformFee > 0)
+                {
+                    ownerReport.AddItem("Phí sàn (10%)", platformFee, true); // true = là khoản trừ (màu đỏ)
+
+                    // [MỚI] CỘNG TIỀN VÀO VÍ ADMIN
+                    if (adminWallet != null)
+                    {
+                        adminWallet.Balance += platformFee;
+                        await CreateIncomeTransactionAsync(adminWallet, tripId, platformFee, TransactionType.PLATFORM_PAYMENT, $"Phí sàn 10% - {trip.TripCode}");
+                    }
+                }
+
+                // Cộng tiền thực nhận vào ví Owner
+                ownerWallet.Balance += netRevenue;
+                await CreateIncomeTransactionAsync(ownerWallet, tripId, netRevenue, TransactionType.OWNER_PAYOUT, "Doanh thu vận hành (đã trừ phí)");
 
                 // B2. Trừ Lương Tài xế (Ghi nợ nếu thiếu)
                 if (totalSalaryAndBonusExpense > 0)
@@ -1614,7 +1661,7 @@ namespace BLL.Services.Implement
                 // B4. Log tiền phạt nội bộ nhận được (Chỉ để report, tiền đã cộng ở vòng lặp A)
                 if (collectedForOwner > 0) ownerReport.AddItem("Thu phạt nội bộ", collectedForOwner, false);
 
-                ownerReport.FinalWalletChange = grossRevenue - totalSalaryAndBonusExpense - (gap > 0 ? gap : 0) + collectedForOwner;
+                ownerReport.FinalWalletChange = netRevenue - totalSalaryAndBonusExpense - (gap > 0 ? gap : 0) + collectedForOwner;
 
                 // ==========================================================================
                 // PHẦN C: TÍNH CHO PROVIDER
@@ -1633,6 +1680,13 @@ namespace BLL.Services.Implement
 
                 await _unitOfWork.WalletRepo.UpdateAsync(ownerWallet);
                 await _unitOfWork.WalletRepo.UpdateAsync(providerWallet);
+
+                // [MỚI] Lưu Ví Admin (Nếu có)
+                if (adminWallet != null)
+                {
+                    await _unitOfWork.WalletRepo.UpdateAsync(adminWallet);
+                }
+
                 // Driver wallets saved in loop via context tracking
 
                 result.OwnerReport = ownerReport;
@@ -1893,7 +1947,6 @@ namespace BLL.Services.Implement
         // =========================================================================================================
         // 4. CANCEL TRIP BY OWNER (HỦY CHUYẾN & BỒI THƯỜNG)
         // =========================================================================================================
-        // Trong TripService.cs
 
         // =========================================================================================================
         // 4. CANCEL TRIP BY OWNER (HỦY CHUYẾN & BỒI THƯỜNG)

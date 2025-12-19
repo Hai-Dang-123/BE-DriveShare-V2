@@ -236,7 +236,7 @@ namespace BLL.Services.Impletement
             }
         }
 
-       
+
         // =========================================================================================================
         // 2. TÀI XẾ ỨNG TUYỂN (ASSIGNMENT BY POST TRIP)
         // =========================================================================================================
@@ -502,53 +502,46 @@ namespace BLL.Services.Impletement
                     await CreateRecordsForMainDriver(trip.TripId, driverId, trip.OwnerId);
                 }
 
-                // 1. Trừ số lượng RequiredCount đi 1
-                postDetail.RequiredCount -= 1;
-                if (postDetail.RequiredCount < 0) postDetail.RequiredCount = 0; // Safety check
+                // =========================================================================
+                // [FIX LOGIC DONE POST]
+                // =========================================================================
 
+                // 1. Trừ số lượng RequiredCount đi 1 (Không được âm)
+                postDetail.RequiredCount = (postDetail.RequiredCount > 0) ? postDetail.RequiredCount - 1 : 0;
 
-
-                // 2. Cập nhật chi tiết này vào DB Context để đảm bảo data mới nhất
+                // Cập nhật Detail
                 await _unitOfWork.PostTripDetailRepo.UpdateAsync(postDetail);
 
-                // 3. Kiểm tra xem CÒN SLOT NÀO TRỐNG KHÔNG?
-                // Logic: Lấy danh sách Detail (đã bao gồm cái vừa trừ), nếu KHÔNG CÒN cái nào > 0 thì là FULL.
-                bool hasAnySlotOpen = postTrip.PostTripDetails.Any(d => d.RequiredCount > 0);
+                // 2. CHECK TỔNG SỐ LƯỢNG SLOT CÒN LẠI CỦA CẢ BÀI POST
+                // Lưu ý: postTrip.PostTripDetails lúc này đã chứa giá trị RequiredCount mới nhất (vừa trừ xong)
+                int totalRemainingSlots = postTrip.PostTripDetails.Sum(d => d.RequiredCount);
 
-                if (!hasAnySlotOpen)
+                if (totalRemainingSlots <= 0)
                 {
-                    // 1. Đóng Post (Luôn đóng khi đủ người)
+                    // A. Đóng Post (Vì đã hết sạch slot)
                     postTrip.Status = PostStatus.DONE;
                     postTrip.UpdateAt = DateTime.UtcNow;
 
-                    // 2. Xử lý Trạng thái Trip (TripStatus)
+                    // B. Xử lý Trạng thái Trip
                     if (isInternalDriver)
                     {
-                        // A. Nếu là NỘI BỘ (Internal) -> Chốt luôn
-                        // Vì nội bộ không cần ký hợp đồng, nên nếu đủ người mà người cuối cùng là nội bộ
-                        // (và giả sử các người trước cũng đã xong/ký rồi) -> DONE
+                        // Nếu là Nội bộ -> Chốt Trip luôn
                         trip.Status = TripStatus.DONE_ASSIGNING_DRIVER;
                         trip.UpdateAt = DateTime.UtcNow;
                     }
-                    else
-                    {
-                        // B. Nếu là NGOÀI (External) -> KHÔNG ĐƯỢC CHỐT DONE
-                        // Phải giữ nguyên trạng thái PENDING_DRIVER_ASSIGNMENT (hoặc chuyển sang AWAITING_SIGNATURE nếu có)
-                        // Lý do: Tài xế này cần phải gọi API SignContract thì mới tính là xong.
-                        // Trip Status sẽ được cập nhật trong API SignContract.
-
-                        // (Code: Không làm gì với trip.Status ở đây)
-                    }
+                    // Nếu là External -> Giữ nguyên Trip Status (chờ ký hợp đồng)
                 }
                 else
                 {
-                    // Nếu chưa đủ người, chỉ update thời gian
+                    // Vẫn còn slot -> Chỉ update time
                     postTrip.UpdateAt = DateTime.UtcNow;
+                    // Đảm bảo Post vẫn OPEN
+                    if (postTrip.Status == PostStatus.DONE) postTrip.Status = PostStatus.OPEN;
                 }
 
-                // Update DB
-                await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
+                // 3. Update DB
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
+                await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
 
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
