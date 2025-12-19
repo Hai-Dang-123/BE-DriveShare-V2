@@ -932,8 +932,8 @@ namespace BLL.Services.Impletement
             {
                 // Validate quyền Admin
                 var currentRole = _userUtility.GetUserRoleFromToken();
-                if (currentRole != "Admin")
-                    return new ResponseDTO("Forbidden: Chỉ Admin mới có quyền thực hiện.", 403, false);
+                if (currentRole == "Admin" || currentRole == "Staff")
+                    return new ResponseDTO("Forbidden: Chỉ Admin hoặc Staff mới có quyền thực hiện.", 403, false);
 
                 var user = await _unitOfWork.BaseUserRepo.GetByIdAsync(userId);
                 if (user == null) return new ResponseDTO("User not found", 404, false);

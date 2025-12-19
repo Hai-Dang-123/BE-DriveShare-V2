@@ -236,9 +236,7 @@ namespace BLL.Services.Impletement
             }
         }
 
-        // =========================================================================================================
-        // 2. TÀI XẾ ỨNG TUYỂN (ASSIGNMENT BY POST TRIP)
-        // =========================================================================================================
+       
         // =========================================================================================================
         // 2. TÀI XẾ ỨNG TUYỂN (ASSIGNMENT BY POST TRIP)
         // =========================================================================================================
@@ -504,15 +502,20 @@ namespace BLL.Services.Impletement
                     await CreateRecordsForMainDriver(trip.TripId, driverId, trip.OwnerId);
                 }
 
-                // --- CẬP NHẬT SỐ LƯỢNG SLOT ---
+                // 1. Trừ số lượng RequiredCount đi 1
                 postDetail.RequiredCount -= 1;
+                if (postDetail.RequiredCount < 0) postDetail.RequiredCount = 0; // Safety check
 
-                // ==================================================================================
-                // [QUAN TRỌNG] LOGIC CHECK ĐỦ NGƯỜI & CHỐT CHUYẾN
-                // ==================================================================================
-                bool isAllSlotsFilled = postTrip.PostTripDetails.All(d => d.RequiredCount <= 0);
 
-                if (isAllSlotsFilled)
+
+                // 2. Cập nhật chi tiết này vào DB Context để đảm bảo data mới nhất
+                await _unitOfWork.PostTripDetailRepo.UpdateAsync(postDetail);
+
+                // 3. Kiểm tra xem CÒN SLOT NÀO TRỐNG KHÔNG?
+                // Logic: Lấy danh sách Detail (đã bao gồm cái vừa trừ), nếu KHÔNG CÒN cái nào > 0 thì là FULL.
+                bool hasAnySlotOpen = postTrip.PostTripDetails.Any(d => d.RequiredCount > 0);
+
+                if (!hasAnySlotOpen)
                 {
                     // 1. Đóng Post (Luôn đóng khi đủ người)
                     postTrip.Status = PostStatus.DONE;
