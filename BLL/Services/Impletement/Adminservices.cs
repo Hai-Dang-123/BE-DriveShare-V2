@@ -1,5 +1,6 @@
 ﻿using BLL.Services.Interface;
 using Common.DTOs;
+using Common.Enums.Type;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -7,6 +8,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+
+using Common.Enums.Status;
 
 namespace BLL.Services.Impletement
 {
@@ -20,9 +23,14 @@ namespace BLL.Services.Impletement
 
         public async Task<ResponseDTO> GetOverview()
         {
-            var users =  _unitOfWork.BaseUserRepo.GetAll();
-            var trips =  _unitOfWork.TripRepo.GetAll();
-            var packages =  _unitOfWork.PackageRepo.GetAll();
+            var users = _unitOfWork.BaseUserRepo.GetAll();
+            var trips = _unitOfWork.TripRepo.GetAll();
+            var packages = _unitOfWork.PackageRepo.GetAll();
+
+            // 🔑 LẤY VÍ ADMIN (TIỀN NỀN TẢNG)
+            var adminWallet = await _unitOfWork.WalletRepo.GetAll()
+                .Include(w => w.User)
+                .FirstOrDefaultAsync(w => w.User.Role.RoleName == "ADMIN");
 
             var data = new DashboardOverviewDTO
             {
@@ -32,7 +40,9 @@ namespace BLL.Services.Impletement
                 TotalProviders = users.Count(x => x.Role.RoleName == "PROVIDER"),
                 TotalTrips = trips.Count(),
                 TotalPackages = packages.Count(),
-                TotalRevenue = 0
+
+                // ✅ THEO LOGIC CỦA BẠN
+                TotalRevenue = adminWallet?.Balance ?? 0
             };
 
             return new ResponseDTO("Overview loaded", 200, true, data);
@@ -68,9 +78,103 @@ namespace BLL.Services.Impletement
 
             return new ResponseDTO("Package by status", 200, true, data);
         }
-        public async Task<ResponseDTO> GetRevenueStats(DateTime from,DateTime to,string groupBy)
+        public async Task<ResponseDTO> GetRevenueStats(
+    DateTime from,
+    DateTime to,
+    string groupBy)
         {
-            var data = new List<TimeSeriesDTO>();
+            var revenueTypes = new[]
+            {
+        TransactionType.DRIVER_SERVICE_PAYMENT
+        // Sau này thêm:
+        // TransactionType.PLATFORM_FEE,
+        // TransactionType.SURCHARGE_PAYMENT
+    };
+
+            var baseQuery = _unitOfWork.TransactionRepo.GetAll()
+                .Where(t =>
+                    t.CreatedAt >= from &&
+                    t.CreatedAt <= to &&
+                    t.Status == TransactionStatus.SUCCEEDED &&
+                    t.Amount > 0 &&
+                    revenueTypes.Contains(t.Type)
+                );
+
+            List<TimeSeriesDTO> data;
+
+            switch (groupBy)
+            {
+                case "day":
+                    {
+                        // ===== PHASE 1: EF (SQL) =====
+                        var raw = baseQuery
+                            .GroupBy(t => t.CreatedAt.Date)
+                            .Select(g => new
+                            {
+                                Date = g.Key,
+                                Total = g.Sum(x => x.Amount)
+                            })
+                            .OrderBy(x => x.Date)
+                            .ToList();
+
+                        // ===== PHASE 2: C# (FORMAT STRING) =====
+                        data = raw.Select(x => new TimeSeriesDTO
+                        {
+                            Label = x.Date.ToString("dd/MM/yyyy"),
+                            Value = x.Total
+                        }).ToList();
+
+                        break;
+                    }
+
+                case "month":
+                    {
+                        var raw = baseQuery
+                            .GroupBy(t => new { t.CreatedAt.Year, t.CreatedAt.Month })
+                            .Select(g => new
+                            {
+                                g.Key.Year,
+                                g.Key.Month,
+                                Total = g.Sum(x => x.Amount)
+                            })
+                            .OrderBy(x => x.Year)
+                            .ThenBy(x => x.Month)
+                            .ToList();
+
+                        data = raw.Select(x => new TimeSeriesDTO
+                        {
+                            Label = $"{x.Month:D2}/{x.Year}",
+                            Value = x.Total
+                        }).ToList();
+
+                        break;
+                    }
+
+                case "year":
+                    {
+                        var raw = baseQuery
+                            .GroupBy(t => t.CreatedAt.Year)
+                            .Select(g => new
+                            {
+                                Year = g.Key,
+                                Total = g.Sum(x => x.Amount)
+                            })
+                            .OrderBy(x => x.Year)
+                            .ToList();
+
+                        data = raw.Select(x => new TimeSeriesDTO
+                        {
+                            Label = x.Year.ToString(),
+                            Value = x.Total
+                        }).ToList();
+
+                        break;
+                    }
+
+                default:
+                    data = new List<TimeSeriesDTO>();
+                    break;
+            }
 
             return new ResponseDTO("Revenue stats", 200, true, data);
         }
