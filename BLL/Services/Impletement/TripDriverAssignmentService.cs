@@ -8,7 +8,7 @@ using Common.Helpers;
 using Common.Settings;
 using DAL.Entities;
 using DAL.UnitOfWork;
-using Microsoft.EntityFrameworkCore; // Vẫn cần để dùng Include
+using Microsoft.EntityFrameworkCore; 
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -709,6 +709,91 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
             }
         }
+
+        // =========================================================================
+        // 1. TÀI XẾ CHECK-IN (LÊN XE)
+        // =========================================================================
+        //public async Task<ResponseDTO> DriverCheckInAsync(DriverCheckInDTO dto)
+        //{
+        //    try
+        //    {
+        //        var driverId = _userUtility.GetUserIdFromToken();
+
+        //        // A. Lấy thông tin phân công
+        //        var assignment = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+        //            .Include(a => a.Trip)
+        //            .FirstOrDefaultAsync(a => a.TripId == dto.TripId && a.DriverId == driverId);
+
+        //        if (assignment == null) return new ResponseDTO("Bạn không có trong chuyến này.", 404, false);
+
+        //        // B. Validate Trạng thái
+        //        if (assignment.IsOnBoard) return new ResponseDTO("Bạn đã Check-in rồi.", 400, false);
+
+        //        if (assignment.AssignmentStatus != AssignmentStatus.ACCEPTED)
+        //            return new ResponseDTO("Bạn chưa được chấp nhận vào chuyến này.", 400, false);
+
+        //        // C. XỬ LÝ KHOẢNG CÁCH & VALIDATE > 5KM
+        //        string distanceNote = "";
+        //        // double? finalDistance = null; // Mở comment nếu cần lưu số liệu
+
+        //        if (assignment.StartLocation != null
+        //            && assignment.StartLocation.Latitude.HasValue
+        //            && assignment.StartLocation.Longitude.HasValue)
+        //        {
+        //            // Tính khoảng cách (Km)
+        //            double distKm = CalculateDistance(
+        //                assignment.StartLocation.Latitude.Value,
+        //                assignment.StartLocation.Longitude.Value,
+        //                dto.Latitude,
+        //                dto.Longitude
+        //            );
+
+        //            // finalDistance = distKm; // Mở comment nếu cần lưu số liệu
+
+        //            // 1. Validate CHẶN nếu > 5km
+        //            if (distKm > 5.0)
+        //            {
+        //                return new ResponseDTO($"Vị trí của bạn quá xa điểm đón ({distKm:N2}km > 5km). Vui lòng di chuyển lại gần để Check-in.", 400, false);
+        //            }
+
+        //            // 2. Phân loại cảnh báo cho các trường hợp hợp lệ (<= 5km)
+        //            distanceNote = distKm switch
+        //            {
+        //                <= 0.5 => "", // Dưới 500m -> Tốt
+        //                <= 3.0 => $" | ⚠️ Cảnh báo: Lệch {distKm:N2}km", // 0.5 - 3km -> Cảnh báo nhẹ
+        //                _ => $" | ⛔ Cảnh báo cao: Lệch {distKm:N2}km" // 3km - 5km -> Cảnh báo nặng (nhưng vẫn cho qua)
+        //            };
+        //        }
+
+        //        // D. Upload Ảnh (Chỉ chạy khi đã qua validate khoảng cách để tiết kiệm tài nguyên)
+        //        string imageUrl = await _fileService.UploadFileAsync(dto.EvidenceImage, driverId, FirebaseFileType.CHECKIN_CHECKOUT_IMAGES);
+        //        if (string.IsNullOrEmpty(imageUrl)) return new ResponseDTO("Lỗi upload ảnh minh chứng.", 500, false);
+
+        //        // E. Cập nhật DB
+        //        assignment.IsOnBoard = true;
+        //        assignment.OnBoardTime = DateTime.UtcNow;
+
+        //        // Lưu vị trí kèm Note cảnh báo (nếu có)
+        //        assignment.OnBoardLocation = $"{dto.Latitude},{dto.Longitude}|{dto.CurrentAddress}";
+        //        assignment.OnBoardImage = imageUrl;
+        //        assignment.CheckInNote = distanceNote;
+
+        //        // assignment.CheckInDistanceDiff = finalDistance; // Nếu có cột lưu khoảng cách
+
+        //        await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assignment);
+        //        await _unitOfWork.SaveChangeAsync();
+
+        //        // F. Gửi thông báo (Optional)
+        //        // await _notificationService.SendAsync(assignment.Trip.OwnerId, "TÀI XẾ ĐÃ LÊN XE",
+        //        //     $"Tài xế check-in tại {dto.CurrentAddress}.{distanceNote}");
+
+        //        return new ResponseDTO("Check-in thành công!", 200, true, new { imageUrl, warning = distanceNote });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return new ResponseDTO($"Lỗi: {ex.Message}", 500, false);
+        //    }
+        //}
 
         // =========================================================================
         // 2. TÀI XẾ CHECK-OUT (XUỐNG XE)

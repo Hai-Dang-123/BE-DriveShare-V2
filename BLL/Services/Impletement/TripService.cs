@@ -1321,15 +1321,10 @@ namespace BLL.Services.Implement
         //    }
         //}
 
-        // =========================================================================================================
-        // 2. CORE LOGIC: THANH LÝ HỢP ĐỒNG (LIQUIDATION)
-        // =========================================================================================================
-        // =========================================================================================================
-        // 2. HELPER LOGIC: TÍNH TOÁN TIỀN NONG (LIQUIDATION)
-        // =========================================================================================================
-        // =========================================================================================================
-        // 2. MAIN FUNCTION: CHANGE TRIP STATUS
-        // =========================================================================================================
+
+        // =========================================================================
+        // 2. THAY ĐỔI TRẠNG THÁI CHUYẾN ĐI (ChangeTripStatus)
+        // =========================================================================
         public async Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto)
         {
             // Bắt đầu Transaction để đảm bảo tính toàn vẹn dữ liệu (Tiền + Trạng thái)
@@ -1356,13 +1351,13 @@ namespace BLL.Services.Implement
                     if (dto.NewStatus == TripStatus.LOADING && trip.ActualPickupTime == null)
                     {
                         trip.ActualPickupTime = DateTime.UtcNow;
-                        // Giả sử hàm này bạn đã có
-                        await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.PICKUP);
+                        // Hàm gửi link ký tên (nếu có)
+                         await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.PICKUP);
                     }
                     else if (dto.NewStatus == TripStatus.UNLOADING)
                     {
-                        // Giả sử hàm này bạn đã có
-                        await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.DROPOFF);
+                        // Hàm gửi link ký tên (nếu có)
+                         await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.DROPOFF);
                     }
 
                     await _unitOfWork.TripRepo.UpdateAsync(trip);
@@ -1376,23 +1371,30 @@ namespace BLL.Services.Implement
                 // CASE B: HOÀN TẤT CHUYẾN ĐI (COMPLETED) - XỬ LÝ TIỀN NONG
                 // =====================================================================
 
-                // [BƯỚC 1]: AUTO CHECK-OUT CHO TÀI XẾ CHÍNH (Nếu quên checkout)
+                // [BƯỚC 1]: AUTO CHECK-OUT CHO TÀI XẾ (Nếu quên checkout)
                 var activeAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
-                    .Where(a => a.TripId == trip.TripId &&  !a.IsFinished)
+                    .Where(a => a.TripId == trip.TripId && !a.IsFinished)
                     .ToListAsync();
 
                 if (activeAssignments.Any())
                 {
                     foreach (var assign in activeAssignments)
                     {
-                        assign.IsFinished = true;
-                        assign.OffBoardTime = DateTime.UtcNow;
-                        assign.OffBoardLocation = "Auto-checkout (Trip Completed)";
-                        assign.CheckOutNote = "Hệ thống tự động check-out.";
+                        assign.IsFinished = true; // Kết thúc phân công
                         assign.AssignmentStatus = AssignmentStatus.COMPLETED;
 
-                        // TODO: Gọi hàm tính lương theo giờ nếu có logic đó
-                        // assign.TotalAmount = CalculateSalary(...) 
+                        // Chỉ set thông tin xuống xe nếu họ thực sự ĐÃ LÊN XE
+                        if (assign.IsOnBoard)
+                        {
+                            assign.OffBoardTime = DateTime.UtcNow;
+                            assign.OffBoardLocation = "Auto-checkout (Trip Completed)";
+                            assign.CheckOutNote = "Hệ thống tự động check-out.";
+                        }
+                        else
+                        {
+                            // Nếu chưa lên xe mà chuyến đã xong -> Đánh dấu note
+                            assign.CheckOutNote = "Kết thúc chuyến khi chưa Check-in (Không trả lương).";
+                        }
 
                         await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
                     }
@@ -1410,7 +1412,7 @@ namespace BLL.Services.Implement
                 }
 
                 // [QUAN TRỌNG] Serialize kết quả báo cáo thành JSON và lưu vào Trip
-                var reportData = liquidationResult.Result; // Object chứa OwnerReport, ProviderReport, DriverReports
+                var reportData = liquidationResult.Result;
                 trip.LiquidationReportJson = System.Text.Json.JsonSerializer.Serialize(reportData);
 
                 // [BƯỚC 3]: CẬP NHẬT TRẠNG THÁI TRIP CUỐI CÙNG
@@ -1420,7 +1422,7 @@ namespace BLL.Services.Implement
 
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
 
-                // CHANGE STATUS VEHICLE TRỜ LẠI
+                // CHANGE STATUS VEHICLE TRỞ LẠI ACTIVE
                 var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(trip.VehicleId);
                 if (vehicle != null)
                 {
@@ -1433,7 +1435,6 @@ namespace BLL.Services.Implement
                 await transaction.CommitAsync();
 
                 // [BƯỚC 4]: GỬI EMAIL (Chạy ngầm, không block response)
-                // Truyền result đầy đủ vào để gửi mail chính xác
                 _ = Task.Run(() => SendCompletionEmailsBackground(trip.TripId, liquidationResult.Result));
 
                 return new ResponseDTO("Hoàn tất chuyến đi và thanh toán thành công.", 200, true);
@@ -1444,8 +1445,6 @@ namespace BLL.Services.Implement
                 return new ResponseDTO($"System Error: {ex.Message}", 500, false);
             }
         }
-
-
 
         // =========================================================================================================
         // 3. CORE LOGIC: TÍNH TOÁN TIỀN NONG & QUYẾT TOÁN (LIQUIDATION)
@@ -1458,9 +1457,9 @@ namespace BLL.Services.Implement
             var result = new LiquidationResultModel();
             try
             {
-                // ==========================================================================
+                // --------------------------------------------------------------------------
                 // 1. LOAD DATA
-                // ==========================================================================
+                // --------------------------------------------------------------------------
                 var trip = await _unitOfWork.TripRepo.GetAll()
                     .Include(t => t.ShippingRoute)
                     .Include(t => t.TripProviderContract)
@@ -1472,9 +1471,9 @@ namespace BLL.Services.Implement
                 result.TripId = trip.TripId;
                 result.TripCode = trip.TripCode;
 
-                // ==========================================================================
+                // --------------------------------------------------------------------------
                 // 2. LẤY WALLET & USER (Provider, Owner, ADMIN)
-                // ==========================================================================
+                // --------------------------------------------------------------------------
                 Guid providerId = trip.TripProviderContract?.CounterpartyId ?? trip.Packages.FirstOrDefault()?.ProviderId ?? Guid.Empty;
                 var providerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(providerId);
                 var providerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == providerId);
@@ -1482,18 +1481,17 @@ namespace BLL.Services.Implement
                 var ownerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(trip.OwnerId);
                 var ownerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == trip.OwnerId);
 
-                // [MỚI] Lấy ví Admin Hệ Thống
+                // Ví Admin Hệ Thống
                 var adminWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == SystemAdminId);
 
                 if (providerWallet == null || ownerWallet == null) return (false, null, "Lỗi: Không tìm thấy ví Provider hoặc Owner.");
-                // Lưu ý: Nếu adminWallet == null, code bên dưới sẽ bỏ qua việc cộng phí sàn (để tránh lỗi crash)
 
                 var ownerReport = new ParticipantFinancialReport { UserId = trip.OwnerId, FullName = ownerUser.FullName, Email = ownerUser.Email, Role = "Owner" };
                 var providerReport = new ParticipantFinancialReport { UserId = providerId, FullName = providerUser.FullName, Email = providerUser.Email, Role = "Provider" };
 
-                // ==========================================================================
+                // --------------------------------------------------------------------------
                 // 3. TÍNH TOÁN PHẠT (SURCHARGES)
-                // ==========================================================================
+                // --------------------------------------------------------------------------
                 var allSurcharges = await _unitOfWork.TripSurchargeRepo.GetAll()
                     .Where(s => s.TripId == tripId && s.Status == SurchargeStatus.PENDING)
                     .ToListAsync();
@@ -1504,7 +1502,7 @@ namespace BLL.Services.Implement
                 decimal collectedForOwner = 0;
 
                 // ==========================================================================
-                // PHẦN A: TÍNH CHO DRIVER (TRỪ HẾT VÀO DRIVER, CHO PHÉP ÂM)
+                // PHẦN A: TÍNH CHO DRIVER (QUAN TRỌNG: CHECK IS ON BOARD)
                 // ==========================================================================
                 var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
                     .Where(a => a.TripId == tripId && a.AssignmentStatus == AssignmentStatus.COMPLETED)
@@ -1526,20 +1524,41 @@ namespace BLL.Services.Implement
                         Role = "Tài xế"
                     };
 
+                    // [LOGIC MỚI] VALIDATE CHECK-IN
+                    // Nếu chưa Check-in (IsOnBoard == false) -> Lương = 0, Không chịu phạt
+                    if (!assign.IsOnBoard)
+                    {
+                        dReport.AddItem("⚠️ Không Check-in (Không trả lương)", 0, false);
+                        dReport.FinalWalletChange = 0;
+
+                        // Đánh dấu trạng thái thanh toán là REJECTED/CANCELLED
+                        assign.PaymentStatus = DriverPaymentStatus.UN_PAID;
+                        //assign. = "Driver did not check-in. No payment processed.";
+
+                        result.DriverReports.Add(dReport);
+                        continue; // -> BỎ QUA, SANG TÀI XẾ KHÁC
+                    }
+
+                    // --- NẾU ĐÃ CHECK-IN THÌ TÍNH TOÁN BÌNH THƯỜNG ---
+
                     // A1. Thu nhập (Lương + Thưởng)
                     decimal totalIncome = assign.BaseAmount + (assign.BonusAmount ?? 0);
                     totalSalaryAndBonusExpense += totalIncome;
                     dReport.AddItem("Lương & Thưởng", totalIncome, false);
 
-                    // A2. Tính Phạt (Chia sẻ)
+                    // A2. Tính Phạt (Chỉ phạt nếu tài xế CÓ MẶT trên xe)
                     decimal payToProvider = 0;
                     decimal payToOwner = 0;
 
                     foreach (var sur in allSurcharges)
                     {
+                        // Chỉ tính phạt nếu tài xế chịu trách nhiệm
                         if (IsDriverResponsible(assign, sur))
                         {
-                            int responsibleCount = assignments.Count(a => IsDriverResponsible(a, sur));
+                            // Đếm số lượng tài xế chịu trách nhiệm VÀ CÓ check-in (Công bằng)
+                            int responsibleCount = assignments.Count(a => IsDriverResponsible(a, sur) && a.IsOnBoard);
+
+                            // Tránh chia cho 0
                             decimal share = sur.Amount / (responsibleCount > 0 ? responsibleCount : 1);
 
                             if (IsSurchargeForProvider(sur.Type))
@@ -1556,8 +1575,6 @@ namespace BLL.Services.Implement
                     }
 
                     // A3. TRỪ TIỀN PHẠT (Dùng Helper Ghi Nợ nếu thiếu)
-
-                    // -> Phạt Hàng hóa (Chuyển sang Provider)
                     if (payToProvider > 0)
                     {
                         await DeductMoneyWithDebtLogAsync(driverWallet, tripId, payToProvider, $"Bồi thường hàng hóa (Trip {trip.TripCode})");
@@ -1567,7 +1584,6 @@ namespace BLL.Services.Implement
                         await CreateIncomeTransactionAsync(providerWallet, tripId, payToProvider, TransactionType.COMPENSATION, $"Nhận bồi thường từ {dReport.FullName}");
                     }
 
-                    // -> Phạt Xe (Chuyển sang Owner)
                     if (payToOwner > 0)
                     {
                         await DeductMoneyWithDebtLogAsync(driverWallet, tripId, payToOwner, $"Bồi thường hư xe (Trip {trip.TripCode})");
@@ -1605,17 +1621,15 @@ namespace BLL.Services.Implement
                 // PHẦN B: TÍNH CHO OWNER & ADMIN (PLATFORM FEE)
                 // ==========================================================================
 
-                // B1. Cộng Doanh thu & Tính Phí Sàn (Logic: Chỉ trừ phí nếu có doanh thu dương)
+                // B1. Cộng Doanh thu & Tính Phí Sàn
                 decimal originalFare = trip.TotalFare;
                 decimal platformFee = 0;
 
-                // YÊU CẦU: Nếu tiền nhận <= 0 thì KHỎI SÀN (Phí = 0)
                 if (originalFare > 0)
                 {
                     platformFee = originalFare * 0.10m; // 10% phí sàn
                 }
 
-                // Số tiền thực tế Owner nhận được sau khi trừ phí
                 decimal netRevenue = originalFare - platformFee;
 
                 // Log Report Owner
@@ -1623,9 +1637,8 @@ namespace BLL.Services.Implement
 
                 if (platformFee > 0)
                 {
-                    ownerReport.AddItem("Phí sàn (10%)", platformFee, true); // true = là khoản trừ (màu đỏ)
-
-                    // [MỚI] CỘNG TIỀN VÀO VÍ ADMIN
+                    ownerReport.AddItem("Phí sàn (10%)", platformFee, true);
+                    // CỘNG TIỀN VÀO VÍ ADMIN
                     if (adminWallet != null)
                     {
                         adminWallet.Balance += platformFee;
@@ -1637,7 +1650,7 @@ namespace BLL.Services.Implement
                 ownerWallet.Balance += netRevenue;
                 await CreateIncomeTransactionAsync(ownerWallet, tripId, netRevenue, TransactionType.OWNER_PAYOUT, "Doanh thu vận hành (đã trừ phí)");
 
-                // B2. Trừ Lương Tài xế (Ghi nợ nếu thiếu)
+                // B2. Trừ Lương Tài xế (Chỉ trừ phần lương của những người ĐÃ Check-in)
                 if (totalSalaryAndBonusExpense > 0)
                 {
                     ownerReport.AddItem("Chi phí lương", totalSalaryAndBonusExpense, true);
@@ -1648,17 +1661,15 @@ namespace BLL.Services.Implement
                 decimal gap = totalAmountDueToProvider - collectedForProvider;
                 if (gap > 0)
                 {
-                    // Trừ Owner (Ghi nợ nếu thiếu)
                     await DeductMoneyWithDebtLogAsync(ownerWallet, tripId, gap, "Bù lỗ bồi thường hàng hóa");
 
-                    // Cộng Provider
                     providerWallet.Balance += gap;
                     await CreateIncomeTransactionAsync(providerWallet, tripId, gap, TransactionType.COMPENSATION, "Nhận bồi thường (Owner bù)");
 
                     ownerReport.AddItem("Bù lỗ hàng hóa", gap, true);
                 }
 
-                // B4. Log tiền phạt nội bộ nhận được (Chỉ để report, tiền đã cộng ở vòng lặp A)
+                // B4. Log tiền phạt nội bộ nhận được (Chỉ report)
                 if (collectedForOwner > 0) ownerReport.AddItem("Thu phạt nội bộ", collectedForOwner, false);
 
                 ownerReport.FinalWalletChange = netRevenue - totalSalaryAndBonusExpense - (gap > 0 ? gap : 0) + collectedForOwner;
@@ -1680,14 +1691,7 @@ namespace BLL.Services.Implement
 
                 await _unitOfWork.WalletRepo.UpdateAsync(ownerWallet);
                 await _unitOfWork.WalletRepo.UpdateAsync(providerWallet);
-
-                // [MỚI] Lưu Ví Admin (Nếu có)
-                if (adminWallet != null)
-                {
-                    await _unitOfWork.WalletRepo.UpdateAsync(adminWallet);
-                }
-
-                // Driver wallets saved in loop via context tracking
+                if (adminWallet != null) await _unitOfWork.WalletRepo.UpdateAsync(adminWallet);
 
                 result.OwnerReport = ownerReport;
                 result.ProviderReport = providerReport;

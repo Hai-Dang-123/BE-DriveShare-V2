@@ -31,7 +31,7 @@ namespace Common.Enums.Type
         PLATFORM_PAYMENT,
 
         COMPENSATION,         // bồi thường
-        COMMISSION
+        
 
 
     }
