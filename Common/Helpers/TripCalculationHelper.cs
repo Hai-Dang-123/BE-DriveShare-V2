@@ -5,56 +5,63 @@ namespace Common.Helpers
 {
     public static class TripCalculationHelper
     {
-
-        // CẬP NHẬT: Thêm tham số waitTimeHours và bufferHours
         public static DriverSuggestionDTO CalculateScenarios(
             double distanceKm,
             double rawDrivingHours,
-            double waitTimeHours,   // <--- MỚI
-            double bufferHours,     // <--- MỚI
+            double waitTimeHours,
+            double bufferHours,
             DateTime pickup,
             DateTime deadline)
         {
             var suggestion = new DriverSuggestionDTO
             {
                 DistanceKm = distanceKm,
-                EstimatedDurationHours = rawDrivingHours
+                EstimatedDurationHours = Math.Round(rawDrivingHours, 1)
             };
 
             // Deadline window (giờ)
             double deadlineWindow = (deadline - pickup).TotalHours;
             if (deadlineWindow <= 0) deadlineWindow = 0.1;
 
-            // Tổng thời gian "chết" (Chờ cấm tải + Buffer)
+            // Tổng thời gian "chết" (Chờ kho + Buffer rủi ro)
             double nonDrivingTime = waitTimeHours + bufferHours;
 
             // =====================================================================
-            // KỊCH BẢN 1: SOLO
+            // KỊCH BẢN 1: SOLO (1 TÀI XẾ)
             // =====================================================================
-            double totalBreakTime = (rawDrivingHours / 4.0) * 0.25;
-            double daysNeeded = Math.Ceiling(rawDrivingHours / 10.0);
-            double totalRestTime = (daysNeeded > 1) ? (daysNeeded - 1) * 10.0 : 0;
+            // 1. Nghỉ ngắn (Break): Cứ 4h lái nghỉ 15p
+            double shortBreaks = (rawDrivingHours / 4.0) * 0.25;
 
-            // Tổng thời gian trôi qua
-            double soloElapsed = rawDrivingHours + totalBreakTime + totalRestTime + nonDrivingTime;
+            // 2. Nghỉ dài (Sleep): Luật lái max 10h/ngày. 
+            // Ví dụ: 34h lái -> 3.4 ngày -> Cần ngủ 3 đêm (mỗi đêm 10 tiếng gồm ăn tối/ngủ/ăn sáng)
+            double daysNeeded = rawDrivingHours / 10.0;
+            int nightsToSleep = (int)Math.Floor(daysNeeded);
+            // Nếu phần dư > 0 (ví dụ lái 10.5h), thực tế tài xế sẽ cố hoặc ngủ thêm, 
+            // nhưng công thức này lấy sàn để tính tối thiểu số đêm phải ngủ lại dọc đường.
+
+            double sleepTime = nightsToSleep * 10.0;
+
+            // Tổng thời gian trôi qua thực tế
+            double soloElapsed = rawDrivingHours + shortBreaks + sleepTime + nonDrivingTime;
 
             suggestion.SoloScenario = new DriverScenarioDTO
             {
                 TotalElapsedHours = Math.Round(soloElapsed, 1),
                 DrivingHoursPerDriver = Math.Round(rawDrivingHours, 1),
                 IsPossible = (soloElapsed <= deadlineWindow) && (rawDrivingHours <= 48),
-                Message = $"1 Tài xế: Tổng {Math.Round(soloElapsed, 1)}h (Gồm {Math.Round(nonDrivingTime, 1)}h chờ)."
+                Message = $"1 Tài xế: Tổng {Math.Round(soloElapsed, 1)}h (~{(soloElapsed / 24):N1} ngày)."
             };
 
             if (!suggestion.SoloScenario.IsPossible)
             {
                 if (rawDrivingHours > 48) suggestion.SoloScenario.Note = "Quá 48h lái/tuần.";
-                else suggestion.SoloScenario.Note = "Trễ deadline.";
+                else suggestion.SoloScenario.Note = "Trễ deadline (Cần thêm tài).";
             }
 
             // =====================================================================
-            // KỊCH BẢN 2: TEAM
+            // KỊCH BẢN 2: TEAM (2 TÀI XẾ CHẠY SUỐT)
             // =====================================================================
+            // Hiệu suất 95% (đổi tài, vệ sinh)
             double teamTotalElapsed = (rawDrivingHours / 0.95) + nonDrivingTime;
 
             suggestion.TeamScenario = new DriverScenarioDTO
@@ -69,8 +76,9 @@ namespace Common.Helpers
                 suggestion.TeamScenario.Note = "Vẫn trễ deadline.";
 
             // =====================================================================
-            // KỊCH BẢN 3: EXPRESS (3 Tài)
+            // KỊCH BẢN 3: EXPRESS (3 TÀI XẾ)
             // =====================================================================
+            // Hiệu suất 98%
             double expressElapsed = (rawDrivingHours / 0.98) + nonDrivingTime;
 
             suggestion.ExpressScenario = new DriverScenarioDTO
@@ -82,7 +90,7 @@ namespace Common.Helpers
             };
 
             // =====================================================================
-            // RECOMMENDATION
+            // RECOMMENDATION (ĐỀ XUẤT)
             // =====================================================================
             if (suggestion.SoloScenario.IsPossible)
             {

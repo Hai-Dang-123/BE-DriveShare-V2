@@ -988,43 +988,59 @@ namespace BLL.Services.Implement
                 // 1. Lấy thông tin Trip kèm ShippingRoute
                 var trip = await _unitOfWork.TripRepo.GetAll()
                     .Include(t => t.DriverAssignments)
-                    .Include(t => t.ShippingRoute) // Quan trọng: Cần Include cái này
+                    .Include(t => t.ShippingRoute) // Quan trọng: Cần Include để lấy dữ liệu quãng đường
                     .AsNoTracking()
                     .FirstOrDefaultAsync(t => t.TripId == tripId);
 
                 if (trip == null) return new ResponseDTO("Trip not found", 404, false);
 
                 // 2. Lấy dữ liệu từ Trip và ShippingRoute
-                // Ưu tiên lấy từ ShippingRoute (dữ liệu dự tính lúc tạo đơn), nếu không có thì fallback sang Trip (thực tế)
+                // Ưu tiên lấy từ ShippingRoute (dữ liệu dự tính chuẩn), nếu không có thì fallback sang Actual (thực tế)
 
-                double distance = trip.ShippingRoute.EstimatedDistanceKm > 0
+                double distance = (trip.ShippingRoute?.EstimatedDistanceKm > 0)
                     ? trip.ShippingRoute.EstimatedDistanceKm
                     : (double)trip.ActualDistanceKm;
 
-                double rawDrivingHours = trip.ShippingRoute.EstimatedDurationHours > 0
+                double rawDrivingHours = (trip.ShippingRoute?.EstimatedDurationHours > 0)
                     ? trip.ShippingRoute.EstimatedDurationHours
                     : trip.ActualDuration.TotalHours;
 
-                // Fallback cuối cùng nếu cả 2 đều bằng 0
-                if (rawDrivingHours <= 0 && distance > 0) rawDrivingHours = distance / 50.0;
+                // [QUAN TRỌNG] FIX LOGIC: Kẹp tốc độ trần (Speed Clamping)
+                // Đồng bộ logic với GetPostPackageDetailsAsync để tránh việc tính ra 27 tiếng cho HN-SG
+                if (distance > 0 && rawDrivingHours > 0)
+                {
+                    double avgSpeed = distance / rawDrivingHours;
+                    const double REALISTIC_TRUCK_SPEED = 50.0; // Tốc độ trung bình xe tải Bắc Nam (50km/h)
 
-                // [FIX LỖI] Lấy WaitTime từ ShippingRoute (Entity bạn vừa show)
-                // Dùng toán tử ?? để handle null (vì WaitTimeHours là double?)
-                double waitTimeHours = trip.ShippingRoute.WaitTimeHours ?? 0;
+                    // Nếu vận tốc > 55km/h -> Dữ liệu đang là của xe con hoặc lý thuyết
+                    if (avgSpeed > 55.0)
+                    {
+                        // Tính lại giờ lái thực tế
+                        rawDrivingHours = distance / REALISTIC_TRUCK_SPEED;
+                    }
+                }
+                else if (distance > 0 && rawDrivingHours <= 0)
+                {
+                    // Fallback: Nếu không có thời gian, tự tính theo tốc độ 50km/h
+                    rawDrivingHours = distance / 50.0;
+                }
 
-                // Tính Buffer: Nếu ShippingRoute có lưu TravelTimeHours (chạy thực) thì:
-                // Buffer = TravelTime - DrivingTime (nhưng thường TravelTime đã bao gồm buffer)
-                // Ở đây ta tính buffer đơn giản theo quy ước cũ nếu chưa lưu field riêng: 15% thời gian lái
-                double bufferHours = rawDrivingHours * 0.15;
+                // [FIX LỖI] Lấy WaitTime & Tính Buffer
+                // Dùng toán tử ?. và ?? để handle null an toàn
+                double waitTimeHours = trip.ShippingRoute?.WaitTimeHours ?? 0;
+
+                // Tính Buffer: 15% thời gian lái + 30 phút rủi ro (Đồng bộ logic)
+                double bufferHours = (rawDrivingHours * 0.15) + 0.5;
 
                 // 3. Gọi Helper tính toán
+                // rawDrivingHours lúc này đã là con số thực tế (ví dụ ~34h cho HN-SG)
                 var suggestion = TripCalculationHelper.CalculateScenarios(
                     distance,
                     rawDrivingHours,
-                    waitTimeHours, // Đã lấy từ ShippingRoute
+                    waitTimeHours,
                     bufferHours,
-                    trip.ShippingRoute.ExpectedPickupDate,
-                    trip.ShippingRoute.ExpectedDeliveryDate
+                    trip.ShippingRoute?.ExpectedPickupDate ?? DateTime.UtcNow,
+                    trip.ShippingRoute?.ExpectedDeliveryDate ?? DateTime.UtcNow.AddHours(24)
                 );
 
                 // 4. Xác định Số lượng tài & Giờ lái yêu cầu
@@ -1046,7 +1062,7 @@ namespace BLL.Services.Implement
                         targetDrivers = 3;
                         requiredHoursPerDriver = suggestion.ExpressScenario.DrivingHoursPerDriver;
                         break;
-                    default:
+                    default: // IMPOSSIBLE hoặc khác
                         targetDrivers = 2;
                         mode = "TEAM (Overdue)";
                         requiredHoursPerDriver = suggestion.TeamScenario.DrivingHoursPerDriver;
@@ -1079,7 +1095,7 @@ namespace BLL.Services.Implement
             }
             catch (Exception ex)
             {
-                return new ResponseDTO(ex.Message, 500, false);
+                return new ResponseDTO($"Lỗi phân tích chuyến: {ex.Message}", 500, false);
             }
         }
 
@@ -1332,7 +1348,10 @@ namespace BLL.Services.Implement
             try
             {
                 // 1. Load Trip (Include đủ để tránh query nhiều lần)
-                var trip = await _unitOfWork.TripRepo.GetByIdAsync(dto.TripId);
+                // 1. Load Trip (CẬP NHẬT: Include Package và Item để update status)
+                var trip = await _unitOfWork.TripRepo.GetAll()
+                    .Include(t => t.Packages).ThenInclude(p => p.Item) // <--- QUAN TRỌNG: Load gói hàng kèm theo
+                    .FirstOrDefaultAsync(t => t.TripId == dto.TripId);
                 if (trip == null) return new ResponseDTO("Không tìm thấy chuyến đi.", 404, false);
 
                 // --- VALIDATE ---
@@ -1414,6 +1433,31 @@ namespace BLL.Services.Implement
                 // [QUAN TRỌNG] Serialize kết quả báo cáo thành JSON và lưu vào Trip
                 var reportData = liquidationResult.Result;
                 trip.LiquidationReportJson = System.Text.Json.JsonSerializer.Serialize(reportData);
+
+
+                // [BƯỚC 3 - MỚI]: CẬP NHẬT TRẠNG THÁI PACKAGE VÀ ITEM -> COMPLETED
+                if (trip.Packages != null && trip.Packages.Any())
+                {
+                    foreach (var pkg in trip.Packages)
+                    {
+                        // Update Package
+                        pkg.Status = PackageStatus.COMPLETED; // Đảm bảo Enum PackageStatus có giá trị này
+                        pkg.UpdatedAt = DateTime.UtcNow;
+
+                        // Update Item bên trong (nếu có)
+                        if (pkg.Item != null)
+                        {
+                            pkg.Item.Status = ItemStatus.COMPLETED; // Đảm bảo Enum ItemStatus có giá trị này
+                            //pkg.Item.UpdatedAt = DateTime.UtcNow;
+
+                            // Cập nhật ItemRepo (nếu Entity Framework không tự track cascade)
+                            await _unitOfWork.ItemRepo.UpdateAsync(pkg.Item);
+                        }
+
+                        // Cập nhật PackageRepo
+                        await _unitOfWork.PackageRepo.UpdateAsync(pkg);
+                    }
+                }
 
                 // [BƯỚC 3]: CẬP NHẬT TRẠNG THÁI TRIP CUỐI CÙNG
                 trip.Status = TripStatus.COMPLETED;
@@ -1526,17 +1570,48 @@ namespace BLL.Services.Implement
 
                     // [LOGIC MỚI] VALIDATE CHECK-IN
                     // Nếu chưa Check-in (IsOnBoard == false) -> Lương = 0, Không chịu phạt
+                    // ... Bên trong foreach (var assign in assignments) ...
+
+                    // [LOGIC MỚI] VALIDATE CHECK-IN
                     if (!assign.IsOnBoard)
                     {
+                        // 1. BÁO CÁO LƯƠNG = 0
                         dReport.AddItem("⚠️ Không Check-in (Không trả lương)", 0, false);
-                        dReport.FinalWalletChange = 0;
-
-                        // Đánh dấu trạng thái thanh toán là REJECTED/CANCELLED
                         assign.PaymentStatus = DriverPaymentStatus.UN_PAID;
-                        //assign. = "Driver did not check-in. No payment processed.";
+
+                        // 2. XỬ LÝ TIỀN CỌC (FIX: Tịch thu cọc chuyển cho Owner)
+                        if (assign.DepositStatus == DepositStatus.DEPOSITED && assign.DepositAmount > 0)
+                        {
+                            decimal penaltyAmount = assign.DepositAmount;
+
+                            // A. Cộng tiền vào ví Owner (Bồi thường)
+                            ownerWallet.Balance += penaltyAmount;
+
+                            // B. Tạo Transaction cho Owner
+                            await CreateIncomeTransactionAsync(ownerWallet, tripId, penaltyAmount,
+                                TransactionType.COMPENSATION,
+                                $"Nhận phạt cọc từ {assign.Driver?.FullName ?? "Tài xế"} (Bỏ chuyến)");
+
+                            // C. Cập nhật trạng thái cọc -> TỊCH THU
+                            assign.DepositStatus = DepositStatus.SEIZED; // Cần đảm bảo Enum có trạng thái này
+                            //assign.Note = "Tài xế không check-in. Cọc đã chuyển cho Owner.";
+
+                            // D. Cập nhật biến tổng để hiển thị trong Report của Owner (Phần Thu phạt nội bộ)
+                            collectedForOwner += penaltyAmount;
+
+                            // E. Log vào Report của Driver để họ thấy
+                            dReport.AddItem("⛔ Bị tịch thu cọc (Bỏ chuyến)", penaltyAmount, true);
+
+                            // Trừ tiền hiển thị trong report (thực tế tiền đã nằm ở hệ thống/ví driver từ trước, giờ chỉ là đổi chủ)
+                            dReport.FinalWalletChange = -penaltyAmount;
+                        }
+                        else
+                        {
+                            dReport.FinalWalletChange = 0;
+                        }
 
                         result.DriverReports.Add(dReport);
-                        continue; // -> BỎ QUA, SANG TÀI XẾ KHÁC
+                        continue; // -> BỎ QUA CÁC BƯỚC TÍNH LƯƠNG BÊN DƯỚI, SANG TÀI XẾ KHÁC
                     }
 
                     // --- NẾU ĐÃ CHECK-IN THÌ TÍNH TOÁN BÌNH THƯỜNG ---

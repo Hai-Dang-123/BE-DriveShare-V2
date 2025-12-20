@@ -198,13 +198,26 @@ namespace BLL.Services.Impletement
                         return new ResponseDTO("Không tìm thấy lộ trình phù hợp giữa hai điểm này.", 400, false);
                     }
 
-                    // --- Tính toán thời gian chạy (Travel Time) ---
-                    double rawHours = path.Time / (1000.0 * 60 * 60);
-                    calculatedDistance = Math.Round(path.Distance / 1000.0, 2);
+                    // --- [FIX LOGIC TÍNH GIỜ] ---
+                    double distKm = Math.Round(path.Distance / 1000.0, 2);
+                    calculatedDistance = distKm;
+
+                    // Lấy giờ từ API
+                    double apiHours = path.Time / (1000.0 * 60 * 60);
+
+                    // KIỂM TRA TỐC ĐỘ TRUNG BÌNH
+                    // Nếu > 55km/h => API đang trả giờ xe con/lý tưởng => Tính lại theo 50km/h
+                    double avgSpeed = (apiHours > 0) ? distKm / apiHours : 0;
+                    double rawHours = apiHours;
+
+                    if (avgSpeed > 55.0)
+                    {
+                        rawHours = distKm / 50.0; // Ép về tốc độ 50km/h
+                    }
 
                     // Buffer an toàn: 15% + 30 phút cho kẹt xe/nghỉ ngơi
                     double bufferHours = (rawHours * 0.15) + 0.5;
-                    travelTimeTotal = Math.Round(rawHours + bufferHours, 1);
+                    travelTimeTotal = Math.Round(rawHours + bufferHours, 1); // Lúc này travelTime sẽ khoảng 40 tiếng (Hợp lý)
 
                     // --- Tính toán thời gian chờ (Wait Time) do Cấm tải ---
                     // Dự kiến xe đến cửa ngõ đích sau khi chạy xong travelTimeTotal
@@ -480,11 +493,14 @@ namespace BLL.Services.Impletement
                 {
                     // Lấy dữ liệu từ DB (đã lưu lúc Create Post)
                     double dist = postPackage.ShippingRoute.EstimatedDistanceKm;
-                    double durationHours = postPackage.ShippingRoute.EstimatedDurationHours;
+                    double durationHours = postPackage.ShippingRoute.EstimatedDurationHours; // Lưu ý: DB thường lưu Tổng giờ (Driving + Buffer)
 
                     // [MỚI] Lấy WaitTime & Buffer
                     double waitTimeHours = postPackage.ShippingRoute.WaitTimeHours ?? 0;
-                    double bufferHours = 0; // Nếu chưa lưu buffer thì tạm tính 0 hoặc tính lại
+                    double bufferHours = 0;
+
+                    // Biến này dùng để truyền vào Helper (Cần là Giờ lái thuần túy - Raw Driving Hours)
+                    double rawDrivingHoursForHelper = durationHours;
 
                     // Fallback: Nếu DB chưa có dữ liệu (dữ liệu cũ), gọi VietMap tính lại
                     if (dist == 0 || durationHours == 0)
@@ -497,23 +513,57 @@ namespace BLL.Services.Impletement
                             var path = await _vietMapService.GetRouteAsync(startNode, endNode, "truck");
                             if (path != null)
                             {
-                                // Tính toán lại Duration & Distance
-                                double rawHours = path.Time / (1000.0 * 60 * 60);
+                                // 1. Tính Distance
                                 dist = Math.Round(path.Distance / 1000.0, 2);
 
-                                // Buffer mặc định 15% + 30p
-                                bufferHours = (rawHours * 0.15) + 0.5;
-                                durationHours = rawHours + bufferHours; // Tổng estimated
+                                // 2. Tính Duration (FIX LỖI 27 TIẾNG HN-SG)
+                                double apiHours = path.Time / (1000.0 * 60 * 60);
+
+                                // Logic: Nếu vận tốc trung bình > 55km/h => API đang trả về giờ xe con.
+                                // Xe tải nặng đường dài VN chỉ chạy trung bình 50km/h.
+                                double avgSpeed = (apiHours > 0) ? dist / apiHours : 0;
+                                const double REALISTIC_TRUCK_SPEED = 50.0;
+
+                                double realDrivingHours;
+
+                                if (avgSpeed > 55.0)
+                                {
+                                    // Tính lại giờ chạy thực tế (khoảng 35h cho 1700km)
+                                    realDrivingHours = dist / REALISTIC_TRUCK_SPEED;
+                                }
+                                else
+                                {
+                                    realDrivingHours = apiHours;
+                                }
+
+                                // 3. Tính Buffer (15% + 30p rủi ro)
+                                bufferHours = (realDrivingHours * 0.15) + 0.5;
+
+                                // Gán giá trị Raw Driving cho biến Helper
+                                rawDrivingHoursForHelper = realDrivingHours;
+
+                                // Cập nhật lại durationHours (để hiển thị nếu cần, dù biến này ít dùng dưới đây)
+                                durationHours = realDrivingHours + bufferHours;
                             }
                         }
                     }
+                    else
+                    {
+                        // Trường hợp lấy từ DB (durationHours đang là Tổng), ta cần tách ra Raw Driving để tính Helper cho chuẩn
+                        // Vì Helper sẽ tự cộng lại buffer
+                        // Ước tính ngược: Raw = Duration / 1.15 (gần đúng) hoặc lấy Duration - Buffer (nếu DB có lưu buffer riêng)
+                        // Ở đây ta tạm lấy Duration làm Raw nếu không gọi API, hoặc tách buffer mặc định
+                        bufferHours = (durationHours * 0.15) + 0.5;
+                        rawDrivingHoursForHelper = durationHours - bufferHours;
+                        if (rawDrivingHoursForHelper < 0) rawDrivingHoursForHelper = durationHours;
+                    }
 
-                    // Gọi Helper tính toán kịch bản (Phiên bản mới 6 tham số)
-                    if (durationHours > 0)
+                    // Gọi Helper tính toán kịch bản
+                    if (rawDrivingHoursForHelper > 0)
                     {
                         dto.DriverSuggestion = TripCalculationHelper.CalculateScenarios(
                             dist,
-                            durationHours, // Lưu ý: Nếu durationHours đã gồm buffer thì truyền rawHours vào đây sẽ chuẩn hơn
+                            rawDrivingHoursForHelper, // Quan trọng: Truyền giờ lái thuần túy
                             waitTimeHours,
                             bufferHours,
                             postPackage.ShippingRoute.ExpectedPickupDate,
@@ -676,20 +726,33 @@ namespace BLL.Services.Impletement
                 if (path == null) return new ResponseDTO("Không tìm thấy lộ trình phù hợp cho xe tải.", 404, false);
 
                 // --- 3. TÍNH TOÁN THỜI GIAN DI CHUYỂN (TRAVEL TIME) ---
-                double rawHours = path.Time / (1000.0 * 60 * 60);
+                double apiHours = path.Time / (1000.0 * 60 * 60);
                 double distanceKm = Math.Round(path.Distance / 1000.0, 2);
+
+                // [FIX LOGIC] Kẹp tốc độ trần (Speed Clamping)
+                double rawHours = apiHours;
+                if (distanceKm > 0 && apiHours > 0)
+                {
+                    double avgSpeed = distanceKm / apiHours;
+                    const double MAX_TRUCK_SPEED = 55.0; // km/h
+                    const double REALISTIC_SPEED = 50.0; // km/h (Xe tải Bắc Nam)
+
+                    if (avgSpeed > MAX_TRUCK_SPEED)
+                    {
+                        // Tính lại giờ chạy dựa trên tốc độ thực tế
+                        rawHours = distanceKm / REALISTIC_SPEED;
+                    }
+                }
 
                 // Buffer: Cộng thêm 15% + 30 phút cho tắc đường/nghỉ ngơi
                 double bufferHours = (rawHours * 0.15) + 0.5;
                 double travelTimeTotal = rawHours + bufferHours;
 
                 // --- 4. CHECK GIỜ CẤM & TÍNH THỜI GIAN CHỜ (LOGIC START & END) ---
-
                 double totalWaitTime = 0;
                 string restrictionNote = "";
 
                 // BƯỚC 4.1: Kiểm tra cấm tải tại ĐẦU ĐI (Start Location)
-                // Xe muốn xuất phát lúc ExpectedPickupDate. Check xem giờ đó chỗ đi có cấm không?
                 var startRestriction = await _trafficRestrictionService.CheckRestrictionAsync(
                     dto.StartLocation.Address,
                     dto.ExpectedPickupDate
@@ -717,7 +780,6 @@ namespace BLL.Services.Impletement
                 if (endRestriction.IsRestricted)
                 {
                     totalWaitTime += endRestriction.WaitTime;
-                    // Nếu đã có note đầu đi thì thêm dấu phẩy hoặc xuống dòng
                     string separator = string.IsNullOrEmpty(restrictionNote) ? "" : " + ";
                     restrictionNote += $"{separator}Đầu đến: Chờ {Math.Round(endRestriction.WaitTime, 1)}h ({endRestriction.Reason}).";
                 }
@@ -729,15 +791,16 @@ namespace BLL.Services.Impletement
                 var minDeliveryDateRaw = dto.ExpectedPickupDate.AddHours(totalDuration);
                 var minDeliveryDate = CeilToNextHour(minDeliveryDateRaw);
 
-                // Gợi ý ngày giao hàng (thư thả thêm 1 ngày)
-                var suggestedDate = minDeliveryDate.AddDays(1);
+                // Gợi ý ngày giao hàng (thư thả thêm 1 ngày nếu quãng đường dài > 500km, nếu ngắn thì thôi)
+                // Logic phụ: Nếu đường dài > 1000km (như Bắc Nam), cộng hẳn 24h để an toàn
+                var suggestedDate = (distanceKm > 500) ? minDeliveryDate.AddDays(1) : minDeliveryDate.AddHours(4);
 
                 // Map kết quả ra DTO
                 var result = new RouteCalculationResultDTO
                 {
                     EstimatedDistanceKm = distanceKm,
                     TravelTimeHours = Math.Round(travelTimeTotal, 1),
-                    WaitTimeHours = Math.Round(totalWaitTime, 1),    // Tổng chờ cả 2 đầu
+                    WaitTimeHours = Math.Round(totalWaitTime, 1),
                     EstimatedDurationHours = Math.Round(totalDuration, 1),
                     RestrictionNote = restrictionNote,
 
@@ -752,7 +815,7 @@ namespace BLL.Services.Impletement
                 if (dto.ExpectedDeliveryDate.HasValue && dto.ExpectedDeliveryDate.Value <= minDeliveryDate)
                 {
                     result.IsValid = false;
-                    result.Message = $"Thời gian quá gấp! Cần {Math.Round(totalDuration, 1)}h (Gồm {Math.Round(travelTimeTotal, 1)}h chạy + {Math.Round(totalWaitTime, 1)}h chờ cấm tải). Gợi ý: {suggestedDate:dd/MM/yyyy HH:mm}";
+                    result.Message = $"Thời gian quá gấp! Cần tối thiểu {Math.Round(totalDuration, 1)}h (Gồm {Math.Round(travelTimeTotal, 1)}h chạy + {Math.Round(totalWaitTime, 1)}h chờ). Gợi ý: {suggestedDate:dd/MM/yyyy HH:mm}";
                 }
 
                 return new ResponseDTO("Tính toán thành công", 200, true, result);
