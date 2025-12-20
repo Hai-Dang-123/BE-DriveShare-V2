@@ -19,7 +19,7 @@ namespace Common.DTOs
     public class TimeSeriesDTO
     {
         public string Label { get; set; } = string.Empty;
-        public int Value { get; set; }
+        public decimal Value { get; set; }
     }
     public class StatusStatisticDTO
     {
