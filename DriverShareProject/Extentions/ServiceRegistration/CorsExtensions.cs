@@ -17,6 +17,7 @@
                  "http://localhost:5173",
                 "http://192.168.100.49:19000", // Expo mobile dev
                 "http://192.168.100.49:19006", // Expo web dev server
+                "http://192.168.101.136:5246",
             "http://localhost:5173")
             .SetIsOriginAllowed(origin => true)
             .AllowAnyHeader()

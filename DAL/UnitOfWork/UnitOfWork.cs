@@ -181,6 +181,8 @@ namespace DAL.UnitOfWork
         public IUserDeviceTokenRepository UserDeviceTokenRepo => _userDeviceTokenRepo ??= new UserDeviceTokenRepository(_context);
         private INotificationRepository? _notificationRepo;
         public INotificationRepository NotificationRepo => _notificationRepo ??= new NotificationRepository(_context);
+        private IPostTripDetailRepository? _postTripDetailRepo;
+        public IPostTripDetailRepository PostTripDetailRepo => _postTripDetailRepo ??= new PostTripDetailRepository(_context);
         public async Task<int> SaveAsync()
         {
             return await _context.SaveChangesAsync();

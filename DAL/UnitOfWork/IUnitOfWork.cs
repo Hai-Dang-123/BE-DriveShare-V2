@@ -61,6 +61,7 @@ namespace DAL.UnitOfWork
         ITruckRestrictionRepository TruckRestrictionRepo { get; }
         IUserDeviceTokenRepository UserDeviceTokenRepo { get; }
         INotificationRepository NotificationRepo { get; }
+        IPostTripDetailRepository PostTripDetailRepo { get; }
 
         // --- 2. Save Changes ---
         Task<int> SaveAsync();
