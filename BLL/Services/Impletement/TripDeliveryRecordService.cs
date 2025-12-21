@@ -1151,7 +1151,7 @@ namespace BLL.Services.Impletement
 
                 // 3. Tạo Link (Thay đổi domain theo FE của bạn)
                 // Ví dụ: https://driveshare.vn/delivery-record/view/{id}?token={token}
-                string frontendUrl = "http://localhost:8081"; // Hoặc Domain thật
+                string frontendUrl = "https://fe-drive-share-web.vercel.app"; // Hoặc Domain thật
                 string link = $"{frontendUrl}/contact-v2/DeliveryRecordScreen?recordId={recordId}&accessToken={accessToken}";
 
                 // 4. Gửi Email

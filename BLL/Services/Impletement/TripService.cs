@@ -2196,12 +2196,12 @@ namespace BLL.Services.Implement
                    type == SurchargeType.LATE_DELIVERY ||
                    type == SurchargeType.MISDELIVERY;
         }
-
         private bool IsDriverResponsible(TripDriverAssignment assign, TripSurcharge surcharge)
         {
             if (!assign.IsOnBoard || !assign.OnBoardTime.HasValue) return false;
             DateTime incidentTime = surcharge.CreatedAt;
 
+            // [TÀI XẾ] Check-in sau khi sự cố xảy ra -> Vô can
             if (assign.OnBoardTime.Value > incidentTime) return false;
 
             // [TÀI PHỤ] Check-out trước khi sự cố xảy ra -> Vô can

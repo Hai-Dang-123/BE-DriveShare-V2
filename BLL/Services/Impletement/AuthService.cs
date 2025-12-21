@@ -599,7 +599,7 @@ namespace BLL.Services.Impletement
                 await _unitOfWork.UserTokenRepo.AddAsync(verificationToken);
                 await _unitOfWork.SaveChangeAsync();
 
-                string verificationLink = $"http://localhost:8081/verify-email?userId={userId}&token={tokenValue}";
+                string verificationLink = $"https://fe-drive-share-web.vercel.app/verify-email?userId={userId}&token={tokenValue}";
                 await _emailService.SendEmailVerificationLinkAsync(email, fullName, verificationLink);
             }
             catch (Exception ex)
