@@ -53,7 +53,7 @@ namespace BLL.Services.Implement
                     BalanceAfter = wallet.Balance, // Chưa cộng tiền
                     Type = TransactionType.TOPUP,
                     Status = TransactionStatus.PENDING, // <--- STEP 1: PENDING
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Description = dto.Description
                 };
                 await _unitOfWork.TransactionRepo.AddAsync(newTransaction);
@@ -71,8 +71,8 @@ namespace BLL.Services.Implement
                     TokenType = TokenType.SEPAY_PAYMENT,
                     TokenValue = tokenCode,
                     IsRevoked = false,
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiredAt = DateTime.UtcNow.AddMinutes(30) // Token/QR hết hạn sau 30p
+                    CreatedAt = TimeUtil.NowVN(),
+                    ExpiredAt = TimeUtil.NowVN().AddMinutes(30) // Token/QR hết hạn sau 30p
                 };
                 await _unitOfWork.UserTokenRepo.AddAsync(userToken);
 
@@ -136,7 +136,7 @@ namespace BLL.Services.Implement
 
                 // 4. [LOGIC MỚI] TRỪ TIỀN NGAY LẬP TỨC
                 wallet.Balance -= dto.Amount;
-                wallet.LastUpdatedAt = DateTime.UtcNow;
+                wallet.LastUpdatedAt = TimeUtil.NowVN();
 
                 await _unitOfWork.WalletRepo.UpdateAsync(wallet); // Update Wallet
 
@@ -150,8 +150,8 @@ namespace BLL.Services.Implement
                     BalanceAfter = wallet.Balance,               // Số dư sau khi trừ
                     Type = TransactionType.WITHDRAWAL,
                     Status = TransactionStatus.SUCCEEDED,        // <--- SUCCEEDED NGAY
-                    CreatedAt = DateTime.UtcNow,
-                    CompletedAt = DateTime.UtcNow,               // Đã hoàn thành
+                    CreatedAt = TimeUtil.NowVN(),
+                    CompletedAt = TimeUtil.NowVN(),               // Đã hoàn thành
                     Description = dto.Description
                 };
 
@@ -200,7 +200,7 @@ namespace BLL.Services.Implement
                     .FirstOrDefaultAsync(t => t.TokenValue == tokenCode && !t.IsRevoked);
 
                 if (userToken == null) return new ResponseDTO("Token invalid or revoked", 404, false);
-                if (userToken.ExpiredAt < DateTime.UtcNow) return new ResponseDTO("Token expired", 400, false);
+                if (userToken.ExpiredAt < TimeUtil.NowVN()) return new ResponseDTO("Token expired", 400, false);
 
                 // B2: Tìm Transaction Pending
                 var transaction = await _unitOfWork.TransactionRepo.GetAll()
@@ -228,14 +228,14 @@ namespace BLL.Services.Implement
 
                 // 2. Cộng tiền vào ví (Thao tác này về mặt toán học đã bao gồm việc trả nợ)
                 wallet.Balance += transferAmount;
-                wallet.LastUpdatedAt = DateTime.UtcNow;
+                wallet.LastUpdatedAt = TimeUtil.NowVN();
                 await _unitOfWork.WalletRepo.UpdateAsync(wallet);
 
                 // 3. Update Transaction Topup
                 transaction.Status = TransactionStatus.SUCCEEDED;
                 transaction.BalanceBefore = balanceBeforeTopup;
                 transaction.BalanceAfter = wallet.Balance;
-                transaction.CompletedAt = DateTime.UtcNow;
+                transaction.CompletedAt = TimeUtil.NowVN();
                 transaction.ExternalTransactionCode = bankReferenceCode;
                 await _unitOfWork.TransactionRepo.UpdateAsync(transaction);
 
@@ -336,7 +336,7 @@ namespace BLL.Services.Implement
                 // 3. Cập nhật số dư
                 decimal balanceBefore = wallet.Balance;
                 wallet.Balance += amount;
-                wallet.LastUpdatedAt = DateTime.UtcNow;
+                wallet.LastUpdatedAt = TimeUtil.NowVN();
                 decimal balanceAfter = wallet.Balance;
 
                 // 4. Tạo Transaction Record
@@ -352,8 +352,8 @@ namespace BLL.Services.Implement
                     BalanceAfter = balanceAfter,
                     Type = type,
                     Status = TransactionStatus.SUCCEEDED,
-                    CreatedAt = DateTime.UtcNow,
-                    CompletedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
+                    CompletedAt = TimeUtil.NowVN(),
                     Description = description,
                     ExternalTransactionCode = externalCode
                 };
@@ -371,7 +371,7 @@ namespace BLL.Services.Implement
                     if (postPackage != null)
                     {
                         postPackage.Status = PostStatus.OPEN;
-                        postPackage.Updated = DateTime.UtcNow; // Nhớ update time
+                        postPackage.Updated = TimeUtil.NowVN(); // Nhớ update time
                         await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                         isPostUpdated = true;
                     }
@@ -383,7 +383,7 @@ namespace BLL.Services.Implement
                         if (postTrip != null)
                         {
                             postTrip.Status = PostStatus.OPEN;
-                            postTrip.UpdateAt = DateTime.UtcNow; // Nhớ update time
+                            postTrip.UpdateAt = TimeUtil.NowVN(); // Nhớ update time
                             await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                         }
                     }
@@ -417,7 +417,7 @@ namespace BLL.Services.Implement
                                     foreach (var assign in assignments)
                                     {
                                         assign.PaymentStatus = DriverPaymentStatus.PAID;
-                                        assign.UpdateAt = DateTime.UtcNow;
+                                        assign.UpdateAt = TimeUtil.NowVN();
                                         await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
                                     }
                                 }
@@ -444,7 +444,7 @@ namespace BLL.Services.Implement
 
                         if (tripUpdated)
                         {
-                            trip.UpdateAt = DateTime.UtcNow;
+                            trip.UpdateAt = TimeUtil.NowVN();
                             await _unitOfWork.TripRepo.UpdateAsync(trip);
                         }
                     }

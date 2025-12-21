@@ -72,7 +72,7 @@ namespace BLL.Services.Impletement
                     Features = dto.Features ?? new(),
                     CurrentAddress = dto.CurrentAddress,
                     Status = VehicleStatus.INACTIVE,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN(),
                 };
                 await _unitOfWork.VehicleRepo.AddAsync(vehicle);
 

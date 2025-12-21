@@ -63,7 +63,7 @@ namespace BLL.Services.Impletement
                     OwnerId = dto.HandoverUserId,
                     DriverId = dto.ReceiverUserId,
 
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Notes = dto.Notes,
 
                     // Khởi tạo các thông số mặc định bằng 0
@@ -280,8 +280,8 @@ namespace BLL.Services.Impletement
                     UserId = userId,
                     TokenType = TokenType.VEHICLE_HANDOVER_SIGNING_OTP,
                     TokenValue = hashedOtp,
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiredAt = DateTime.UtcNow.AddMinutes(5),
+                    CreatedAt = TimeUtil.NowVN(),
+                    ExpiredAt = TimeUtil.NowVN().AddMinutes(5),
                     IsRevoked = false
                 };
                 await _unitOfWork.UserTokenRepo.AddAsync(newToken);
@@ -323,7 +323,7 @@ namespace BLL.Services.Impletement
                     .Where(t => t.UserId == userId
                               && t.TokenType == TokenType.VEHICLE_HANDOVER_SIGNING_OTP
                               && !t.IsRevoked
-                              && t.ExpiredAt > DateTime.UtcNow)
+                              && t.ExpiredAt > TimeUtil.NowVN())
                     .OrderByDescending(t => t.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -353,13 +353,13 @@ namespace BLL.Services.Impletement
                 {
                     if (record.OwnerSignedAt != null && record.OwnerSigned) return new ResponseDTO("Bạn đã ký rồi.", 400, false);
                     record.OwnerSigned = true;
-                    record.OwnerSignedAt = DateTime.UtcNow;
+                    record.OwnerSignedAt = TimeUtil.NowVN();
                 }
                 else if (isReceiverSide)
                 {
                     if (record.DriverSignedAt != null && record.DriverSigned) return new ResponseDTO("Bạn đã ký rồi.", 400, false);
                     record.DriverSigned = true;
-                    record.DriverSignedAt = DateTime.UtcNow;
+                    record.DriverSignedAt = TimeUtil.NowVN();
                 }
 
                 // --- BƯỚC 5: Kiểm tra hoàn tất & Cập nhật Trạng Thái ---
@@ -386,7 +386,7 @@ namespace BLL.Services.Impletement
                     else if (record.Type == DeliveryRecordType.RETURN) // Sửa lại enum cho đúng
                     {
                         record.Trip.Status = TripStatus.DONE_TRIP_AND_WATING_FOR_PAYOUT;
-                        record.Trip.ActualCompletedTime = DateTime.UtcNow;
+                        record.Trip.ActualCompletedTime = TimeUtil.NowVN();
                         await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
 
                         // CẬP NHẬT ODOMETER (Nếu cần)
@@ -540,7 +540,7 @@ namespace BLL.Services.Impletement
                     IssueType = dto.IssueType,
                     Description = dto.Description,
                     Status = IssueStatus.REPORTED, // Mặc định là mới báo cáo
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Images = new List<TripVehicleHandoverIssueImage>()
                 };
 

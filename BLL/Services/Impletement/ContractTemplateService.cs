@@ -1,4 +1,5 @@
 ﻿using BLL.Services.Interface;
+using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Type;
 using DAL.Entities;
@@ -31,7 +32,7 @@ namespace BLL.Services.Impletement
                     ContractTemplateName = dto.ContractTemplateName,
                     Version = dto.Version,
                     Type = dto.Type,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN(),
                 };
 
 

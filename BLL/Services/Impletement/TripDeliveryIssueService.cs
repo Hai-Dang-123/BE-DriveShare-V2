@@ -50,7 +50,7 @@ namespace BLL.Services.Impletement
                     IssueType = dto.IssueType,
                     Description = dto.Description,
                     Status = IssueStatus.REPORTED,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     DeliveryIssueImages = new List<TripDeliveryIssueImage>()
                 };
 
@@ -77,7 +77,7 @@ namespace BLL.Services.Impletement
                             TripDeliveryIssueId = issue.TripDeliveryIssueId,
                             ImageUrl = url,
                             Caption = dto.IssueType.ToString(),
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = TimeUtil.NowVN()
                         });
                     }
                 }
@@ -106,7 +106,7 @@ namespace BLL.Services.Impletement
                     .FirstOrDefaultAsync(t => t.TokenValue == accessToken
                                            && t.TokenType == TokenType.VIEW_ACCESS_TOKEN
                                            && !t.IsRevoked
-                                           && t.ExpiredAt > DateTime.UtcNow);
+                                           && t.ExpiredAt > TimeUtil.NowVN());
 
                 if (validAccess == null) return new ResponseDTO("Phiên làm việc hết hạn.", 401, false);
 
@@ -133,7 +133,7 @@ namespace BLL.Services.Impletement
                     IssueType = dto.IssueType,
                     Description = $"[Khách: {validAccess.TripContact.FullName}] {dto.Description}",
                     Status = IssueStatus.REPORTED,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     DeliveryIssueImages = new List<TripDeliveryIssueImage>()
                 };
 
@@ -157,7 +157,7 @@ namespace BLL.Services.Impletement
                             TripDeliveryIssueId = issue.TripDeliveryIssueId,
                             ImageUrl = url,
                             Caption = dto.IssueType.ToString(),
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = TimeUtil.NowVN()
                         });
                     }
                 }

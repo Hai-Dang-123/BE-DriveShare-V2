@@ -70,7 +70,7 @@ namespace BLL.Services.Impletement
                     TripVehicleHandoverIssueId = dto.TripVehicleHandoverIssueId,
                     TripDeliveryIssueId = dto.TripDeliveryIssueId,
 
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.TripSurchargeRepo.AddAsync(surcharge);
@@ -137,7 +137,7 @@ namespace BLL.Services.Impletement
                 // Nếu trạng thái là PAID -> Cập nhật thời gian trả
                 if (dto.NewStatus == SurchargeStatus.PAID)
                 {
-                    surcharge.PaidAt = DateTime.UtcNow;
+                    surcharge.PaidAt = TimeUtil.NowVN();
                 }
                 else
                 {
@@ -166,7 +166,7 @@ namespace BLL.Services.Impletement
                     .FirstOrDefaultAsync(t => t.TokenValue == accessToken
                                            && t.TokenType == TokenType.VIEW_ACCESS_TOKEN
                                            && !t.IsRevoked
-                                           && t.ExpiredAt > DateTime.UtcNow);
+                                           && t.ExpiredAt > TimeUtil.NowVN());
 
                 if (validAccess == null)
                     return new ResponseDTO("Phiên làm việc đã hết hạn hoặc không hợp lệ.", 401, false);
@@ -210,7 +210,7 @@ namespace BLL.Services.Impletement
                     TripDeliveryIssueId = dto.TripDeliveryIssueId,
                     TripVehicleHandoverIssueId = null, // Khách không được can thiệp phần xe
 
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.TripSurchargeRepo.AddAsync(surcharge);

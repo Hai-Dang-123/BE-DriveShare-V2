@@ -60,7 +60,7 @@ namespace BLL.Services.Implement
                 var contract = new TripProviderContract
                 {
                     ContractId = Guid.NewGuid(),
-                    ContractCode = $"CON-PROV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                    ContractCode = $"CON-PROV-{TimeUtil.NowVN():yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
                     TripId = trip.TripId,
                     OwnerId = ownerId,
                     CounterpartyId = provider.UserId,
@@ -68,7 +68,7 @@ namespace BLL.Services.Implement
                     Version = template.Version,
                     Type = ContractType.PROVIDER_CONTRACT,
                     Status = ContractStatus.PENDING,
-                    CreateAt = DateTime.UtcNow
+                    CreateAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.TripProviderContractRepo.AddAsync(contract);
@@ -138,7 +138,7 @@ namespace BLL.Services.Implement
                     .Where(t => t.UserId == userId
                              && t.TokenType == TokenType.CONTRACT_SIGNING_OTP // Enum bạn đã thêm
                              && !t.IsRevoked
-                             && t.ExpiredAt > DateTime.UtcNow) // Chưa hết hạn
+                             && t.ExpiredAt > TimeUtil.NowVN()) // Chưa hết hạn
                     .OrderByDescending(t => t.CreatedAt) // Lấy cái mới nhất
                     .FirstOrDefaultAsync();
 
@@ -187,14 +187,14 @@ namespace BLL.Services.Implement
                     if (contract.OwnerSigned)
                         return new ResponseDTO("Owner already signed", 400, false);
                     contract.OwnerSigned = true;
-                    contract.OwnerSignAt = DateTime.UtcNow;
+                    contract.OwnerSignAt = TimeUtil.NowVN();
                 }
                 else if (isProvider)
                 {
                     if (contract.CounterpartySigned)
                         return new ResponseDTO("Provider already signed", 400, false);
                     contract.CounterpartySigned = true;
-                    contract.CounterpartySignAt = DateTime.UtcNow;
+                    contract.CounterpartySignAt = TimeUtil.NowVN();
                 }
 
                 // ⚠️ 5. Cập nhật trạng thái (Contract VÀ Trip) dựa trên chữ ký
@@ -202,7 +202,7 @@ namespace BLL.Services.Implement
                 {
                     // --- Cả hai đã ký ---
                     contract.Status = ContractStatus.COMPLETED;
-                    contract.EffectiveDate = DateTime.UtcNow;
+                    contract.EffectiveDate = TimeUtil.NowVN();
 
                     trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
                 }
@@ -379,7 +379,7 @@ namespace BLL.Services.Implement
             var contract = new TripProviderContract
             {
                 ContractId = Guid.NewGuid(),
-                ContractCode = $"CON-PROV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                ContractCode = $"CON-PROV-{TimeUtil.NowVN():yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
                 TripId = tripId,         // Từ tham số
                 OwnerId = ownerId,      // Từ tham số
                 CounterpartyId = providerId, // Từ tham số
@@ -387,11 +387,11 @@ namespace BLL.Services.Implement
                 Version = template.Version,
                 Type = ContractType.PROVIDER_CONTRACT,
                 Status = ContractStatus.PENDING, // Chờ ký
-                CreateAt = DateTime.UtcNow,
+                CreateAt = TimeUtil.NowVN(),
                 OwnerSigned = false,
                 OwnerSignAt = null,
                 CounterpartySigned = true,
-                CounterpartySignAt = DateTime.UtcNow,
+                CounterpartySignAt = TimeUtil.NowVN(),
                 // --- Gán giá trị từ tham số ---
                 ContractValue = fare,
                 Currency = "VND" // Giả định
@@ -552,8 +552,8 @@ namespace BLL.Services.Implement
                     UserId = userId,
                     TokenType = TokenType.CONTRACT_SIGNING_OTP,
                     TokenValue = hashedOtp, // Lưu bản mã hóa
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiredAt = DateTime.UtcNow.AddMinutes(5), // Hết hạn sau 5 phút
+                    CreatedAt = TimeUtil.NowVN(),
+                    ExpiredAt = TimeUtil.NowVN().AddMinutes(5), // Hết hạn sau 5 phút
                     IsRevoked = false,
                 };
 

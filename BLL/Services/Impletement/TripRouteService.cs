@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using BLL.Utilities;
 
 namespace BLL.Services.Impletement
 {
@@ -193,8 +194,8 @@ namespace BLL.Services.Impletement
                 RouteData = path.Points,
                 DistanceKm = (decimal)path.Distance / 1000m,
                 Duration = TimeSpan.FromMilliseconds(path.Time),
-                CreateAt = DateTime.UtcNow,
-                UpdateAt = DateTime.UtcNow
+                CreateAt = TimeUtil.NowVN(),
+                UpdateAt = TimeUtil.NowVN()
             };
 
             // 5. Thêm vào UoW (KHÔNG SAVE)

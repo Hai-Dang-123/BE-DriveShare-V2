@@ -51,7 +51,7 @@ namespace BLL.Services.Impletement
                 DeliveryRecordTemplateId = tripDeliveryRecordDTO.DeliveryRecordTempalteId,
                 TripContactId = tripDeliveryRecordDTO.StripContractId,
                 DriverId = userid,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = TimeUtil.NowVN(),
                 Notes = tripDeliveryRecordDTO.Notes,
                 Type = tripDeliveryRecordDTO.type,
                 Status = DeliveryRecordStatus.PENDING
@@ -307,7 +307,7 @@ namespace BLL.Services.Impletement
                     .Where(t => t.UserId == userId
                              && t.TokenType == TokenType.DELIVERY_RECORD_SIGNING_OTP // Enum OTP riêng hoặc dùng chung CONTRACT_SIGNING_OTP tùy bạn
                              && !t.IsRevoked
-                             && t.ExpiredAt > DateTime.UtcNow)
+                             && t.ExpiredAt > TimeUtil.NowVN())
                     .OrderByDescending(t => t.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -352,13 +352,13 @@ namespace BLL.Services.Impletement
                 {
                     if (record.DriverSigned == true) return new ResponseDTO("Driver already signed", 400, false);
                     record.DriverSigned = true;
-                    record.DriverSignedAt = DateTime.UtcNow;
+                    record.DriverSignedAt = TimeUtil.NowVN();
                 }
                 else if (isContact)
                 {
                     if (record.ContactSigned == true) return new ResponseDTO("Contact already signed", 400, false);
                     record.ContactSigned = true;
-                    record.ContactSignedAt = DateTime.UtcNow;
+                    record.ContactSignedAt = TimeUtil.NowVN();
                 }
 
                 // 4. Cập nhật trạng thái Biên bản
@@ -376,7 +376,7 @@ namespace BLL.Services.Impletement
                             if (record.Trip.Status == TripStatus.MOVING_TO_PICKUP || record.Trip.Status == TripStatus.LOADING)
                             {
                                 record.Trip.Status = TripStatus.MOVING_TO_DROPOFF;
-                                record.Trip.ActualPickupTime = DateTime.UtcNow; // Ghi nhận giờ lấy thực tế
+                                record.Trip.ActualPickupTime = TimeUtil.NowVN(); // Ghi nhận giờ lấy thực tế
                                 await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                             }
                         }
@@ -389,7 +389,7 @@ namespace BLL.Services.Impletement
                                 // Nếu còn tiền chưa thanh toán -> AWAITING_FINAL_PAYOUT
                                 // Nếu xong xuôi -> COMPLETED
                                 record.Trip.Status = TripStatus.READY_FOR_VEHICLE_RETURN;
-                                record.Trip.ActualCompletedTime = DateTime.UtcNow; // Ghi nhận giờ giao thực tế
+                                record.Trip.ActualCompletedTime = TimeUtil.NowVN(); // Ghi nhận giờ giao thực tế
                                 await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                             }
                         }
@@ -463,8 +463,8 @@ namespace BLL.Services.Impletement
                     UserId = userId,
                     TokenType = TokenType.DELIVERY_RECORD_SIGNING_OTP, // <-- Quan trọng
                     TokenValue = hashedOtp,
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiredAt = DateTime.UtcNow.AddMinutes(5),
+                    CreatedAt = TimeUtil.NowVN(),
+                    ExpiredAt = TimeUtil.NowVN().AddMinutes(5),
                     IsRevoked = false
                 };
 
@@ -512,7 +512,7 @@ namespace BLL.Services.Impletement
                     DeliveryRecordTemplateId = dto.DeliveryRecordTempalteId,
                     TripContactId = dto.StripContractId,
                     DriverId = driverId, // ⚠️ SỬA ĐỔI: Lấy từ tham số
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Notes = dto.Notes,
                     Type = dto.type,
                     Status = DeliveryRecordStatus.PENDING
@@ -824,7 +824,7 @@ namespace BLL.Services.Impletement
                 var validAccess = await _unitOfWork.ContactTokenRepo.GetAll()
                     .FirstOrDefaultAsync(t => t.TokenValue == accessToken // Token dài không cần hash (hoặc hash tùy logic bạn)
                                            && t.TokenType == TokenType.VIEW_ACCESS_TOKEN // Enum mới cho quyền xem
-                                           && t.ExpiredAt > DateTime.UtcNow);
+                                           && t.ExpiredAt > TimeUtil.NowVN());
 
                 if (validAccess == null)
                 {
@@ -969,7 +969,7 @@ namespace BLL.Services.Impletement
                 var validAccess = await _unitOfWork.ContactTokenRepo.GetAll()
                     .FirstOrDefaultAsync(t => t.TokenValue == accessToken
                                            && t.TokenType == TokenType.VIEW_ACCESS_TOKEN
-                                           && t.ExpiredAt > DateTime.UtcNow);
+                                           && t.ExpiredAt > TimeUtil.NowVN());
 
                 if (validAccess == null) return new ResponseDTO("Phiên làm việc hết hạn, vui lòng tải lại trang từ email.", 401, false);
 
@@ -999,8 +999,8 @@ namespace BLL.Services.Impletement
                     TripContactId = contact.TripContactId,
                     TokenValue = hashedOtp,
                     TokenType = TokenType.DELIVERY_RECORD_SIGNING_OTP,
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiredAt = DateTime.UtcNow.AddMinutes(10),
+                    CreatedAt = TimeUtil.NowVN(),
+                    ExpiredAt = TimeUtil.NowVN().AddMinutes(10),
                     IsRevoked = false
                 };
 
@@ -1031,7 +1031,7 @@ namespace BLL.Services.Impletement
                 var validAccess = await _unitOfWork.ContactTokenRepo.GetAll()
                    .FirstOrDefaultAsync(t => t.TokenValue == accessToken
                                           && t.TokenType == TokenType.VIEW_ACCESS_TOKEN
-                                          && t.ExpiredAt > DateTime.UtcNow);
+                                          && t.ExpiredAt > TimeUtil.NowVN());
                 if (validAccess == null) return new ResponseDTO("Access Token không hợp lệ.", 401, false);
 
                 // B. Validate OTP (Token ký) - Query bảng ContactToken
@@ -1039,7 +1039,7 @@ namespace BLL.Services.Impletement
                     .Where(t => t.TripContactId == validAccess.TripContactId
                              && t.TokenType == TokenType.DELIVERY_RECORD_SIGNING_OTP
                              && !t.IsRevoked
-                             && t.ExpiredAt > DateTime.UtcNow)
+                             && t.ExpiredAt > TimeUtil.NowVN())
                     .OrderByDescending(t => t.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -1062,7 +1062,7 @@ namespace BLL.Services.Impletement
                 if (record.ContactSigned == true) return new ResponseDTO("Bạn đã ký rồi.", 200, true);
 
                 record.ContactSigned = true;
-                record.ContactSignedAt = DateTime.UtcNow;
+                record.ContactSignedAt = TimeUtil.NowVN();
 
                 // E. Check trạng thái hoàn thành & Update Trip Status
                 if (record.DriverSigned == true && record.ContactSigned == true)
@@ -1080,7 +1080,7 @@ namespace BLL.Services.Impletement
                             if (record.Trip.Status == TripStatus.MOVING_TO_PICKUP || record.Trip.Status == TripStatus.LOADING)
                             {
                                 record.Trip.Status = TripStatus.MOVING_TO_DROPOFF; // ✅ Cập nhật theo yêu cầu
-                                record.Trip.ActualPickupTime = DateTime.UtcNow;
+                                record.Trip.ActualPickupTime = TimeUtil.NowVN();
                                 await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                             }
                         }
@@ -1091,7 +1091,7 @@ namespace BLL.Services.Impletement
                             if (record.Trip.Status == TripStatus.MOVING_TO_DROPOFF || record.Trip.Status == TripStatus.UNLOADING)
                             {
                                 record.Trip.Status = TripStatus.READY_FOR_VEHICLE_RETURN; // Hoặc RETURNING_VEHICLE
-                                record.Trip.ActualCompletedTime = DateTime.UtcNow;
+                                record.Trip.ActualCompletedTime = TimeUtil.NowVN();
                                 await _unitOfWork.TripRepo.UpdateAsync(record.Trip);
                             }
                         }
@@ -1141,8 +1141,8 @@ namespace BLL.Services.Impletement
                     TripContactId = contact.TripContactId,
                     TokenValue = accessToken,
                     TokenType = TokenType.VIEW_ACCESS_TOKEN,
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiredAt = DateTime.UtcNow.AddDays(7), // Link sống 7 ngày
+                    CreatedAt = TimeUtil.NowVN(),
+                    ExpiredAt = TimeUtil.NowVN().AddDays(7), // Link sống 7 ngày
                     IsRevoked = false
                 };
 

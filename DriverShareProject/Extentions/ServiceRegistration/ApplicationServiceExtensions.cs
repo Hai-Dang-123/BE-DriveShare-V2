@@ -90,7 +90,7 @@ namespace DriverShareProject.Extentions.ServiceRegistration
             //services.AddScoped<IVNPTTokenService, VNPTTokenService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<UserUtility>();
-
+            services.AddScoped<TimeUtil>();
             services.AddScoped<ISepayService, SepayService>();
             services.AddHttpClient<IVNPTTokenService, VNPTTokenService>();
             // Trong Program.cs hoặc Startup.cs

@@ -369,7 +369,8 @@ namespace BLL.Services.Impletement
             dto.BusinessAddress = owner.BusinessAddress;
             dto.AverageRating = owner.AverageRating;
             dto.TotalVehicles = owner.Vehicles?.Count ?? 0;
-            dto.TotalDrivers = owner.OwnerDriverLinks?.Count ?? 0;
+            dto.TotalDrivers = owner.OwnerDriverLinks?
+        .Count(x => x.Status == FleetJoinStatus.APPROVED) ?? 0;
             dto.TotalTripsCreated = owner.Trips?.Count ?? 0;
             return dto;
         }
@@ -844,7 +845,7 @@ namespace BLL.Services.Impletement
                 };
             }
 
-            user.LastUpdatedAt = DateTime.UtcNow;
+            user.LastUpdatedAt = TimeUtil.NowVN();
         }
 
         // =========================================================
@@ -862,7 +863,7 @@ namespace BLL.Services.Impletement
 
                 // Thực hiện Soft Delete
                 user.Status = UserStatus.DELETED;
-                user.LastUpdatedAt = DateTime.UtcNow;
+                user.LastUpdatedAt = TimeUtil.NowVN();
 
                 // (Optional) Hủy token nếu cần:
                 // if (user.UserTokens != null) _unitOfWork.UserTokenRepo.RemoveRange(user.UserTokens);
@@ -910,7 +911,7 @@ namespace BLL.Services.Impletement
                 // 2. Cập nhật trạng thái sang Chờ Duyệt
                 // Chỉ cho phép nếu đang INACTIVE hoặc BANNED
                 user.Status = UserStatus.PENDING_ACTIVATION;
-                user.LastUpdatedAt = DateTime.UtcNow;
+                user.LastUpdatedAt = TimeUtil.NowVN();
 
                 await _unitOfWork.BaseUserRepo.UpdateAsync(user);
                 await _unitOfWork.SaveChangeAsync();
@@ -951,7 +952,7 @@ namespace BLL.Services.Impletement
                 {
                     // A. NẾU DUYỆT -> ACTIVE
                     user.Status = UserStatus.ACTIVE;
-                    user.LastUpdatedAt = DateTime.UtcNow;
+                    user.LastUpdatedAt = TimeUtil.NowVN();
 
                     await _unitOfWork.BaseUserRepo.UpdateAsync(user);
                     await _unitOfWork.SaveChangeAsync();
@@ -962,7 +963,7 @@ namespace BLL.Services.Impletement
                 {
                     // B. NẾU TỪ CHỐI -> QUAY VỀ INACTIVE (HOẶC BANNED)
                     user.Status = UserStatus.INACTIVE; // Hoặc UserStatus.BANNED tùy logic bạn muốn
-                    user.LastUpdatedAt = DateTime.UtcNow;
+                    user.LastUpdatedAt = TimeUtil.NowVN();
 
                     await _unitOfWork.BaseUserRepo.UpdateAsync(user);
                     await _unitOfWork.SaveChangeAsync();

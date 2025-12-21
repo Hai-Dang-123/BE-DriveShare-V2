@@ -1,4 +1,5 @@
 ﻿using BLL.Services.Interface;
+using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
 using Common.Enums.Type;
@@ -29,7 +30,7 @@ namespace BLL.Services.Impletement
                 TemplateName = dto.TemplateName,
                 Version = dto.Version,
                 Type = Enum.Parse<DeliveryRecordType>(dto.Type),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = TimeUtil.NowVN(),
             };
 
             await _unitOfWork.DeliveryRecordTemplateRepo.AddAsync(entity);

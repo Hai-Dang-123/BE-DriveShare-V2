@@ -27,6 +27,7 @@ namespace BLL.Services.Implement
         private readonly IEmailService _emailService;
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IUserDocumentService _userDocumentService;
+        private readonly TimeUtil _timeUtil;
 
         public TripService(
             IUnitOfWork unitOfWork,
@@ -38,7 +39,8 @@ namespace BLL.Services.Implement
             ITripDeliveryRecordService tripDeliveryRecordService,
             IEmailService emailService,
             IServiceScopeFactory serviceScopeFactory,
-            IUserDocumentService userDocumentService)
+            IUserDocumentService userDocumentService,
+            TimeUtil timeUtil)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -50,6 +52,7 @@ namespace BLL.Services.Implement
             _emailService = emailService;
             _serviceScopeFactory = serviceScopeFactory;
             _userDocumentService = userDocumentService;
+            _timeUtil = timeUtil;
         }
 
         // =========================================================================================================
@@ -180,7 +183,7 @@ namespace BLL.Services.Implement
                 // 4. TẠO TRIP ROUTE (GỌI VIETMAP)
                 // Dùng clonedRoute để tính toán và liên kết
                 var newTripRoute = await _tripRouteService.CreateAndAddTripRouteAsync(clonedShippingRoute, vehicle);
-
+                
                 // 5. TẠO TRIP
                 var trip = new Trip
                 {
@@ -188,8 +191,8 @@ namespace BLL.Services.Implement
                     TripCode = GenerateTripCode(),
                     Status = TripStatus.AWAITING_OWNER_CONTRACT,
                     Type = TripType.FROM_PROVIDER,
-                    CreateAt = DateTime.UtcNow,
-                    UpdateAt = DateTime.UtcNow,
+                    CreateAt = TimeUtil.NowVN(),
+                    UpdateAt = TimeUtil.NowVN(),
                     VehicleId = dto.VehicleId,
                     OwnerId = ownerId,
                     TripRouteId = newTripRoute.TripRouteId,
@@ -213,7 +216,7 @@ namespace BLL.Services.Implement
 
                 // 8. CẬP NHẬT TRẠNG THÁI POST & PACKAGES
                 postPackage.Status = PostStatus.DONE;
-                postPackage.Updated = DateTime.UtcNow;
+                postPackage.Updated = TimeUtil.NowVN();
                 await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
 
                 foreach (var pkg in postPackage.Packages)
@@ -1442,8 +1445,8 @@ namespace BLL.Services.Implement
                     rawDrivingHours,
                     waitTimeHours,
                     bufferHours,
-                    trip.ShippingRoute?.ExpectedPickupDate ?? DateTime.UtcNow,
-                    trip.ShippingRoute?.ExpectedDeliveryDate ?? DateTime.UtcNow.AddHours(24)
+                    trip.ShippingRoute?.ExpectedPickupDate ?? TimeUtil.NowVN(),
+                    trip.ShippingRoute?.ExpectedDeliveryDate ?? TimeUtil.NowVN().AddHours(24)
                 );
 
                 // 4. Xác định Số lượng tài & Giờ lái yêu cầu
@@ -1767,12 +1770,12 @@ namespace BLL.Services.Implement
                 if (dto.NewStatus != TripStatus.COMPLETED)
                 {
                     trip.Status = dto.NewStatus;
-                    trip.UpdateAt = DateTime.UtcNow;
+                    trip.UpdateAt = TimeUtil.NowVN();
 
                     // Logic phụ: Ghi nhận thời gian Pickup/Dropoff thực tế
                     if (dto.NewStatus == TripStatus.LOADING && trip.ActualPickupTime == null)
                     {
-                        trip.ActualPickupTime = DateTime.UtcNow;
+                        trip.ActualPickupTime = TimeUtil.NowVN();
                         // Hàm gửi link ký tên (nếu có)
                          await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.PICKUP);
                     }
@@ -1808,7 +1811,7 @@ namespace BLL.Services.Implement
                         // Chỉ set thông tin xuống xe nếu họ thực sự ĐÃ LÊN XE
                         if (assign.IsOnBoard)
                         {
-                            assign.OffBoardTime = DateTime.UtcNow;
+                            assign.OffBoardTime = TimeUtil.NowVN();
                             assign.OffBoardLocation = "Auto-checkout (Trip Completed)";
                             assign.CheckOutNote = "Hệ thống tự động check-out.";
                         }
@@ -1845,7 +1848,7 @@ namespace BLL.Services.Implement
                     {
                         // Update Package
                         pkg.Status = PackageStatus.COMPLETED; // Đảm bảo Enum PackageStatus có giá trị này
-                        pkg.UpdatedAt = DateTime.UtcNow;
+                        pkg.UpdatedAt = TimeUtil.NowVN();
 
                         // Update Item bên trong (nếu có)
                         if (pkg.Item != null)
@@ -1864,8 +1867,8 @@ namespace BLL.Services.Implement
 
                 // [BƯỚC 3]: CẬP NHẬT TRẠNG THÁI TRIP CUỐI CÙNG
                 trip.Status = TripStatus.COMPLETED;
-                trip.ActualCompletedTime = DateTime.UtcNow;
-                trip.UpdateAt = DateTime.UtcNow;
+                trip.ActualCompletedTime = TimeUtil.NowVN();
+                trip.UpdateAt = TimeUtil.NowVN();
 
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
 
@@ -2165,7 +2168,7 @@ namespace BLL.Services.Implement
                 // ==========================================================================
                 // FINAL SAVE
                 // ==========================================================================
-                foreach (var s in allSurcharges) { s.Status = SurchargeStatus.PAID; s.PaidAt = DateTime.UtcNow; }
+                foreach (var s in allSurcharges) { s.Status = SurchargeStatus.PAID; s.PaidAt = TimeUtil.NowVN(); }
 
                 await _unitOfWork.WalletRepo.UpdateAsync(ownerWallet);
                 await _unitOfWork.WalletRepo.UpdateAsync(providerWallet);
@@ -2246,7 +2249,7 @@ namespace BLL.Services.Implement
 
             // Trừ tiền (Cho phép số dư âm)
             wallet.Balance -= amount;
-            wallet.LastUpdatedAt = DateTime.UtcNow;
+            wallet.LastUpdatedAt = TimeUtil.NowVN();
 
             TransactionType type;
             string finalDesc;
@@ -2273,7 +2276,7 @@ namespace BLL.Services.Implement
                 Type = type,
                 Status = TransactionStatus.SUCCEEDED,
                 Description = finalDesc,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = TimeUtil.NowVN(),
                 BalanceBefore = balanceBefore,
                 BalanceAfter = wallet.Balance
             });
@@ -2301,7 +2304,7 @@ namespace BLL.Services.Implement
                 Type = type,
                 Status = TransactionStatus.SUCCEEDED,
                 Description = desc,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = TimeUtil.NowVN(),
                 BalanceBefore = balanceBefore,
                 BalanceAfter = wallet.Balance
             });
@@ -2505,7 +2508,7 @@ namespace BLL.Services.Implement
                 {
                     var pickupTime = trip.ShippingRoute.ExpectedPickupDate.Date
                         .Add(trip.ShippingRoute.PickupTimeWindow?.StartTime?.ToTimeSpan() ?? TimeSpan.Zero);
-                    var timeUntilPickup = pickupTime - DateTime.UtcNow;
+                    var timeUntilPickup = pickupTime - TimeUtil.NowVN();
 
                     if (timeUntilPickup.TotalHours < 24)
                     {
@@ -2549,7 +2552,7 @@ namespace BLL.Services.Implement
                 // 5. UPDATE TRIP STATUS
                 // =======================================================================
                 trip.Status = TripStatus.CANCELLED;
-                trip.UpdateAt = DateTime.UtcNow;
+                trip.UpdateAt = TimeUtil.NowVN();
                 if (trip.TripProviderContract != null) trip.TripProviderContract.Status = ContractStatus.CANCELLED;
 
                 // =======================================================================
@@ -2565,7 +2568,7 @@ namespace BLL.Services.Implement
                         if (postPackage != null && postPackage.Status == PostStatus.DONE)
                         {
                             postPackage.Status = PostStatus.OPEN;
-                            postPackage.Updated = DateTime.UtcNow;
+                            postPackage.Updated = TimeUtil.NowVN();
                             await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                         }
                     }
