@@ -62,7 +62,7 @@ namespace BLL.Services.Impletement
 
                     // [UPDATED] Đặt trạng thái chờ duyệt
                     Status = VerifileStatus.PENDING_REVIEW,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                 };
 
                 // 3. Add vào Repo (Chưa SaveChange vì VehicleService sẽ Save)
@@ -105,7 +105,7 @@ namespace BLL.Services.Impletement
                     FrontDocumentUrl = frontUrl,
                     BackDocumentUrl = backUrl,
                     Status = VerifileStatus.PENDING_REVIEW,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 // [NEW] Nếu là giấy Đăng kiểm, lưu tạm thông tin vào Note hoặc trường phụ để Staff duyệt sau
@@ -154,7 +154,7 @@ namespace BLL.Services.Impletement
                 {
                     // A. Cập nhật trạng thái Document
                     doc.Status = VerifileStatus.ACTIVE;
-                    doc.ProcessedAt = DateTime.UtcNow;
+                    doc.ProcessedAt = TimeUtil.NowVN();
                     doc.AdminNotes = "Approved by Staff.";
 
                     // B. Cập nhật trạng thái XE -> ACTIVE
@@ -169,7 +169,7 @@ namespace BLL.Services.Impletement
                     if (doc.DocumentType == DocumentType.INSPECTION_CERTIFICATE && doc.ExpirationDate.HasValue)
                     {
                         // Parse thông tin từ AdminNotes (nếu có lưu ở bước Add) hoặc lấy mặc định
-                        DateTime inspectionDate = DateTime.UtcNow; // Mặc định hôm nay nếu ko có data
+                        DateTime inspectionDate = TimeUtil.NowVN(); // Mặc định hôm nay nếu ko có data
                         string station = "N/A";
 
                         if (!string.IsNullOrEmpty(doc.AdminNotes) && doc.AdminNotes.Contains("[USER_SUBMIT]"))
@@ -188,7 +188,7 @@ namespace BLL.Services.Impletement
                             ExpirationDate = doc.ExpirationDate.Value, // Lấy từ giấy tờ
                             InspectionStation = station,
                             Result = "ĐẠT", // Mặc định Đạt nếu được duyệt
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = TimeUtil.NowVN()
                         };
 
                         await _unitOfWork.InspectionHistoryRepo.AddAsync(history); // Cần thêm Repo này
@@ -199,7 +199,7 @@ namespace BLL.Services.Impletement
                     // Từ chối
                     if (string.IsNullOrWhiteSpace(rejectReason)) return new ResponseDTO("Vui lòng nhập lý do từ chối.", 400, false);
                     doc.Status = VerifileStatus.REJECTED;
-                    doc.ProcessedAt = DateTime.UtcNow;
+                    doc.ProcessedAt = TimeUtil.NowVN();
                     doc.AdminNotes = rejectReason;
 
                     // Nếu từ chối, có thể set xe về INACTIVE tùy logic

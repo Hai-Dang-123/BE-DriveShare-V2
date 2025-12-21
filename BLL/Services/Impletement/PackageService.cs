@@ -20,12 +20,14 @@ namespace BLL.Services.Impletement
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
         private readonly IPackageImageService _packageImageService;
+        private TimeUtil _timeUtil;
 
-        public PackageService(IUnitOfWork unitOfWork, UserUtility userUtility, IPackageImageService packageImageService)
+        public PackageService(IUnitOfWork unitOfWork, UserUtility userUtility, IPackageImageService packageImageService, TimeUtil timeUtil)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _packageImageService = packageImageService;
+            _timeUtil = timeUtil;
         }
 
         // ==================================================================================
@@ -438,7 +440,7 @@ namespace BLL.Services.Impletement
                     OwnerId = userId,
                     ItemId = packageDTO.ItemId,
                     Status = PackageStatus.PENDING,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.PackageRepo.AddAsync(package);
@@ -522,7 +524,7 @@ namespace BLL.Services.Impletement
                     ProviderId = userId,
                     ItemId = dto.ItemId,
                     Status = initialStatus,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.PackageRepo.AddAsync(package);
@@ -589,7 +591,7 @@ namespace BLL.Services.Impletement
                 package.Unit = updatePackageDTO.Unit;
                 package.WeightKg = updatePackageDTO.WeightKg;
                 package.VolumeM3 = updatePackageDTO.VolumeM3;
-                package.UpdatedAt = DateTime.UtcNow;
+                package.UpdatedAt = TimeUtil.NowVN();
 
                 if (package.HandlingDetail == null)
                 {

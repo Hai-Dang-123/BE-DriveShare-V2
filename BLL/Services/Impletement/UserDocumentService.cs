@@ -140,7 +140,7 @@ namespace BLL.Services.Impletement
                         UserId = userId,
                         DocumentType = docType,
                         FrontImageUrl = await frontTask,
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = TimeUtil.NowVN(),
                         Status = VerifileStatus.PENDING_REVIEW, // Chờ staff duyệt
                         RejectionReason = "Đang chờ nhân viên duyệt."
                     };
@@ -187,7 +187,7 @@ namespace BLL.Services.Impletement
                     FaceMatchScore = ekycResult.FaceMatchScore,
                     EkycLog = ekycResult.OcrRawJson,
 
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Status = VerifileStatus.INACTIVE
                 };
 
@@ -203,7 +203,7 @@ namespace BLL.Services.Impletement
                 if (rejectReasons.Count == 0)
                 {
                     userDoc.Status = VerifileStatus.ACTIVE;
-                    userDoc.VerifiedAt = DateTime.UtcNow;
+                    userDoc.VerifiedAt = TimeUtil.NowVN();
 
                     // Update Base Info
                     if (docType == DocumentType.DRIVER_LINCENSE)
@@ -496,7 +496,7 @@ namespace BLL.Services.Impletement
 
                 doc.Status = VerifileStatus.PENDING_REVIEW;
                 doc.RejectionReason = $"[USER REQUEST]: {dto.UserNote}";
-                doc.LastUpdatedAt = DateTime.UtcNow;
+                doc.LastUpdatedAt = TimeUtil.NowVN();
 
                 await _unitOfWork.UserDocumentRepo.UpdateAsync(doc);
                 await _unitOfWork.SaveChangeAsync();
@@ -529,7 +529,7 @@ namespace BLL.Services.Impletement
                 {
                     // Approve Logic
                     doc.Status = VerifileStatus.ACTIVE;
-                    doc.VerifiedAt = DateTime.UtcNow;
+                    doc.VerifiedAt = TimeUtil.NowVN();
                     doc.RejectionReason = null;
                     doc.IsDocumentReal = true; // Override AI/Default
 
@@ -615,7 +615,7 @@ namespace BLL.Services.Impletement
                         if (shouldActivate)
                         {
                             user.Status = UserStatus.ACTIVE;
-                            user.LastUpdatedAt = DateTime.UtcNow;
+                            user.LastUpdatedAt = TimeUtil.NowVN();
                             await _unitOfWork.BaseUserRepo.UpdateAsync(user);
                             await _unitOfWork.SaveChangeAsync(); // Lưu trạng thái User
                         }

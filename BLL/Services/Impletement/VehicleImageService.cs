@@ -50,7 +50,7 @@ namespace BLL.Services.Impletement
                     VehicleId = dto.VehicleId,
                     ImageURL = imageUrl,
                     Caption = dto.Caption,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.VehicleImageRepo.AddAsync(image);
@@ -219,7 +219,7 @@ namespace BLL.Services.Impletement
                     // QUAN TRỌNG: Lưu loại ảnh (Toàn cảnh / Biển số)
                     ImageType = dto.ImageType,
 
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
             });
 

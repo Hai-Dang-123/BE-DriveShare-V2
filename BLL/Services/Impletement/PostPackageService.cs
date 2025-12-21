@@ -29,6 +29,7 @@ namespace BLL.Services.Impletement
         private readonly INotificationService _notificationService;
         // 1. KHAI BÁO BIẾN NÀY
         private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly TimeUtil _timeUtil;
 
         public PostPackageService(
             IUnitOfWork unitOfWork,
@@ -40,7 +41,8 @@ namespace BLL.Services.Impletement
             IOwnerDriverLinkService ownerDriverLinkService,
             ITrafficRestrictionService trafficRestrictionService,
             INotificationService notificationService,
-            IServiceScopeFactory serviceScopeFactory)
+            IServiceScopeFactory serviceScopeFactory,
+            TimeUtil timeUtil)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -52,6 +54,7 @@ namespace BLL.Services.Impletement
             _trafficRestrictionService = trafficRestrictionService;
             _notificationService = notificationService;
             _serviceScopeFactory = serviceScopeFactory;
+            _timeUtil = timeUtil;
         }
 
         // =============================================================================
@@ -60,7 +63,7 @@ namespace BLL.Services.Impletement
         private async Task CheckAndExpirePostsAsync(IEnumerable<PostPackage> posts)
         {
             bool hasChange = false;
-            var today = DateTime.UtcNow.Date;
+            var today =TimeUtil.NowVN().Date;
 
             foreach (var post in posts)
             {
@@ -69,7 +72,7 @@ namespace BLL.Services.Impletement
                     if (post.ShippingRoute.ExpectedPickupDate.Date < today)
                     {
                         post.Status = PostStatus.OUT_OF_DATE;
-                        post.Updated = DateTime.UtcNow;
+                        post.Updated = TimeUtil.NowVN();
                         hasChange = true;
                     }
                 }
@@ -94,7 +97,7 @@ namespace BLL.Services.Impletement
                 if (postPackage == null) return new ResponseDTO("Post package not found.", 404, false);
 
                 postPackage.Status = dto.NewStatus;
-                postPackage.Updated = DateTime.UtcNow;
+                postPackage.Updated = TimeUtil.NowVN();
 
                 await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
                 await _unitOfWork.SaveChangeAsync();
@@ -160,7 +163,7 @@ namespace BLL.Services.Impletement
                 if (!verifyCheck.IsValid) return new ResponseDTO(verifyCheck.Message, 403, false);
 
                 var route = dto.ShippingRoute;
-                var today = DateTime.UtcNow.Date;
+                var today = TimeUtil.NowVN().Date;
 
                 if (route.ExpectedPickupDate.Date < today) return new ResponseDTO("Ngày lấy hàng dự kiến không thể ở trong quá khứ.", 400, false);
                 if (route.ExpectedDeliveryDate <= route.ExpectedPickupDate) return new ResponseDTO("Ngày giao hàng phải sau thời gian lấy hàng.", 400, false);
@@ -277,8 +280,8 @@ namespace BLL.Services.Impletement
                     Title = dto.Title,
                     Description = dto.Description,
                     OfferedPrice = dto.OfferedPrice,
-                    Created = DateTime.UtcNow,
-                    Updated = DateTime.UtcNow,
+                    Created = TimeUtil.NowVN(),
+                    Updated = TimeUtil.NowVN(),
                     Status = dto.Status, // Thường là PENDING hoặc OPEN
                     ShippingRouteId = newShippingRoute.ShippingRouteId
                 };

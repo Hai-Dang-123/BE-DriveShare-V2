@@ -166,8 +166,8 @@ namespace BLL.Services.Impletement
                     TripId = dto.TripId,
                     DriverId = dto.DriverId,
                     Type = dto.Type,
-                    CreateAt = DateTime.UtcNow,
-                    UpdateAt = DateTime.UtcNow,
+                    CreateAt = TimeUtil.NowVN(),
+                    UpdateAt = TimeUtil.NowVN(),
                     BaseAmount = dto.BaseAmount,
                     BonusAmount = dto.BonusAmount,
                     StartLocation = startLocationObj,
@@ -210,7 +210,7 @@ namespace BLL.Services.Impletement
                 if (isMainDriver)
                 {
                     // 1. Tạo bản ghi main driver record (Logic cũ của bạn)
-                    trip.UpdateAt = DateTime.UtcNow;
+                    trip.UpdateAt = TimeUtil.NowVN();
                     await CreateRecordsForMainDriver(trip.TripId, dto.DriverId, trip.OwnerId);
 
                     // 2. [UPDATE] Nếu là Nội bộ -> Chốt chuyến luôn (Done Assign)
@@ -354,7 +354,7 @@ namespace BLL.Services.Impletement
                     }
 
                     driverWallet.Balance -= depositAmount;
-                    driverWallet.LastUpdatedAt = DateTime.UtcNow;
+                    driverWallet.LastUpdatedAt = TimeUtil.NowVN();
                     await _unitOfWork.WalletRepo.UpdateAsync(driverWallet);
 
                     await _unitOfWork.TransactionRepo.AddAsync(new Transaction
@@ -366,10 +366,10 @@ namespace BLL.Services.Impletement
                         Type = TransactionType.DEPOSIT,
                         Status = TransactionStatus.SUCCEEDED,
                         Description = $"Đặt cọc cho chuyến đi {trip.TripCode}",
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = TimeUtil.NowVN(),
                         BalanceBefore = driverWallet.Balance + depositAmount,
                         BalanceAfter = driverWallet.Balance,
-                        CompletedAt = DateTime.UtcNow
+                        CompletedAt = TimeUtil.NowVN()
                     });
 
                     depositStatus = DepositStatus.DEPOSITED;
@@ -470,13 +470,13 @@ namespace BLL.Services.Impletement
                     TripId = postTrip.TripId,
                     DriverId = driverId,
                     Type = postDetail.Type,
-                    CreateAt = DateTime.UtcNow,
-                    UpdateAt = DateTime.UtcNow,
+                    CreateAt = TimeUtil.NowVN(),
+                    UpdateAt = TimeUtil.NowVN(),
                     BaseAmount = postDetail.PricePerPerson,
                     BonusAmount = postDetail.BonusAmount,
                     DepositAmount = depositAmount,
                     DepositStatus = depositStatus,
-                    DepositAt = (depositStatus == DepositStatus.DEPOSITED) ? DateTime.UtcNow : null,
+                    DepositAt = (depositStatus == DepositStatus.DEPOSITED) ? TimeUtil.NowVN() : null,
                     StartLocation = finalStartLoc,
                     EndLocation = finalEndLoc,
                     AssignmentStatus = AssignmentStatus.ACCEPTED,
@@ -497,7 +497,7 @@ namespace BLL.Services.Impletement
                 // --- MAIN DRIVER RECORD ---
                 if (isMainDriver)
                 {
-                    trip.UpdateAt = DateTime.UtcNow;
+                    trip.UpdateAt = TimeUtil.NowVN();
                     await _unitOfWork.TripRepo.UpdateAsync(trip);
                     await CreateRecordsForMainDriver(trip.TripId, driverId, trip.OwnerId);
                 }
@@ -520,21 +520,21 @@ namespace BLL.Services.Impletement
                 {
                     // A. Đóng Post (Vì đã hết sạch slot)
                     postTrip.Status = PostStatus.DONE;
-                    postTrip.UpdateAt = DateTime.UtcNow;
+                    postTrip.UpdateAt = TimeUtil.NowVN();
 
                     // B. Xử lý Trạng thái Trip
                     if (isInternalDriver)
                     {
                         // Nếu là Nội bộ -> Chốt Trip luôn
                         trip.Status = TripStatus.DONE_ASSIGNING_DRIVER;
-                        trip.UpdateAt = DateTime.UtcNow;
+                        trip.UpdateAt = TimeUtil.NowVN();
                     }
                     // Nếu là External -> Giữ nguyên Trip Status (chờ ký hợp đồng)
                 }
                 else
                 {
                     // Vẫn còn slot -> Chỉ update time
-                    postTrip.UpdateAt = DateTime.UtcNow;
+                    postTrip.UpdateAt = TimeUtil.NowVN();
                     // Đảm bảo Post vẫn OPEN
                     if (postTrip.Status == PostStatus.DONE) postTrip.Status = PostStatus.OPEN;
                 }
@@ -684,7 +684,7 @@ namespace BLL.Services.Impletement
 
                 // E. Cập nhật DB
                 assignment.IsOnBoard = true;
-                assignment.OnBoardTime = DateTime.UtcNow;
+                assignment.OnBoardTime = TimeUtil.NowVN();
 
                 // Lưu vị trí kèm Note cảnh báo
                 assignment.OnBoardLocation = $"{dto.Latitude},{dto.Longitude}|{dto.CurrentAddress}";
@@ -843,7 +843,7 @@ namespace BLL.Services.Impletement
 
                 // E. Cập nhật DB
                 assignment.IsFinished = true;
-                assignment.OffBoardTime = DateTime.UtcNow;
+                assignment.OffBoardTime = TimeUtil.NowVN();
                 assignment.OffBoardLocation = $"{dto.Latitude},{dto.Longitude}|{dto.CurrentAddress}";
                 assignment.OffBoardImage = imageUrl;
 
@@ -1110,7 +1110,7 @@ namespace BLL.Services.Impletement
                         // Cộng tiền lại cho Driver
                         decimal refundAmount = assignment.DepositAmount;
                         driverWallet.Balance += refundAmount;
-                        driverWallet.LastUpdatedAt = DateTime.UtcNow;
+                        driverWallet.LastUpdatedAt = TimeUtil.NowVN();
 
                         await _unitOfWork.WalletRepo.UpdateAsync(driverWallet);
 
@@ -1124,7 +1124,7 @@ namespace BLL.Services.Impletement
                             Type = TransactionType.REFUND,
                             Status = TransactionStatus.SUCCEEDED,
                             Description = $"Hoàn cọc do bị hủy khỏi chuyến {assignment.Trip.TripCode}",
-                            CreatedAt = DateTime.UtcNow,
+                            CreatedAt = TimeUtil.NowVN(),
                             BalanceBefore = driverWallet.Balance - refundAmount,
                             BalanceAfter = driverWallet.Balance
                         });
@@ -1149,7 +1149,7 @@ namespace BLL.Services.Impletement
                 // 5. Cập nhật trạng thái Assignment
                 // Thay vì xóa cứng (Delete), ta đổi status để lưu vết lịch sử
                 assignment.AssignmentStatus = AssignmentStatus.CANCELLED;
-                assignment.UpdateAt = DateTime.UtcNow;
+                assignment.UpdateAt = TimeUtil.NowVN();
 
                 await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assignment);
 
@@ -1171,7 +1171,7 @@ namespace BLL.Services.Impletement
                             assignment.Trip.PostTrip.Status = PostStatus.OPEN;
                         }
 
-                        assignment.Trip.PostTrip.UpdateAt = DateTime.UtcNow;
+                        assignment.Trip.PostTrip.UpdateAt = TimeUtil.NowVN();
                         await _unitOfWork.PostTripRepo.UpdateAsync(assignment.Trip.PostTrip);
                     }
                 }
@@ -1232,7 +1232,7 @@ namespace BLL.Services.Impletement
                 var startTime = assignment.Trip.ShippingRoute.ExpectedPickupDate;
                 if (startTime == default(DateTime)) startTime = assignment.Trip.CreateAt.AddDays(1); // Fallback nếu data lỗi
 
-                var timeRemaining = startTime - DateTime.UtcNow;
+                var timeRemaining = startTime - TimeUtil.NowVN();
                 double hoursRemaining = timeRemaining.TotalHours;
 
                 decimal depositAmount = assignment.DepositAmount;
@@ -1271,7 +1271,7 @@ namespace BLL.Services.Impletement
                         if (refundAmount > 0)
                         {
                             driverWallet.Balance += refundAmount;
-                            driverWallet.LastUpdatedAt = DateTime.UtcNow;
+                            driverWallet.LastUpdatedAt = TimeUtil.NowVN();
 
                             await _unitOfWork.TransactionRepo.AddAsync(new Transaction
                             {
@@ -1282,7 +1282,7 @@ namespace BLL.Services.Impletement
                                 Type = TransactionType.REFUND,
                                 Status = TransactionStatus.SUCCEEDED,
                                 Description = $"Hoàn cọc hủy chuyến {assignment.Trip.TripCode}. ({penaltyReason})",
-                                CreatedAt = DateTime.UtcNow,
+                                CreatedAt = TimeUtil.NowVN(),
                                 BalanceBefore = driverWallet.Balance - refundAmount,
                                 BalanceAfter = driverWallet.Balance
                             });
@@ -1304,7 +1304,7 @@ namespace BLL.Services.Impletement
                         if (penaltyAmount > 0)
                         {
                             ownerWallet.Balance += penaltyAmount;
-                            ownerWallet.LastUpdatedAt = DateTime.UtcNow;
+                            ownerWallet.LastUpdatedAt = TimeUtil.NowVN();
 
                             await _unitOfWork.TransactionRepo.AddAsync(new Transaction
                             {
@@ -1315,7 +1315,7 @@ namespace BLL.Services.Impletement
                                 Type = TransactionType.COMPENSATION, // Dạng bồi thường
                                 Status = TransactionStatus.SUCCEEDED,
                                 Description = $"Nhận bồi thường do Tài xế hủy chuyến {assignment.Trip.TripCode}. ({penaltyReason})",
-                                CreatedAt = DateTime.UtcNow,
+                                CreatedAt = TimeUtil.NowVN(),
                                 BalanceBefore = ownerWallet.Balance - penaltyAmount,
                                 BalanceAfter = ownerWallet.Balance
                             });
@@ -1343,7 +1343,7 @@ namespace BLL.Services.Impletement
 
                 // 5. Cập nhật trạng thái Assignment
                 assignment.AssignmentStatus = AssignmentStatus.CANCELLED;
-                assignment.UpdateAt = DateTime.UtcNow;
+                assignment.UpdateAt = TimeUtil.NowVN();
                 assignment.CheckOutNote = $"Tài xế tự hủy. {penaltyReason}";
 
                 await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assignment);
@@ -1363,7 +1363,7 @@ namespace BLL.Services.Impletement
                             assignment.Trip.PostTrip.Status = PostStatus.OPEN;
                         }
 
-                        assignment.Trip.PostTrip.UpdateAt = DateTime.UtcNow;
+                        assignment.Trip.PostTrip.UpdateAt = TimeUtil.NowVN();
                         await _unitOfWork.PostTripRepo.UpdateAsync(assignment.Trip.PostTrip);
                     }
                 }

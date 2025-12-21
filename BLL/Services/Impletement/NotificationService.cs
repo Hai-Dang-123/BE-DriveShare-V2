@@ -1,4 +1,5 @@
 ﻿using BLL.Services.Interface;
+using BLL.Utilities;
 using Common.DTOs;
 using Common.Enums.Status;
 using DAL.Entities;
@@ -16,10 +17,11 @@ namespace BLL.Services.Impletement
     public class NotificationService : INotificationService
     {
         private readonly IUnitOfWork _unitOfWork;
-
-        public NotificationService(IUnitOfWork unitOfWork)
+        private readonly TimeUtil _timeUtil ;
+        public NotificationService(IUnitOfWork unitOfWork, TimeUtil timeUtil)
         {
             _unitOfWork = unitOfWork;
+            _timeUtil = timeUtil;
         }
 
         // =========================================================================
@@ -32,12 +34,12 @@ namespace BLL.Services.Impletement
             try
             {
                 var existingToken = await _unitOfWork.UserDeviceTokenRepo.GetByTokenAsync(token);
-
+               
                 if (existingToken != null)
                 {
                     // Update user sở hữu token này
                     existingToken.UserId = userId;
-                    existingToken.LastUpdated = DateTime.UtcNow;
+                    existingToken.LastUpdated = TimeUtil.NowVN() ;
                     existingToken.Platform = platform;
                     await _unitOfWork.UserDeviceTokenRepo.UpdateAsync(existingToken);
                 }
@@ -50,7 +52,7 @@ namespace BLL.Services.Impletement
                         UserId = userId,
                         DeviceToken = token,
                         Platform = platform,
-                        LastUpdated = DateTime.UtcNow
+                        LastUpdated = TimeUtil.NowVN()
                     };
                     await _unitOfWork.UserDeviceTokenRepo.AddAsync(newToken);
                 }
@@ -79,7 +81,7 @@ namespace BLL.Services.Impletement
                     Body = body,
                     Data = data != null ? JsonSerializer.Serialize(data) : null,
                     IsRead = false,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.NotificationRepo.AddAsync(notiEntity);
@@ -138,7 +140,7 @@ namespace BLL.Services.Impletement
                 // B. Lưu DB (Bulk Insert - 1 lệnh duy nhất)
                 var notiList = new List<DAL.Entities.Notification>();
                 string jsonData = data != null ? JsonSerializer.Serialize(data) : null;
-                var now = DateTime.UtcNow;
+                var now = TimeUtil.NowVN();
 
                 foreach (var user in usersData)
                 {

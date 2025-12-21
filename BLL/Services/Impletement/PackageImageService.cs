@@ -19,11 +19,13 @@ namespace BLL.Services.Impletement
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserUtility _userUtility;
         private readonly IFirebaseUploadService _firebaseService;
-        public PackageImageService(IUnitOfWork unitOfWork, UserUtility userUtility, IFirebaseUploadService firebaseService)
+        private readonly TimeUtil _timeUtil;
+        public PackageImageService(IUnitOfWork unitOfWork, UserUtility userUtility, IFirebaseUploadService firebaseService, TimeUtil timeUtil)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _firebaseService = firebaseService;
+            _timeUtil = timeUtil;
         }
         // CREATE PACKAGE IMAGE
         public async Task<ResponseDTO> CreatePackageImageAsync(PackageImageCreateDTO packageImageCreateDTO)
@@ -56,7 +58,7 @@ namespace BLL.Services.Impletement
                     PackageImageId = Guid.NewGuid(),
                     PackageId = packageImageCreateDTO.PackageId,
                     PackageImageURL = img,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Status = PackageImageStatus.Active
                 };
 
@@ -282,7 +284,7 @@ namespace BLL.Services.Impletement
                     PackageImageId = Guid.NewGuid(),
                     PackageId = packageId,
                     PackageImageURL = url,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = TimeUtil.NowVN(),
                     Status = PackageImageStatus.Active
                 };
 

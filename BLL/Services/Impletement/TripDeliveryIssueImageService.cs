@@ -45,7 +45,7 @@ namespace BLL.Services.Impletement
                     TripDeliveryIssueId = dto.TripDeliveryIssueId,
                     ImageUrl = imageURL,
                     Caption = dto.Caption,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN(),
                 };
                 await _unitOfWork.TripDeliveryIssueImageRepo.AddAsync(tripDeliveryIssueImage);
                 await _unitOfWork.SaveChangeAsync();

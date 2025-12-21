@@ -60,7 +60,7 @@ namespace BLL.Services.Implement
                 var contract = new TripDriverContract
                 {
                     ContractId = Guid.NewGuid(),
-                    ContractCode = $"CON-DRV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                    ContractCode = $"CON-DRV-{TimeUtil.NowVN():yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
                     TripId = trip.TripId,
                     OwnerId = ownerId,
                     CounterpartyId = driver.UserId,
@@ -68,14 +68,14 @@ namespace BLL.Services.Implement
                     Version = template.Version,
                     Type = ContractType.DRIVER_CONTRACT,
                     Status = ContractStatus.PENDING,
-                    CreateAt = DateTime.UtcNow
+                    CreateAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
 
                 // Chuyển status trip
                 trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
-                trip.UpdateAt = DateTime.UtcNow;
+                trip.UpdateAt = TimeUtil.NowVN();
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
 
                 await _unitOfWork.SaveChangeAsync();
@@ -146,7 +146,7 @@ namespace BLL.Services.Implement
                     .Where(t => t.UserId == userId
                                 && t.TokenType == TokenType.CONTRACT_SIGNING_OTP
                                 && !t.IsRevoked
-                                && t.ExpiredAt > DateTime.UtcNow)
+                                && t.ExpiredAt > TimeUtil.NowVN())
                     .OrderByDescending(t => t.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -194,14 +194,14 @@ namespace BLL.Services.Implement
                     if (contract.OwnerSigned)
                         return new ResponseDTO("Owner already signed", 400, false);
                     contract.OwnerSigned = true;
-                    contract.OwnerSignAt = DateTime.UtcNow;
+                    contract.OwnerSignAt = TimeUtil.NowVN();
                 }
                 else if (isDriver)
                 {
                     if (contract.CounterpartySigned)
                         return new ResponseDTO("Driver already signed", 400, false);
                     contract.CounterpartySigned = true;
-                    contract.CounterpartySignAt = DateTime.UtcNow;
+                    contract.CounterpartySignAt = TimeUtil.NowVN();
                 }
 
                 // 5. Cập nhật trạng thái HỢP ĐỒNG HIỆN TẠI
@@ -210,7 +210,7 @@ namespace BLL.Services.Implement
                 {
                     // Cả 2 bên đã ký -> Hợp đồng hoàn tất
                     contract.Status = ContractStatus.COMPLETED;
-                    contract.EffectiveDate = DateTime.UtcNow;
+                    contract.EffectiveDate = TimeUtil.NowVN();
                     isCurrentContractDone = true;
                 }
                 else
@@ -236,7 +236,7 @@ namespace BLL.Services.Implement
                         // Không còn ai chưa ký -> Tất cả đã xong -> Chuyển trạng thái Trip
                         // Trip chuyển sang trạng thái đã gán xong tài xế (hoặc sẵn sàng bàn giao xe)
                         trip.Status = TripStatus.DONE_ASSIGNING_DRIVER;
-                        trip.UpdateAt = DateTime.UtcNow;
+                        trip.UpdateAt = TimeUtil.NowVN();
                     }
                     else
                     {
@@ -427,7 +427,7 @@ namespace BLL.Services.Implement
                 var contract = new TripDriverContract
                 {
                     ContractId = Guid.NewGuid(),
-                    ContractCode = $"CON-DRV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                    ContractCode = $"CON-DRV-{TimeUtil.NowVN():yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}",
                     TripId = trip.TripId,
                     OwnerId = ownerId,
                     CounterpartyId = driver.UserId, // Driver kế thừa BaseUser -> UserId
@@ -437,12 +437,12 @@ namespace BLL.Services.Implement
 
                     // --- TRẠNG THÁI: ĐÃ KÝ (ACTIVE) ---
                     Status = ContractStatus.AWAITING_CONTRACT_SIGNATURE,
-                    CreateAt = DateTime.UtcNow,
-                    EffectiveDate = DateTime.UtcNow,
+                    CreateAt = TimeUtil.NowVN(),
+                    EffectiveDate = TimeUtil.NowVN(),
 
                     // Owner ký
                     OwnerSigned = true,
-                    OwnerSignAt = DateTime.UtcNow,
+                    OwnerSignAt = TimeUtil.NowVN(),
 
                     // Driver (Counterparty) ký
                     CounterpartySigned = false,
@@ -457,7 +457,7 @@ namespace BLL.Services.Implement
                 await _unitOfWork.TripDriverContractRepo.AddAsync(contract);
 
                 trip.Status = TripStatus.PENDING_DRIVER_ASSIGNMENT;
-                trip.UpdateAt = DateTime.UtcNow;
+                trip.UpdateAt = TimeUtil.NowVN();
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
 
                 return contract;

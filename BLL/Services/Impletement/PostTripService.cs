@@ -20,14 +20,16 @@ namespace BLL.Services.Impletement
         private readonly IUserDocumentService _userDocumentService;
         private readonly INotificationService _notificationService;
         private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly TimeUtil _timeUtil;
 
-        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService, INotificationService notificationService, IServiceScopeFactory serviceScopeFactory)
+        public PostTripService(IUnitOfWork unitOfWork, UserUtility userUtility, IUserDocumentService userDocumentService, INotificationService notificationService, IServiceScopeFactory serviceScopeFactory, TimeUtil timeUtil)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _userDocumentService = userDocumentService;
             _notificationService = notificationService;
             _serviceScopeFactory = serviceScopeFactory;
+            _timeUtil = timeUtil;
         }
 
         // =========================================================================
@@ -94,8 +96,8 @@ namespace BLL.Services.Impletement
                     Description = dto.Description,
                     RequiredPayloadInKg = dto.RequiredPayloadInKg,
                     Status = PostStatus.OPEN, // Mặc định là OPEN khi tạo mới
-                    CreateAt = DateTime.UtcNow,
-                    UpdateAt = DateTime.UtcNow,
+                    CreateAt = TimeUtil.NowVN(),
+                    UpdateAt = TimeUtil.NowVN(),
                 };
 
                 // 4. Tạo Details
@@ -422,7 +424,7 @@ namespace BLL.Services.Impletement
 
                 // 5. Cập nhật
                 postTrip.Status = newStatus;
-                postTrip.UpdateAt = DateTime.UtcNow;
+                postTrip.UpdateAt = TimeUtil.NowVN();
 
                 await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                 await _unitOfWork.SaveChangeAsync();

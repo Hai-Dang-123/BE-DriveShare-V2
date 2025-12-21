@@ -60,7 +60,7 @@ namespace BLL.Services.Impletement
             link.Status = dto.Status;
             if (dto.Status == FleetJoinStatus.APPROVED)
             {
-                link.ApprovedAt = DateTime.UtcNow; 
+                link.ApprovedAt = TimeUtil.NowVN(); 
             }
             else 
             {
@@ -120,7 +120,7 @@ namespace BLL.Services.Impletement
             {
                 OwnerDriverLinkId = Guid.NewGuid(),
                 Status = FleetJoinStatus.PENDING, 
-                RequestedAt = DateTime.UtcNow,
+                RequestedAt = TimeUtil.NowVN(),
                 ApprovedAt = null,
                 OwnerId = dto.OwnerId,
                 DriverId = currentDriverId,
@@ -223,7 +223,7 @@ namespace BLL.Services.Impletement
         // =================================================================
         private async Task<(double HoursToday, double HoursWeek, double HoursMonth, bool CanDrive)> CalculateDriverStatisticsAsync(Guid driverId)
         {
-            var now = DateTime.UtcNow;
+            var now = TimeUtil.NowVN();
 
             // 1. Xác định các mốc thời gian
             // -- Ngày
