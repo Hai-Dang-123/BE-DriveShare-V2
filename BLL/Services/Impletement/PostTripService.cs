@@ -93,7 +93,7 @@ namespace BLL.Services.Impletement
                     Title = dto.Title,
                     Description = dto.Description,
                     RequiredPayloadInKg = dto.RequiredPayloadInKg,
-                    Status = PostStatus.OPEN, // Mặc định là OPEN khi tạo mới
+                    Status = dto.Status, // Mặc định là OPEN khi tạo mới
                     CreateAt = DateTime.UtcNow,
                     UpdateAt = DateTime.UtcNow,
                 };
