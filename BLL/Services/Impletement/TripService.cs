@@ -2043,6 +2043,7 @@ namespace BLL.Services.Implement
                     .Include(t => t.DriverAssignments) // Load assignment để check
                     .Include(t => t.Owner)
                     .Include(t => t.Packages)
+                    .Include(t => t.Vehicle)
                     .FirstOrDefaultAsync(t => t.TripId == dto.TripId);
 
                 if (trip == null) return new ResponseDTO("Không tìm thấy chuyến đi.", 404, false);
@@ -2067,7 +2068,10 @@ namespace BLL.Services.Implement
                 {
                     TripStatus.AWAITING_PROVIDER_CONTRACT,
                     TripStatus.AWAITING_PROVIDER_PAYMENT,
-                    TripStatus.PENDING_DRIVER_ASSIGNMENT, // Đang tìm tài, chưa có tài -> OK
+                    TripStatus.PENDING_DRIVER_ASSIGNMENT,
+                    TripStatus.AWAITING_OWNER_CONTRACT,
+
+                    // Đang tìm tài, chưa có tài -> OK
                     // Lưu ý: Các trạng thái như DONE_ASSIGNING_DRIVER thường đã có tài xế, 
                     // nên sẽ bị chặn bởi logic check ở bước 1.5 bên trên.
                 };
@@ -2183,7 +2187,11 @@ namespace BLL.Services.Implement
                         assign.CheckOutNote = "Chuyến đi bị hủy bởi nhà xe.";
                     }
                 }
-
+                if (trip.Vehicle != null)
+                {
+                    trip.Vehicle.Status = VehicleStatus.ACTIVE;
+                    await _unitOfWork.VehicleRepo.UpdateAsync(trip.Vehicle);
+                }
                 // 7. Save & Commit
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();

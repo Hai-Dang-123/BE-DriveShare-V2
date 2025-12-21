@@ -51,5 +51,20 @@ namespace DriverShareProject.Controllers
             var response = await _ownerDriverLinkService.GetCurrentTeamInfoAsync();
             return StatusCode(response.StatusCode, response);
         }
+        /// <summary>
+        /// (Owner) Lấy danh sách tài xế KHÔNG bị REJECTED (APPROVED, PENDING, ...)
+        /// </summary>
+        [HttpGet("my-drivers/not-rejected")]
+        // [Authorize(Roles = "Owner")]
+        public async Task<IActionResult> GetMyDriversNotRejected(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var response = await _ownerDriverLinkService
+                .GetDriversByOwner_NotRejectedAsync(pageNumber, pageSize);
+
+            return StatusCode(response.StatusCode, response);
+        }
+
     }
 }

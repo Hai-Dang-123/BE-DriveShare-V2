@@ -16,6 +16,7 @@ namespace BLL.Services.Interface
         Task<List<LinkedDriverDTO>> GetDriversWithStatsByOwnerIdAsync(Guid ownerId);
         // --- [NEW] Hàm mới cho Driver check team ---
         Task<ResponseDTO> GetCurrentTeamInfoAsync();
+        Task<ResponseDTO> GetDriversByOwner_NotRejectedAsync(int pageNumber = 1, int pageSize = 10);
     }
 }
 

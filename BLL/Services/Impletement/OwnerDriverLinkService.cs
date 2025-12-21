@@ -383,5 +383,101 @@ namespace BLL.Services.Impletement
             }
         }
 
+        public async Task<ResponseDTO> GetDriversByOwner_NotRejectedAsync(
+     int pageNumber = 1,
+     int pageSize = 10)
+        {
+            try
+            {
+                // 1. Lấy OwnerId từ Token
+                var ownerId = _userUtility.GetUserIdFromToken();
+                if (ownerId == Guid.Empty)
+                {
+                    return new ResponseDTO("Unauthorized.", 401, false);
+                }
+
+                // 2. Query: lấy driver KHÔNG bị REJECTED
+                var query = _unitOfWork.OwnerDriverLinkRepo.GetAll()
+                    .Include(l => l.Driver)
+                    .Where(link =>
+                        link.OwnerId == ownerId &&
+                        link.Status != FleetJoinStatus.REJECTED
+                    );
+
+                // 3. Đếm tổng
+                var totalCount = await query.CountAsync();
+                if (totalCount == 0)
+                {
+                    return new ResponseDTO(
+                        "No drivers found.",
+                        200,
+                        true,
+                        new PaginatedDTO<LinkedDriverDTO>(
+                            new List<LinkedDriverDTO>(),
+                            0,
+                            pageNumber,
+                            pageSize
+                        )
+                    );
+                }
+
+                // 4. Phân trang
+                var links = await query
+                    .OrderByDescending(l => l.RequestedAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                // 5. Map DTO + tính statistics
+                var resultList = new List<LinkedDriverDTO>();
+
+                foreach (var link in links)
+                {
+                    var stats = await CalculateDriverStatisticsAsync(link.DriverId);
+
+                    resultList.Add(new LinkedDriverDTO
+                    {
+                        OwnerDriverLinkId = link.OwnerDriverLinkId,
+                        DriverId = link.DriverId,
+                        FullName = link.Driver.FullName,
+                        PhoneNumber = link.Driver.PhoneNumber,
+                        AvatarUrl = link.Driver.AvatarUrl,
+                        LicenseNumber = link.Driver.LicenseNumber,
+                        Status = link.Status.ToString(),
+                        RequestedAt = link.RequestedAt,
+                        ApprovedAt = link.ApprovedAt,
+
+                        HoursDrivenToday = stats.HoursToday,
+                        HoursDrivenThisWeek = stats.HoursWeek,
+                        HoursDrivenThisMonth = stats.HoursMonth,
+                        CanDrive = stats.CanDrive
+                    });
+                }
+
+                // 6. Trả kết quả
+                var paginatedResult = new PaginatedDTO<LinkedDriverDTO>(
+                    resultList,
+                    totalCount,
+                    pageNumber,
+                    pageSize
+                );
+
+                return new ResponseDTO(
+                    "Get drivers (not rejected) successfully.",
+                    200,
+                    true,
+                    paginatedResult
+                );
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO(
+                    $"Error getting drivers: {ex.Message}",
+                    500,
+                    false
+                );
+            }
+        }
+
     }
 }
