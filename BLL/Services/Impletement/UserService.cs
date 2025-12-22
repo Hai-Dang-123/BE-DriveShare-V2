@@ -976,5 +976,17 @@ namespace BLL.Services.Impletement
                 return new ResponseDTO($"Lỗi xử lý yêu cầu: {ex.Message}", 500, false);
             }
         }
+
+        public async Task<Guid> GetAdminUserIdAsync()
+        {
+               return await _unitOfWork.BaseUserRepo
+              .GetAll()
+              .Where(u =>
+                  u.Role != null &&
+                  u.Role.RoleName == Common.Constants.RoleConstant.Admin &&
+                  u.Status == UserStatus.ACTIVE)
+              .Select(u => u.UserId)
+              .FirstOrDefaultAsync();
+        }
     }
 }

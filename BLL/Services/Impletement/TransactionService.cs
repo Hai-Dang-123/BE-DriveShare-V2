@@ -6,6 +6,7 @@ using Common.Enums.Status;
 using Common.Enums.Type;
 using DAL.Entities;
 using DAL.UnitOfWork;
+using FirebaseAdmin.Auth;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
@@ -18,13 +19,15 @@ namespace BLL.Services.Implement
         private readonly UserUtility _userUtility;
         private readonly ISepayService _sepayService;
         private readonly IEmailService _emailService;
+        private readonly IUserService _userService;
 
-        public TransactionService(IUnitOfWork unitOfWork, UserUtility userUtility, ISepayService sepayService, IEmailService emailService)
+        public TransactionService(IUnitOfWork unitOfWork, UserUtility userUtility, ISepayService sepayService, IEmailService emailService,IUserService userService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
             _sepayService = sepayService;
             _emailService = emailService;
+            _userService = userService;
         }
 
         // ==========================================
@@ -300,173 +303,241 @@ namespace BLL.Services.Implement
             var userId = _userUtility.GetUserIdFromToken();
             if (userId == Guid.Empty)
                 return new ResponseDTO("Unauthorized", 401, false);
-            // Trừ tiền (số âm)
-            return await ExecuteBalanceChangeAsync(userId, -dto.Amount, dto.Type, dto.TripId, dto.PostId, dto.Description, dto.ExternalCode);
+
+            var adminId = await _userService.GetAdminUserIdAsync();
+
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                // 1️⃣ Trừ tiền USER (đúng như bạn nói)
+                await ExecuteBalanceChangeAsync(
+                    userId,
+                    -dto.Amount,
+                    dto.Type,
+                    dto.TripId,
+                    dto.PostId,
+                    dto.Description,
+                    dto.ExternalCode
+                );
+
+                // 2️⃣ Cộng tiền ADMIN (HỆ THỐNG làm)
+                await ExecuteBalanceChangeAsync(
+                    adminId,
+                    dto.Amount,
+                    dto.Type,
+                    dto.TripId,
+                    dto.PostId,
+                    $"Receive from user {userId}"
+                );
+
+                await transaction.CommitAsync();
+                return new ResponseDTO("Payment successful", 200, true);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return new ResponseDTO(ex.Message, 400, false);
+            }
         }
 
         // 4. Dành cho Hệ thống/Service (Service gọi) -> ⚠️ SỬA ĐỔI: Trả về ResponseDTO
         public async Task<ResponseDTO> CreatePayoutAsync(InternalTransactionRequestDTO dto)
         {
-            var userId = _userUtility.GetUserIdFromToken();
-            if (userId == Guid.Empty)
+            var receiverId = _userUtility.GetUserIdFromToken();
+            if (receiverId == Guid.Empty)
                 return new ResponseDTO("Unauthorized", 401, false);
-            // Cộng tiền (số dương)
-            return await ExecuteBalanceChangeAsync(userId, dto.Amount, dto.Type, dto.TripId, dto.PostId ,dto.Description, dto.ExternalCode);
+
+            var adminId = await _userService.GetAdminUserIdAsync();
+
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                // 1️⃣ Trừ tiền ADMIN
+                await ExecuteBalanceChangeAsync(
+                    adminId,
+                    -dto.Amount,
+                    dto.Type,
+                    dto.TripId,
+                    dto.PostId,
+                    $"Admin payout: {dto.Description}",
+                    dto.ExternalCode
+                );
+
+                // 2️⃣ Cộng tiền USER
+                await ExecuteBalanceChangeAsync(
+                    receiverId,
+                    dto.Amount,
+                    dto.Type,
+                    dto.TripId,
+                    dto.PostId,
+                    $"User receive payout: {dto.Description}",
+                    dto.ExternalCode
+                );
+
+                await transaction.CommitAsync();
+                return new ResponseDTO("Payout successful", 200, true);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return new ResponseDTO(ex.Message, 400, false);
+            }
         }
 
 
         // ─────── HÀM LÕI (CORE) XỬ LÝ GIAO DỊCH ───────
 
         // Hàm lõi này VẪN trả về ResponseDTO vì nó cần cho cả hai loại hàm (public và internal)
-        private async Task<ResponseDTO> ExecuteBalanceChangeAsync(Guid userId, decimal amount, TransactionType type, Guid? tripId, Guid? postId, string description, string? externalCode = null)
+        private async Task<ResponseDTO> ExecuteBalanceChangeAsync(
+     Guid userId,
+     decimal amount,
+     TransactionType type,
+     Guid? tripId,
+     Guid? postId,
+     string description,
+     string? externalCode = null)
         {
-            // [FIX 1] Sử dụng 'using' để quản lý Transaction Scope
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-            try
+            // 1. Lấy & validate Wallet
+            var wallet = await _unitOfWork.WalletRepo
+                .FirstOrDefaultAsync(w => w.UserId == userId);
+
+            if (wallet == null)
+                throw new Exception($"Wallet not found for user {userId}");
+
+            if (wallet.Status != WalletStatus.ACTIVE)
+                throw new Exception("Wallet is not active");
+
+            if (amount < 0 && wallet.Balance < Math.Abs(amount))
+                throw new Exception("Insufficient funds");
+
+            // 2. Update số dư
+            decimal balanceBefore = wallet.Balance;
+            wallet.Balance += amount;
+            wallet.LastUpdatedAt = TimeUtil.NowVN();
+            decimal balanceAfter = wallet.Balance;
+
+            // 3. Tạo Transaction record
+            var newTransaction = new Transaction
             {
-                // 1. Lấy & Validate Wallet
-                var wallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == userId);
-                if (wallet == null) throw new Exception($"Wallet not found for user {userId}");
-                if (wallet.Status != WalletStatus.ACTIVE) throw new Exception("Wallet is not active");
+                TransactionId = Guid.NewGuid(),
+                WalletId = wallet.WalletId,
+                TripId = tripId,
+                // PostId = postId, // mở nếu entity có field
+                Amount = amount,
+                Currency = "VND",
+                BalanceBefore = balanceBefore,
+                BalanceAfter = balanceAfter,
+                Type = type,
+                Status = TransactionStatus.SUCCEEDED,
+                CreatedAt = TimeUtil.NowVN(),
+                CompletedAt = TimeUtil.NowVN(),
+                Description = description,
+                ExternalTransactionCode = externalCode
+            };
 
-                // 2. Validate Số dư (nếu trừ tiền)
-                if (amount < 0 && (wallet.Balance < Math.Abs(amount)))
-                    throw new Exception("Insufficient funds");
+            await _unitOfWork.TransactionRepo.AddAsync(newTransaction);
+            await _unitOfWork.WalletRepo.UpdateAsync(wallet);
 
-                // 3. Cập nhật số dư
-                decimal balanceBefore = wallet.Balance;
-                wallet.Balance += amount;
-                wallet.LastUpdatedAt = TimeUtil.NowVN();
-                decimal balanceAfter = wallet.Balance;
+            // 4. Update trạng thái Post (Package / Trip)
+            if (postId.HasValue)
+            {
+                bool isPostUpdated = false;
 
-                // 4. Tạo Transaction Record
-                var newTransaction = new Transaction
+                var postPackage = await _unitOfWork.PostPackageRepo
+                    .GetByIdAsync(postId.Value);
+
+                if (postPackage != null)
                 {
-                    TransactionId = Guid.NewGuid(),
-                    WalletId = wallet.WalletId,
-                    TripId = tripId,
-                    // PostId = postId, // Uncomment nếu Entity Transaction có trường này
-                    Amount = amount,
-                    Currency = "VND",
-                    BalanceBefore = balanceBefore,
-                    BalanceAfter = balanceAfter,
-                    Type = type,
-                    Status = TransactionStatus.SUCCEEDED,
-                    CreatedAt = TimeUtil.NowVN(),
-                    CompletedAt = TimeUtil.NowVN(),
-                    Description = description,
-                    ExternalTransactionCode = externalCode
-                };
-
-                await _unitOfWork.TransactionRepo.AddAsync(newTransaction);
-                await _unitOfWork.WalletRepo.UpdateAsync(wallet);
-
-                // 5. [UPDATE] CẬP NHẬT TRẠNG THÁI POST (CHECK CẢ PACKAGE VÀ TRIP)
-                if (postId.HasValue)
-                {
-                    bool isPostUpdated = false;
-
-                    // A. Thử tìm trong PostPackage
-                    var postPackage = await _unitOfWork.PostPackageRepo.GetByIdAsync(postId.Value);
-                    if (postPackage != null)
-                    {
-                        postPackage.Status = PostStatus.OPEN;
-                        postPackage.Updated = TimeUtil.NowVN(); // Nhớ update time
-                        await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
-                        isPostUpdated = true;
-                    }
-
-                    // B. Nếu không phải Package, thử tìm trong PostTrip
-                    if (!isPostUpdated)
-                    {
-                        var postTrip = await _unitOfWork.PostTripRepo.GetByIdAsync(postId.Value);
-                        if (postTrip != null)
-                        {
-                            postTrip.Status = PostStatus.OPEN;
-                            postTrip.UpdateAt = TimeUtil.NowVN(); // Nhớ update time
-                            await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
-                        }
-                    }
+                    postPackage.Status = PostStatus.OPEN;
+                    postPackage.Updated = TimeUtil.NowVN();
+                    await _unitOfWork.PostPackageRepo.UpdateAsync(postPackage);
+                    isPostUpdated = true;
                 }
 
-                // 6. CẬP NHẬT TRẠNG THÁI TRIP & ASSIGNMENT
-                if (tripId.HasValue)
+                if (!isPostUpdated)
                 {
-                    var trip = await _unitOfWork.TripRepo.GetByIdAsync(tripId.Value);
-                    if (trip != null)
+                    var postTrip = await _unitOfWork.PostTripRepo
+                        .GetByIdAsync(postId.Value);
+
+                    if (postTrip != null)
                     {
-                        bool tripUpdated = false;
-                        switch (type)
-                        {
-                            // --- GIAI ĐOẠN 2: OWNER THANH TOÁN TIỀN THUÊ TÀI XẾ ---
-                            case TransactionType.DRIVER_SERVICE_PAYMENT:
-                                // A. Cập nhật trạng thái Trip
-                                if (trip.Status == TripStatus.AWAITING_OWNER_PAYMENT)
-                                {
-                                    trip.Status = TripStatus.READY_FOR_VEHICLE_HANDOVER;
-                                    tripUpdated = true;
-                                }
-
-                                // B. Cập nhật PaymentStatus của Assignment thành PAID
-                                var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
-                                    .Where(a => a.TripId == tripId.Value && a.PaymentStatus == DriverPaymentStatus.UN_PAID)
-                                    .ToListAsync();
-
-                                if (assignments.Any())
-                                {
-                                    foreach (var assign in assignments)
-                                    {
-                                        assign.PaymentStatus = DriverPaymentStatus.PAID;
-                                        assign.UpdateAt = TimeUtil.NowVN();
-                                        await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
-                                    }
-                                }
-                                break;
-
-                            // --- GIAI ĐOẠN 6: QUYẾT TOÁN CHO OWNER ---
-                            case TransactionType.OWNER_PAYOUT:
-                                if (trip.Status == TripStatus.AWAITING_FINAL_PROVIDER_PAYOUT)
-                                {
-                                    trip.Status = TripStatus.AWAITING_FINAL_DRIVER_PAYOUT;
-                                    tripUpdated = true;
-                                }
-                                break;
-
-                            // --- GIAI ĐOẠN 6: QUYẾT TOÁN CHO DRIVER ---
-                            case TransactionType.DRIVER_PAYOUT:
-                                if (trip.Status == TripStatus.AWAITING_FINAL_DRIVER_PAYOUT)
-                                {
-                                    trip.Status = TripStatus.COMPLETED;
-                                    tripUpdated = true;
-                                }
-                                break;
-                        }
-
-                        if (tripUpdated)
-                        {
-                            trip.UpdateAt = TimeUtil.NowVN();
-                            await _unitOfWork.TripRepo.UpdateAsync(trip);
-                        }
+                        postTrip.Status = PostStatus.OPEN;
+                        postTrip.UpdateAt = TimeUtil.NowVN();
+                        await _unitOfWork.PostTripRepo.UpdateAsync(postTrip);
                     }
                 }
-
-                // 7. Commit
-                await _unitOfWork.SaveChangeAsync();
-
-                // [FIX 2] Gọi Commit từ biến 'transaction'
-                await transaction.CommitAsync();
-
-                // Map DTO
-                var transactionDto = MapTransactionToDTO(newTransaction);
-                return new ResponseDTO($"Transaction {type} successful.", 200, true, transactionDto);
             }
-            catch (Exception ex)
+
+            // 5. Update Trip & Assignment
+            if (tripId.HasValue)
             {
-                // [FIX 3] Gọi Rollback từ biến 'transaction'
-                await transaction.RollbackAsync();
-                return new ResponseDTO($"Transaction failed: {ex.Message}", 400, false);
+                var trip = await _unitOfWork.TripRepo.GetByIdAsync(tripId.Value);
+
+                if (trip != null)
+                {
+                    bool tripUpdated = false;
+
+                    switch (type)
+                    {
+                        case TransactionType.DRIVER_SERVICE_PAYMENT:
+                            if (trip.Status == TripStatus.AWAITING_OWNER_PAYMENT)
+                            {
+                                trip.Status = TripStatus.READY_FOR_VEHICLE_HANDOVER;
+                                tripUpdated = true;
+                            }
+
+                            var assignments = await _unitOfWork.TripDriverAssignmentRepo
+                                .GetAll()
+                                .Where(a => a.TripId == tripId.Value &&
+                                            a.PaymentStatus == DriverPaymentStatus.UN_PAID)
+                                .ToListAsync();
+
+                            foreach (var assign in assignments)
+                            {
+                                assign.PaymentStatus = DriverPaymentStatus.PAID;
+                                assign.UpdateAt = TimeUtil.NowVN();
+                                await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
+                            }
+                            break;
+
+                        case TransactionType.OWNER_PAYOUT:
+                            if (trip.Status == TripStatus.AWAITING_FINAL_PROVIDER_PAYOUT)
+                            {
+                                trip.Status = TripStatus.AWAITING_FINAL_DRIVER_PAYOUT;
+                                tripUpdated = true;
+                            }
+                            break;
+
+                        case TransactionType.DRIVER_PAYOUT:
+                            if (trip.Status == TripStatus.AWAITING_FINAL_DRIVER_PAYOUT)
+                            {
+                                trip.Status = TripStatus.COMPLETED;
+                                tripUpdated = true;
+                            }
+                            break;
+                    }
+
+                    if (tripUpdated)
+                    {
+                        trip.UpdateAt = TimeUtil.NowVN();
+                        await _unitOfWork.TripRepo.UpdateAsync(trip);
+                    }
+                }
             }
+
+            // 6. SaveChanges (KHÔNG COMMIT TRANSACTION)
+            await _unitOfWork.SaveChangeAsync();
+
+            // 7. Return DTO
+            var transactionDto = MapTransactionToDTO(newTransaction);
+            return new ResponseDTO(
+                $"Transaction {type} successful.",
+                200,
+                true,
+                transactionDto
+            );
         }
+
         // ─────── HÀM PRIVATE HELPER (MAPPER) ───────
 
         private TransactionDTO MapTransactionToDTO(Transaction t)

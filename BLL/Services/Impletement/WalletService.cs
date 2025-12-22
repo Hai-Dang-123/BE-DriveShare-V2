@@ -59,34 +59,57 @@ namespace BLL.Services.Impletement
                 if (userId == Guid.Empty)
                     return new ResponseDTO("Unauthorized", 401, false);
 
-                var wallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == userId);
+                var wallet = await _unitOfWork.WalletRepo
+                    .FirstOrDefaultAsync(w => w.UserId == userId);
+
                 if (wallet == null)
                     return new ResponseDTO("Wallet not found", 404, false);
 
                 var query = _unitOfWork.TransactionRepo.GetAll()
-                                .Where(t => t.WalletId == wallet.WalletId);
+                    .Where(t => t.WalletId == wallet.WalletId);
 
                 var totalCount = await query.CountAsync();
-                var transactions = await query
+
+                // ================================
+                // 🔥 FIX EF CORE PROJECTION ERROR
+                // ================================
+                // 1️⃣ LẤY ENTITY TRƯỚC (KHÔNG MAP DTO TRONG EF)
+                var transactionEntities = await query
                     .OrderByDescending(t => t.CreatedAt)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(t => MapTransactionToDTO(t)) // Dùng .Select() để tối ưu
                     .ToListAsync();
+
+                // 2️⃣ MAP DTO SAU KHI RA KHỎI EF
+                var transactions = transactionEntities
+                    .Select(t => MapTransactionToDTO(t))
+                    .ToList();
 
                 var result = new TransactionHistoryDTO
                 {
                     WalletInfo = MapWalletToDTO(wallet),
                     Transactions = new PaginatedDTO<TransactionDTO>(
-                        transactions, totalCount, pageNumber, pageSize
+                        transactions,
+                        totalCount,
+                        pageNumber,
+                        pageSize
                     )
                 };
 
-                return new ResponseDTO("Get transaction history successfully", 200, true, result);
+                return new ResponseDTO(
+                    "Get transaction history successfully",
+                    200,
+                    true,
+                    result
+                );
             }
             catch (Exception ex)
             {
-                return new ResponseDTO($"Error getting transaction history: {ex.Message}", 500, false);
+                return new ResponseDTO(
+                    $"Error getting transaction history: {ex.Message}",
+                    500,
+                    false
+                );
             }
         }
         // ─────── HÀM PRIVATE HELPER (MAPPER) ───────

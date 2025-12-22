@@ -23,7 +23,7 @@ namespace Common.Enums.Type
 
         PENALTY,               // Phạt vi phạm
         DEPOSIT,               // Tiền cọc
-
+        DEPOSIT_HOLD,          // giữ tiền cọc
         // tiền đang nợ nền tảng ( chưa thanh toán )
         OUTSTANDING_PAYMENT,
 
@@ -31,8 +31,11 @@ namespace Common.Enums.Type
         PLATFORM_PAYMENT,
 
         COMPENSATION,         // bồi thường
-        
-
+        PAYOUT_TO_DRIVER,  // trả tiền cho tài xế
+        PAYOUT_TO_OWNER, // trả tiền cho chủ xe
+        PENALTY_COLLECTED,
+        COMPENSATION_PAYOUT,
+        DEBT_COLLECTION
 
     }
 

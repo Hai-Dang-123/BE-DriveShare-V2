@@ -29,6 +29,7 @@ namespace BLL.Services.Impletement
         private readonly IUserDocumentService _userDocumentService;
         private readonly ITransactionService _transactionService;
         private readonly IEmailService _emailService;
+        private readonly IUserService _userService;
 
         public TripDriverAssignmentService(
             IUnitOfWork unitOfWork,
@@ -42,7 +43,8 @@ namespace BLL.Services.Impletement
             IDriverWorkSessionService driverWorkSessionService,
             IUserDocumentService userDocumentService,
             ITransactionService transactionService,
-            IEmailService emailService)
+            IEmailService emailService,
+            IUserService userService)
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -56,6 +58,7 @@ namespace BLL.Services.Impletement
             _userDocumentService = userDocumentService;
             _transactionService = transactionService;
             _emailService = emailService;
+            _userService = userService;
         }
 
         // =========================================================================================================
@@ -345,16 +348,28 @@ namespace BLL.Services.Impletement
 
                 if (depositAmount > 0)
                 {
-                    var driverWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == driverId);
-                    if (driverWallet == null) return new ResponseDTO("Ví tài xế không tồn tại.", 400, false);
+                    // --- LẤY VÍ DRIVER ---
+                    var driverWallet = await _unitOfWork.WalletRepo
+                        .FirstOrDefaultAsync(w => w.UserId == driverId);
+
+                    if (driverWallet == null)
+                        return new ResponseDTO("Ví tài xế không tồn tại.", 400, false);
 
                     if (driverWallet.Balance < depositAmount)
-                    {
-                        return new ResponseDTO($"Số dư ví không đủ để đặt cọc ({depositAmount:N0}đ). Vui lòng nạp thêm tiền.", 402, false);
-                    }
+                        return new ResponseDTO($"Số dư ví không đủ để đặt cọc ({depositAmount:N0}đ).", 402, false);
+                    var adminId = await _userService.GetAdminUserIdAsync();
+                    // --- LẤY VÍ ADMIN ---
+                    var adminWallet = await _unitOfWork.WalletRepo
+                        .FirstOrDefaultAsync(w => w.UserId == adminId);
 
+                    if (adminWallet == null)
+                        return new ResponseDTO("Ví admin không tồn tại.", 500, false);
+
+                    // ===== 1️⃣ TRỪ TIỀN DRIVER =====
+                    var driverBalanceBefore = driverWallet.Balance;
                     driverWallet.Balance -= depositAmount;
                     driverWallet.LastUpdatedAt = TimeUtil.NowVN();
+
                     await _unitOfWork.WalletRepo.UpdateAsync(driverWallet);
 
                     await _unitOfWork.TransactionRepo.AddAsync(new Transaction
@@ -365,14 +380,37 @@ namespace BLL.Services.Impletement
                         Amount = -depositAmount,
                         Type = TransactionType.DEPOSIT,
                         Status = TransactionStatus.SUCCEEDED,
-                        Description = $"Đặt cọc cho chuyến đi {trip.TripCode}",
-                        CreatedAt = TimeUtil.NowVN(),
-                        BalanceBefore = driverWallet.Balance + depositAmount,
+                        BalanceBefore = driverBalanceBefore,
                         BalanceAfter = driverWallet.Balance,
+                        Description = $"Đặt cọc cho chuyến {trip.TripCode}",
+                        CreatedAt = TimeUtil.NowVN(),
+                        CompletedAt = TimeUtil.NowVN()
+                    });
+
+                    // ===== 2️⃣ CỘNG TIỀN ADMIN =====
+                    var adminBalanceBefore = adminWallet.Balance;
+                    adminWallet.Balance += depositAmount;
+                    adminWallet.LastUpdatedAt = TimeUtil.NowVN();
+
+                    await _unitOfWork.WalletRepo.UpdateAsync(adminWallet);
+
+                    await _unitOfWork.TransactionRepo.AddAsync(new Transaction
+                    {
+                        TransactionId = Guid.NewGuid(),
+                        WalletId = adminWallet.WalletId,
+                        TripId = trip.TripId,
+                        Amount = depositAmount,
+                        Type = TransactionType.DEPOSIT_HOLD, // hoặc DEPOSIT_RECEIVED
+                        Status = TransactionStatus.SUCCEEDED,
+                        BalanceBefore = adminBalanceBefore,
+                        BalanceAfter = adminWallet.Balance,
+                        Description = $"Nhận tiền cọc từ tài xế {driverId}",
+                        CreatedAt = TimeUtil.NowVN(),
                         CompletedAt = TimeUtil.NowVN()
                     });
 
                     depositStatus = DepositStatus.DEPOSITED;
+
                 }
 
                 // =========================================================================

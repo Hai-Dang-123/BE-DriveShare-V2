@@ -37,5 +37,7 @@ namespace BLL.Services.Interface
 
         // [NEW] Admin duyệt yêu cầu kích hoạt
         Task<ResponseDTO> ApproveAccountActivationAsync(Guid userId, bool isApproved);
+
+        Task<Guid> GetAdminUserIdAsync();
     }
 }

@@ -8,6 +8,7 @@ using DAL.Entities;
 using DAL.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,6 +29,7 @@ namespace BLL.Services.Implement
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IUserDocumentService _userDocumentService;
         private readonly TimeUtil _timeUtil;
+        private readonly IUserService _userService;
 
         public TripService(
             IUnitOfWork unitOfWork,
@@ -40,7 +42,9 @@ namespace BLL.Services.Implement
             IEmailService emailService,
             IServiceScopeFactory serviceScopeFactory,
             IUserDocumentService userDocumentService,
-            TimeUtil timeUtil)
+            TimeUtil timeUtil,
+            IUserService userService
+            )
         {
             _unitOfWork = unitOfWork;
             _userUtility = userUtility;
@@ -53,6 +57,7 @@ namespace BLL.Services.Implement
             _serviceScopeFactory = serviceScopeFactory;
             _userDocumentService = userDocumentService;
             _timeUtil = timeUtil;
+            _userService = userService;
         }
 
         // =========================================================================================================
@@ -1747,20 +1752,458 @@ namespace BLL.Services.Implement
         // =========================================================================
         // 2. THAY ĐỔI TRẠNG THÁI CHUYẾN ĐI (ChangeTripStatus)
         // =========================================================================
+
+        //public async Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto)
+        //{
+        //    // Bắt đầu Transaction để đảm bảo tính toàn vẹn dữ liệu (Tiền + Trạng thái)
+        //    using var transaction = await _unitOfWork.BeginTransactionAsync();
+        //    try
+        //    {
+        //        // 1. Load Trip (Include đủ để tránh query nhiều lần)
+        //        // 1. Load Trip (CẬP NHẬT: Include Package và Item để update status)
+        //        var trip = await _unitOfWork.TripRepo.GetAll()
+        //            .Include(t => t.Packages).ThenInclude(p => p.Item) // <--- QUAN TRỌNG: Load gói hàng kèm theo
+        //            .FirstOrDefaultAsync(t => t.TripId == dto.TripId);
+        //        if (trip == null) return new ResponseDTO("Không tìm thấy chuyến đi.", 404, false);
+
+        //        // --- VALIDATE ---
+        //        if (trip.Status == TripStatus.COMPLETED || trip.Status == TripStatus.CANCELLED)
+        //            return new ResponseDTO("Chuyến đi đã kết thúc, không thể thay đổi trạng thái.", 400, false);
+
+        //        // =====================================================================
+        //        // CASE A: TRẠNG THÁI THÔNG THƯỜNG (LOADING, UNLOADING...)
+        //        // =====================================================================
+        //        if (dto.NewStatus != TripStatus.COMPLETED)
+        //        {
+        //            trip.Status = dto.NewStatus;
+        //            trip.UpdateAt = TimeUtil.NowVN();
+
+        //            // Logic phụ: Ghi nhận thời gian Pickup/Dropoff thực tế
+        //            if (dto.NewStatus == TripStatus.LOADING && trip.ActualPickupTime == null)
+        //            {
+        //                trip.ActualPickupTime = TimeUtil.NowVN();
+        //                // Hàm gửi link ký tên (nếu có)
+        //                 await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.PICKUP);
+        //            }
+        //            else if (dto.NewStatus == TripStatus.UNLOADING)
+        //            {
+        //                // Hàm gửi link ký tên (nếu có)
+        //                 await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.DROPOFF);
+        //            }
+
+        //            await _unitOfWork.TripRepo.UpdateAsync(trip);
+        //            await _unitOfWork.SaveChangeAsync();
+        //            await transaction.CommitAsync();
+
+        //            return new ResponseDTO($"Đã chuyển trạng thái sang {dto.NewStatus}.", 200, true);
+        //        }
+
+        //        // =====================================================================
+        //        // CASE B: HOÀN TẤT CHUYẾN ĐI (COMPLETED) - XỬ LÝ TIỀN NONG
+        //        // =====================================================================
+
+        //        // [BƯỚC 1]: AUTO CHECK-OUT CHO TÀI XẾ (Nếu quên checkout)
+        //        var activeAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+        //            .Where(a => a.TripId == trip.TripId && !a.IsFinished)
+        //            .ToListAsync();
+
+        //        if (activeAssignments.Any())
+        //        {
+        //            foreach (var assign in activeAssignments)
+        //            {
+        //                assign.IsFinished = true; // Kết thúc phân công
+        //                assign.AssignmentStatus = AssignmentStatus.COMPLETED;
+
+        //                // Chỉ set thông tin xuống xe nếu họ thực sự ĐÃ LÊN XE
+        //                if (assign.IsOnBoard)
+        //                {
+        //                    assign.OffBoardTime = TimeUtil.NowVN();
+        //                    assign.OffBoardLocation = "Auto-checkout (Trip Completed)";
+        //                    assign.CheckOutNote = "Hệ thống tự động check-out.";
+        //                }
+        //                else
+        //                {
+        //                    // Nếu chưa lên xe mà chuyến đã xong -> Đánh dấu note
+        //                    assign.CheckOutNote = "Kết thúc chuyến khi chưa Check-in (Không trả lương).";
+        //                }
+
+        //                await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
+        //            }
+        //            // Save ngay để hàm tính tiền bên dưới thấy được assignment đã completed
+        //            await _unitOfWork.SaveChangeAsync();
+        //        }
+
+        //        // [BƯỚC 2]: THANH LÝ HỢP ĐỒNG (Tính toán ví Owner, Driver, Provider)
+        //        var liquidationResult = await ProcessTripLiquidationAsync(trip.TripId);
+
+        //        if (!liquidationResult.Success)
+        //        {
+        //            await transaction.RollbackAsync();
+        //            return new ResponseDTO($"Lỗi thanh lý hợp đồng: {liquidationResult.Message}", 500, false);
+        //        }
+
+        //        // [QUAN TRỌNG] Serialize kết quả báo cáo thành JSON và lưu vào Trip
+        //        var reportData = liquidationResult.Result;
+        //        trip.LiquidationReportJson = System.Text.Json.JsonSerializer.Serialize(reportData);
+
+
+        //        // [BƯỚC 3 - MỚI]: CẬP NHẬT TRẠNG THÁI PACKAGE VÀ ITEM -> COMPLETED
+        //        if (trip.Packages != null && trip.Packages.Any())
+        //        {
+        //            foreach (var pkg in trip.Packages)
+        //            {
+        //                // Update Package
+        //                pkg.Status = PackageStatus.COMPLETED; // Đảm bảo Enum PackageStatus có giá trị này
+        //                pkg.UpdatedAt = TimeUtil.NowVN();
+
+        //                // Update Item bên trong (nếu có)
+        //                if (pkg.Item != null)
+        //                {
+        //                    pkg.Item.Status = ItemStatus.COMPLETED; // Đảm bảo Enum ItemStatus có giá trị này
+        //                    //pkg.Item.UpdatedAt = DateTime.UtcNow;
+
+        //                    // Cập nhật ItemRepo (nếu Entity Framework không tự track cascade)
+        //                    await _unitOfWork.ItemRepo.UpdateAsync(pkg.Item);
+        //                }
+
+        //                // Cập nhật PackageRepo
+        //                await _unitOfWork.PackageRepo.UpdateAsync(pkg);
+        //            }
+        //        }
+
+        //        // [BƯỚC 3]: CẬP NHẬT TRẠNG THÁI TRIP CUỐI CÙNG
+        //        trip.Status = TripStatus.COMPLETED;
+        //        trip.ActualCompletedTime = TimeUtil.NowVN();
+        //        trip.UpdateAt = TimeUtil.NowVN();
+
+        //        await _unitOfWork.TripRepo.UpdateAsync(trip);
+
+        //        // CHANGE STATUS VEHICLE TRỞ LẠI ACTIVE
+        //        var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(trip.VehicleId);
+        //        if (vehicle != null)
+        //        {
+        //            vehicle.Status = VehicleStatus.ACTIVE;
+        //            await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
+        //        }
+
+        //        // Lưu toàn bộ thay đổi (Trip + Wallet + Transaction)
+        //        await _unitOfWork.SaveChangeAsync();
+        //        await transaction.CommitAsync();
+
+        //        // [BƯỚC 4]: GỬI EMAIL (Chạy ngầm, không block response)
+        //        _ = Task.Run(() => SendCompletionEmailsBackground(trip.TripId, liquidationResult.Result));
+
+        //        return new ResponseDTO("Hoàn tất chuyến đi và thanh toán thành công.", 200, true);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        return new ResponseDTO($"System Error: {ex.Message}", 500, false);
+        //    }
+        //}
+
+        // =========================================================================================================
+        // 3. CORE LOGIC: TÍNH TOÁN TIỀN NONG & QUYẾT TOÁN (LIQUIDATION)
+        // =========================================================================================================
+        //private async Task<(bool Success, LiquidationResultModel Result, string Message)> ProcessTripLiquidationAsync(Guid tripId)
+        //{
+        //    // CẤU HÌNH HARDCODE ID ADMIN (Dùng để hứng tiền phí sàn)
+        //    var SystemAdminId = await _userService.GetAdminUserIdAsync();
+
+        //    var result = new LiquidationResultModel();
+        //    try
+        //    {
+        //        // --------------------------------------------------------------------------
+        //        // 1. LOAD DATA
+        //        // --------------------------------------------------------------------------
+        //        var trip = await _unitOfWork.TripRepo.GetAll()
+        //            .Include(t => t.ShippingRoute)
+        //            .Include(t => t.TripProviderContract)
+        //            .Include(t => t.Packages)
+        //            .FirstOrDefaultAsync(t => t.TripId == tripId);
+
+        //        if (trip == null) return (false, null, "Trip not found");
+
+        //        result.TripId = trip.TripId;
+        //        result.TripCode = trip.TripCode;
+
+        //        // --------------------------------------------------------------------------
+        //        // 2. LẤY WALLET & USER (Provider, Owner, ADMIN)
+        //        // --------------------------------------------------------------------------
+        //        Guid providerId = trip.TripProviderContract?.CounterpartyId ?? trip.Packages.FirstOrDefault()?.ProviderId ?? Guid.Empty;
+        //        var providerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(providerId);
+        //        var providerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == providerId);
+
+        //        var ownerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(trip.OwnerId);
+        //        var ownerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == trip.OwnerId);
+
+        //        // Ví Admin Hệ Thống
+        //        var adminWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == SystemAdminId);
+
+        //        if (providerWallet == null || ownerWallet == null) return (false, null, "Lỗi: Không tìm thấy ví Provider hoặc Owner.");
+
+        //        var ownerReport = new ParticipantFinancialReport { UserId = trip.OwnerId, FullName = ownerUser.FullName, Email = ownerUser.Email, Role = "Owner" };
+        //        var providerReport = new ParticipantFinancialReport { UserId = providerId, FullName = providerUser.FullName, Email = providerUser.Email, Role = "Provider" };
+
+        //        // --------------------------------------------------------------------------
+        //        // 3. TÍNH TOÁN PHẠT (SURCHARGES)
+        //        // --------------------------------------------------------------------------
+        //        var allSurcharges = await _unitOfWork.TripSurchargeRepo.GetAll()
+        //            .Where(s => s.TripId == tripId && s.Status == SurchargeStatus.PENDING)
+        //            .ToListAsync();
+
+        //        decimal totalAmountDueToProvider = allSurcharges.Where(s => IsSurchargeForProvider(s.Type)).Sum(s => s.Amount);
+
+        //        decimal collectedForProvider = 0;
+        //        decimal collectedForOwner = 0;
+
+        //        // ==========================================================================
+        //        // PHẦN A: TÍNH CHO DRIVER (QUAN TRỌNG: CHECK IS ON BOARD)
+        //        // ==========================================================================
+        //        var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
+        //            .Where(a => a.TripId == tripId && a.AssignmentStatus == AssignmentStatus.COMPLETED)
+        //            .Include(a => a.Driver)
+        //            .ToListAsync();
+
+        //        decimal totalSalaryAndBonusExpense = 0;
+
+        //        foreach (var assign in assignments)
+        //        {
+        //            var driverWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == assign.DriverId);
+        //            if (driverWallet == null) continue;
+
+        //            var dReport = new ParticipantFinancialReport
+        //            {
+        //                UserId = assign.DriverId,
+        //                FullName = assign.Driver?.FullName ?? "Tài xế",
+        //                Email = assign.Driver?.Email,
+        //                Role = "Tài xế"
+        //            };
+
+        //            // [LOGIC MỚI] VALIDATE CHECK-IN
+        //            // Nếu chưa Check-in (IsOnBoard == false) -> Lương = 0, Không chịu phạt
+        //            // ... Bên trong foreach (var assign in assignments) ...
+
+        //            // [LOGIC MỚI] VALIDATE CHECK-IN
+        //            if (!assign.IsOnBoard)
+        //            {
+        //                // 1. BÁO CÁO LƯƠNG = 0
+        //                dReport.AddItem("⚠️ Không Check-in (Không trả lương)", 0, false);
+        //                assign.PaymentStatus = DriverPaymentStatus.UN_PAID;
+
+        //                // 2. XỬ LÝ TIỀN CỌC (FIX: Tịch thu cọc chuyển cho Owner)
+        //                if (assign.DepositStatus == DepositStatus.DEPOSITED && assign.DepositAmount > 0)
+        //                {
+        //                    decimal penaltyAmount = assign.DepositAmount;
+
+        //                    // A. Cộng tiền vào ví Owner (Bồi thường)
+        //                    ownerWallet.Balance += penaltyAmount;
+
+        //                    // B. Tạo Transaction cho Owner
+        //                    await CreateIncomeTransactionAsync(ownerWallet, tripId, penaltyAmount,
+        //                        TransactionType.COMPENSATION,
+        //                        $"Nhận phạt cọc từ {assign.Driver?.FullName ?? "Tài xế"} (Bỏ chuyến)");
+
+        //                    // C. Cập nhật trạng thái cọc -> TỊCH THU
+        //                    assign.DepositStatus = DepositStatus.SEIZED; // Cần đảm bảo Enum có trạng thái này
+        //                    //assign.Note = "Tài xế không check-in. Cọc đã chuyển cho Owner.";
+
+        //                    // D. Cập nhật biến tổng để hiển thị trong Report của Owner (Phần Thu phạt nội bộ)
+        //                    collectedForOwner += penaltyAmount;
+
+        //                    // E. Log vào Report của Driver để họ thấy
+        //                    dReport.AddItem("⛔ Bị tịch thu cọc (Bỏ chuyến)", penaltyAmount, true);
+
+        //                    // Trừ tiền hiển thị trong report (thực tế tiền đã nằm ở hệ thống/ví driver từ trước, giờ chỉ là đổi chủ)
+        //                    dReport.FinalWalletChange = -penaltyAmount;
+        //                }
+        //                else
+        //                {
+        //                    dReport.FinalWalletChange = 0;
+        //                }
+
+        //                result.DriverReports.Add(dReport);
+        //                continue; // -> BỎ QUA CÁC BƯỚC TÍNH LƯƠNG BÊN DƯỚI, SANG TÀI XẾ KHÁC
+        //            }
+
+        //            // --- NẾU ĐÃ CHECK-IN THÌ TÍNH TOÁN BÌNH THƯỜNG ---
+
+        //            // A1. Thu nhập (Lương + Thưởng)
+        //            decimal totalIncome = assign.BaseAmount + (assign.BonusAmount ?? 0);
+        //            totalSalaryAndBonusExpense += totalIncome;
+        //            dReport.AddItem("Lương & Thưởng", totalIncome, false);
+
+        //            // A2. Tính Phạt (Chỉ phạt nếu tài xế CÓ MẶT trên xe)
+        //            decimal payToProvider = 0;
+        //            decimal payToOwner = 0;
+
+        //            foreach (var sur in allSurcharges)
+        //            {
+        //                // Chỉ tính phạt nếu tài xế chịu trách nhiệm
+        //                if (IsDriverResponsible(assign, sur))
+        //                {
+        //                    // Đếm số lượng tài xế chịu trách nhiệm VÀ CÓ check-in (Công bằng)
+        //                    int responsibleCount = assignments.Count(a => IsDriverResponsible(a, sur) && a.IsOnBoard);
+
+        //                    // Tránh chia cho 0
+        //                    decimal share = sur.Amount / (responsibleCount > 0 ? responsibleCount : 1);
+
+        //                    if (IsSurchargeForProvider(sur.Type))
+        //                    {
+        //                        payToProvider += share;
+        //                        dReport.AddItem($"Phạt Hàng hóa: {sur.Description}", share, true);
+        //                    }
+        //                    else
+        //                    {
+        //                        payToOwner += share;
+        //                        dReport.AddItem($"Phạt Xe/Khác: {sur.Description}", share, true);
+        //                    }
+        //                }
+        //            }
+
+        //            // A3. TRỪ TIỀN PHẠT (Dùng Helper Ghi Nợ nếu thiếu)
+        //            if (payToProvider > 0)
+        //            {
+        //                await DeductMoneyWithDebtLogAsync(driverWallet, tripId, payToProvider, $"Bồi thường hàng hóa (Trip {trip.TripCode})");
+
+        //                providerWallet.Balance += payToProvider;
+        //                collectedForProvider += payToProvider;
+        //                await CreateIncomeTransactionAsync(providerWallet, tripId, payToProvider, TransactionType.COMPENSATION, $"Nhận bồi thường từ {dReport.FullName}");
+        //            }
+
+        //            if (payToOwner > 0)
+        //            {
+        //                await DeductMoneyWithDebtLogAsync(driverWallet, tripId, payToOwner, $"Bồi thường hư xe (Trip {trip.TripCode})");
+
+        //                ownerWallet.Balance += payToOwner;
+        //                collectedForOwner += payToOwner;
+        //                await CreateIncomeTransactionAsync(ownerWallet, tripId, payToOwner, TransactionType.COMPENSATION, $"Nhận bồi thường từ {dReport.FullName}");
+        //            }
+
+        //            // A4. Hoàn cọc (nếu có)
+        //            decimal refundAmount = 0;
+        //            if (assign.DepositStatus == DepositStatus.DEPOSITED && assign.DepositAmount > 0)
+        //            {
+        //                refundAmount = assign.DepositAmount;
+        //                assign.DepositStatus = DepositStatus.REFUNDED;
+        //                dReport.AddItem("Hoàn cọc", refundAmount, false);
+
+        //                driverWallet.Balance += refundAmount;
+        //                await CreateIncomeTransactionAsync(driverWallet, tripId, refundAmount, TransactionType.REFUND, "Hoàn cọc");
+        //            }
+
+        //            // A5. Cộng Lương (Sau khi đã trừ phạt xong xuôi)
+        //            if (totalIncome > 0)
+        //            {
+        //                driverWallet.Balance += totalIncome;
+        //                await CreateIncomeTransactionAsync(driverWallet, tripId, totalIncome, TransactionType.DRIVER_PAYOUT, "Thanh toán lương");
+        //            }
+
+        //            assign.PaymentStatus = DriverPaymentStatus.PAID;
+        //            dReport.FinalWalletChange = totalIncome + refundAmount - (payToProvider + payToOwner);
+        //            result.DriverReports.Add(dReport);
+        //        }
+
+        //        // ==========================================================================
+        //        // PHẦN B: TÍNH CHO OWNER & ADMIN (PLATFORM FEE)
+        //        // ==========================================================================
+
+        //        // B1. Cộng Doanh thu & Tính Phí Sàn
+        //        decimal originalFare = trip.TotalFare;
+        //        decimal platformFee = 0;
+
+        //        if (originalFare > 0)
+        //        {
+        //            platformFee = originalFare * 0.10m; // 10% phí sàn
+        //        }
+
+        //        decimal netRevenue = originalFare - platformFee;
+
+        //        // Log Report Owner
+        //        ownerReport.AddItem("Doanh thu chuyến", originalFare, false);
+
+        //        if (platformFee > 0)
+        //        {
+        //            ownerReport.AddItem("Phí sàn (10%)", platformFee, true);
+        //            // CỘNG TIỀN VÀO VÍ ADMIN
+        //            if (adminWallet != null)
+        //            {
+        //                adminWallet.Balance += platformFee;
+        //                await CreateIncomeTransactionAsync(adminWallet, tripId, platformFee, TransactionType.PLATFORM_PAYMENT, $"Phí sàn 10% - {trip.TripCode}");
+        //            }
+        //        }
+
+        //        // Cộng tiền thực nhận vào ví Owner
+        //        ownerWallet.Balance += netRevenue;
+        //        await CreateIncomeTransactionAsync(ownerWallet, tripId, netRevenue, TransactionType.OWNER_PAYOUT, "Doanh thu vận hành (đã trừ phí)");
+
+        //        // B2. Trừ Lương Tài xế (Chỉ trừ phần lương của những người ĐÃ Check-in)
+        //        if (totalSalaryAndBonusExpense > 0)
+        //        {
+        //            ownerReport.AddItem("Chi phí lương", totalSalaryAndBonusExpense, true);
+        //            await DeductMoneyWithDebtLogAsync(ownerWallet, tripId, totalSalaryAndBonusExpense, "Thanh toán lương tài xế");
+        //        }
+
+        //        // B3. Bù lỗ cho Provider (Nếu không tìm được tài xế chịu trách nhiệm)
+        //        decimal gap = totalAmountDueToProvider - collectedForProvider;
+        //        if (gap > 0)
+        //        {
+        //            await DeductMoneyWithDebtLogAsync(ownerWallet, tripId, gap, "Bù lỗ bồi thường hàng hóa");
+
+        //            providerWallet.Balance += gap;
+        //            await CreateIncomeTransactionAsync(providerWallet, tripId, gap, TransactionType.COMPENSATION, "Nhận bồi thường (Owner bù)");
+
+        //            ownerReport.AddItem("Bù lỗ hàng hóa", gap, true);
+        //        }
+
+        //        // B4. Log tiền phạt nội bộ nhận được (Chỉ report)
+        //        if (collectedForOwner > 0) ownerReport.AddItem("Thu phạt nội bộ", collectedForOwner, false);
+
+        //        ownerReport.FinalWalletChange = netRevenue - totalSalaryAndBonusExpense - (gap > 0 ? gap : 0) + collectedForOwner;
+
+        //        // ==========================================================================
+        //        // PHẦN C: TÍNH CHO PROVIDER
+        //        // ==========================================================================
+        //        providerReport.AddItem("Thanh toán cước", trip.TotalFare, true); // Report only
+
+        //        decimal totalCompReceived = collectedForProvider + (gap > 0 ? gap : 0);
+        //        if (totalCompReceived > 0) providerReport.AddItem("Nhận bồi thường", totalCompReceived, false);
+
+        //        providerReport.FinalWalletChange = totalCompReceived - trip.TotalFare;
+
+        //        // ==========================================================================
+        //        // FINAL SAVE
+        //        // ==========================================================================
+        //        foreach (var s in allSurcharges) { s.Status = SurchargeStatus.PAID; s.PaidAt = TimeUtil.NowVN(); }
+
+        //        await _unitOfWork.WalletRepo.UpdateAsync(ownerWallet);
+        //        await _unitOfWork.WalletRepo.UpdateAsync(providerWallet);
+        //        if (adminWallet != null) await _unitOfWork.WalletRepo.UpdateAsync(adminWallet);
+
+        //        result.OwnerReport = ownerReport;
+        //        result.ProviderReport = providerReport;
+
+        //        return (true, result, "Thành công.");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return (false, null, ex.Message);
+        //    }
+        //}
         public async Task<ResponseDTO> ChangeTripStatusAsync(ChangeTripStatusDTO dto)
         {
-            // Bắt đầu Transaction để đảm bảo tính toàn vẹn dữ liệu (Tiền + Trạng thái)
+            // Bắt đầu Transaction tổng (Parent Transaction)
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 1. Load Trip (Include đủ để tránh query nhiều lần)
-                // 1. Load Trip (CẬP NHẬT: Include Package và Item để update status)
+                // 1. Load Trip (Include đủ data)
                 var trip = await _unitOfWork.TripRepo.GetAll()
-                    .Include(t => t.Packages).ThenInclude(p => p.Item) // <--- QUAN TRỌNG: Load gói hàng kèm theo
+                    .Include(t => t.Packages).ThenInclude(p => p.Item)
                     .FirstOrDefaultAsync(t => t.TripId == dto.TripId);
+
                 if (trip == null) return new ResponseDTO("Không tìm thấy chuyến đi.", 404, false);
 
-                // --- VALIDATE ---
+                // Validate trạng thái
                 if (trip.Status == TripStatus.COMPLETED || trip.Status == TripStatus.CANCELLED)
                     return new ResponseDTO("Chuyến đi đã kết thúc, không thể thay đổi trạng thái.", 400, false);
 
@@ -1772,17 +2215,15 @@ namespace BLL.Services.Implement
                     trip.Status = dto.NewStatus;
                     trip.UpdateAt = TimeUtil.NowVN();
 
-                    // Logic phụ: Ghi nhận thời gian Pickup/Dropoff thực tế
+                    // Logic phụ: Ghi nhận thời gian Pickup/Dropoff
                     if (dto.NewStatus == TripStatus.LOADING && trip.ActualPickupTime == null)
                     {
                         trip.ActualPickupTime = TimeUtil.NowVN();
-                        // Hàm gửi link ký tên (nếu có)
-                         await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.PICKUP);
+                        await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.PICKUP);
                     }
                     else if (dto.NewStatus == TripStatus.UNLOADING)
                     {
-                        // Hàm gửi link ký tên (nếu có)
-                         await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.DROPOFF);
+                        await SendSignatureLinkAsync(trip.TripId, DeliveryRecordType.DROPOFF);
                     }
 
                     await _unitOfWork.TripRepo.UpdateAsync(trip);
@@ -1796,7 +2237,7 @@ namespace BLL.Services.Implement
                 // CASE B: HOÀN TẤT CHUYẾN ĐI (COMPLETED) - XỬ LÝ TIỀN NONG
                 // =====================================================================
 
-                // [BƯỚC 1]: AUTO CHECK-OUT CHO TÀI XẾ (Nếu quên checkout)
+                // [BƯỚC 1]: AUTO CHECK-OUT CHO TÀI XẾ
                 var activeAssignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
                     .Where(a => a.TripId == trip.TripId && !a.IsFinished)
                     .ToListAsync();
@@ -1805,10 +2246,9 @@ namespace BLL.Services.Implement
                 {
                     foreach (var assign in activeAssignments)
                     {
-                        assign.IsFinished = true; // Kết thúc phân công
+                        assign.IsFinished = true;
                         assign.AssignmentStatus = AssignmentStatus.COMPLETED;
 
-                        // Chỉ set thông tin xuống xe nếu họ thực sự ĐÃ LÊN XE
                         if (assign.IsOnBoard)
                         {
                             assign.OffBoardTime = TimeUtil.NowVN();
@@ -1817,62 +2257,51 @@ namespace BLL.Services.Implement
                         }
                         else
                         {
-                            // Nếu chưa lên xe mà chuyến đã xong -> Đánh dấu note
                             assign.CheckOutNote = "Kết thúc chuyến khi chưa Check-in (Không trả lương).";
                         }
-
                         await _unitOfWork.TripDriverAssignmentRepo.UpdateAsync(assign);
                     }
                     // Save ngay để hàm tính tiền bên dưới thấy được assignment đã completed
                     await _unitOfWork.SaveChangeAsync();
                 }
 
-                // [BƯỚC 2]: THANH LÝ HỢP ĐỒNG (Tính toán ví Owner, Driver, Provider)
-                var liquidationResult = await ProcessTripLiquidationAsync(trip.TripId);
+                // [BƯỚC 2]: THANH LÝ HỢP ĐỒNG
+                // QUAN TRỌNG: Truyền useTransaction: false để KHÔNG tạo transaction mới
+                var liquidationResult = await ProcessTripLiquidationAsync(trip.TripId, useTransaction: false);
 
                 if (!liquidationResult.Success)
                 {
+                    // Nếu con thất bại, Cha Rollback toàn bộ
                     await transaction.RollbackAsync();
                     return new ResponseDTO($"Lỗi thanh lý hợp đồng: {liquidationResult.Message}", 500, false);
                 }
 
-                // [QUAN TRỌNG] Serialize kết quả báo cáo thành JSON và lưu vào Trip
-                var reportData = liquidationResult.Result;
-                trip.LiquidationReportJson = System.Text.Json.JsonSerializer.Serialize(reportData);
+                // Serialize kết quả báo cáo
+                trip.LiquidationReportJson = System.Text.Json.JsonSerializer.Serialize(liquidationResult.Result);
 
-
-                // [BƯỚC 3 - MỚI]: CẬP NHẬT TRẠNG THÁI PACKAGE VÀ ITEM -> COMPLETED
+                // [BƯỚC 3]: CẬP NHẬT TRẠNG THÁI PACKAGE VÀ ITEM -> COMPLETED
                 if (trip.Packages != null && trip.Packages.Any())
                 {
                     foreach (var pkg in trip.Packages)
                     {
-                        // Update Package
-                        pkg.Status = PackageStatus.COMPLETED; // Đảm bảo Enum PackageStatus có giá trị này
+                        pkg.Status = PackageStatus.COMPLETED;
                         pkg.UpdatedAt = TimeUtil.NowVN();
 
-                        // Update Item bên trong (nếu có)
                         if (pkg.Item != null)
                         {
-                            pkg.Item.Status = ItemStatus.COMPLETED; // Đảm bảo Enum ItemStatus có giá trị này
-                            //pkg.Item.UpdatedAt = DateTime.UtcNow;
-
-                            // Cập nhật ItemRepo (nếu Entity Framework không tự track cascade)
+                            pkg.Item.Status = ItemStatus.COMPLETED;
                             await _unitOfWork.ItemRepo.UpdateAsync(pkg.Item);
                         }
-
-                        // Cập nhật PackageRepo
                         await _unitOfWork.PackageRepo.UpdateAsync(pkg);
                     }
                 }
 
-                // [BƯỚC 3]: CẬP NHẬT TRẠNG THÁI TRIP CUỐI CÙNG
+                // [BƯỚC 4]: CẬP NHẬT TRẠNG THÁI TRIP & XE
                 trip.Status = TripStatus.COMPLETED;
                 trip.ActualCompletedTime = TimeUtil.NowVN();
                 trip.UpdateAt = TimeUtil.NowVN();
-
                 await _unitOfWork.TripRepo.UpdateAsync(trip);
 
-                // CHANGE STATUS VEHICLE TRỞ LẠI ACTIVE
                 var vehicle = await _unitOfWork.VehicleRepo.GetByIdAsync(trip.VehicleId);
                 if (vehicle != null)
                 {
@@ -1880,11 +2309,11 @@ namespace BLL.Services.Implement
                     await _unitOfWork.VehicleRepo.UpdateAsync(vehicle);
                 }
 
-                // Lưu toàn bộ thay đổi (Trip + Wallet + Transaction)
+                // LƯU TOÀN BỘ VÀ COMMIT
                 await _unitOfWork.SaveChangeAsync();
                 await transaction.CommitAsync();
 
-                // [BƯỚC 4]: GỬI EMAIL (Chạy ngầm, không block response)
+                // Gửi email background
                 _ = Task.Run(() => SendCompletionEmailsBackground(trip.TripId, liquidationResult.Result));
 
                 return new ResponseDTO("Hoàn tất chuyến đi và thanh toán thành công.", 200, true);
@@ -1896,298 +2325,357 @@ namespace BLL.Services.Implement
             }
         }
 
-        // =========================================================================================================
-        // 3. CORE LOGIC: TÍNH TOÁN TIỀN NONG & QUYẾT TOÁN (LIQUIDATION)
-        // =========================================================================================================
-        private async Task<(bool Success, LiquidationResultModel Result, string Message)> ProcessTripLiquidationAsync(Guid tripId)
+        // Thêm tham số useTransaction = true để mặc định vẫn chạy được nếu gọi lẻ
+        private async Task<(bool Success, LiquidationResultModel Result, string Message)> ProcessTripLiquidationAsync(Guid tripId, bool useTransaction = true)
         {
-            // CẤU HÌNH HARDCODE ID ADMIN (Dùng để hứng tiền phí sàn)
-            var SystemAdminId = Guid.Parse("D4DAB1C3-6D48-4B23-8369-2D1C9C828F22");
-
+            var SystemAdminId = await _userService.GetAdminUserIdAsync();
             var result = new LiquidationResultModel();
+
+            // 1. Transaction Management
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = null;
+            if (useTransaction)
+            {
+                transaction = await _unitOfWork.BeginTransactionAsync();
+            }
+
             try
             {
                 // --------------------------------------------------------------------------
-                // 1. LOAD DATA
+                // 2. LOAD DATA & USER INFO
                 // --------------------------------------------------------------------------
                 var trip = await _unitOfWork.TripRepo.GetAll()
                     .Include(t => t.ShippingRoute)
                     .Include(t => t.TripProviderContract)
-                    .Include(t => t.Packages)
+                    .Include(t => t.Packages).ThenInclude(p => p.Item)
+                    .Include(t => t.Owner) // [QUAN TRỌNG]: Include Owner để lấy Email
                     .FirstOrDefaultAsync(t => t.TripId == tripId);
 
                 if (trip == null) return (false, null, "Trip not found");
 
-                result.TripId = trip.TripId;
+                // [FIX]: Gán TripCode để dùng cho email
                 result.TripCode = trip.TripCode;
+                result.CompletedDate = TimeUtil.NowVN();
 
-                // --------------------------------------------------------------------------
-                // 2. LẤY WALLET & USER (Provider, Owner, ADMIN)
-                // --------------------------------------------------------------------------
+                // Xác định ID Provider
                 Guid providerId = trip.TripProviderContract?.CounterpartyId ?? trip.Packages.FirstOrDefault()?.ProviderId ?? Guid.Empty;
+
+                // Load thông tin User của Provider (để lấy Email)
                 var providerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(providerId);
+
+                // Load Ví các bên
                 var providerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == providerId);
-
-                var ownerUser = await _unitOfWork.BaseUserRepo.GetByIdAsync(trip.OwnerId);
                 var ownerWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == trip.OwnerId);
-
-                // Ví Admin Hệ Thống
                 var adminWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == SystemAdminId);
 
-                if (providerWallet == null || ownerWallet == null) return (false, null, "Lỗi: Không tìm thấy ví Provider hoặc Owner.");
+                if (providerWallet == null || ownerWallet == null || adminWallet == null)
+                    return (false, null, "Lỗi nghiêm trọng: Không tìm thấy ví Admin hoặc các bên liên quan.");
 
-                var ownerReport = new ParticipantFinancialReport { UserId = trip.OwnerId, FullName = ownerUser.FullName, Email = ownerUser.Email, Role = "Owner" };
-                var providerReport = new ParticipantFinancialReport { UserId = providerId, FullName = providerUser.FullName, Email = providerUser.Email, Role = "Provider" };
+                // [INIT REPORT]: Khởi tạo báo cáo kèm Email
+                var ownerReport = new ParticipantFinancialReport
+                {
+                    UserId = trip.OwnerId,
+                    Role = "Owner",
+                    FullName = trip.Owner?.FullName ?? "Chủ xe",
+                    Email = trip.Owner?.Email // Lấy Email Owner
+                };
+
+                var providerReport = new ParticipantFinancialReport
+                {
+                    UserId = providerId,
+                    Role = "Provider",
+                    FullName = providerUser?.FullName ?? "Khách hàng",
+                    Email = providerUser?.Email // Lấy Email Provider
+                };
+
+                result.DriverReports = new List<ParticipantFinancialReport>();
 
                 // --------------------------------------------------------------------------
-                // 3. TÍNH TOÁN PHẠT (SURCHARGES)
+                // 3. TÍNH TOÁN PHẠT & PHỤ PHÍ (SURCHARGES)
                 // --------------------------------------------------------------------------
                 var allSurcharges = await _unitOfWork.TripSurchargeRepo.GetAll()
-                    .Where(s => s.TripId == tripId && s.Status == SurchargeStatus.PENDING)
-                    .ToListAsync();
+                    .Where(s => s.TripId == tripId && s.Status == SurchargeStatus.PENDING).ToListAsync();
 
+                // Tổng tiền Provider CẦN được bồi thường
                 decimal totalAmountDueToProvider = allSurcharges.Where(s => IsSurchargeForProvider(s.Type)).Sum(s => s.Amount);
 
-                decimal collectedForProvider = 0;
-                decimal collectedForOwner = 0;
+                // [Admin Pool] Biến hứng tiền phạt từ Driver
+                decimal compensationPoolForProvider = 0;
+                decimal compensationPoolForOwner = 0;
 
                 // ==========================================================================
-                // PHẦN A: TÍNH CHO DRIVER (QUAN TRỌNG: CHECK IS ON BOARD)
+                // PHẦN A: XỬ LÝ TÀI XẾ (DRIVER) -> ADMIN
                 // ==========================================================================
                 var assignments = await _unitOfWork.TripDriverAssignmentRepo.GetAll()
                     .Where(a => a.TripId == tripId && a.AssignmentStatus == AssignmentStatus.COMPLETED)
-                    .Include(a => a.Driver)
+                    .Include(a => a.Driver) // Include Driver để lấy Email
                     .ToListAsync();
 
-                decimal totalSalaryAndBonusExpense = 0;
+                decimal totalSalaryPaidBySystem = 0;
 
                 foreach (var assign in assignments)
                 {
                     var driverWallet = await _unitOfWork.WalletRepo.FirstOrDefaultAsync(w => w.UserId == assign.DriverId);
                     if (driverWallet == null) continue;
 
+                    // [INIT DRIVER REPORT]
                     var dReport = new ParticipantFinancialReport
                     {
                         UserId = assign.DriverId,
                         FullName = assign.Driver?.FullName ?? "Tài xế",
-                        Email = assign.Driver?.Email,
-                        Role = "Tài xế"
+                        Role = "Driver",
+                        Email = assign.Driver?.Email // [QUAN TRỌNG]: Lấy Email Driver
                     };
 
-                    // [LOGIC MỚI] VALIDATE CHECK-IN
-                    // Nếu chưa Check-in (IsOnBoard == false) -> Lương = 0, Không chịu phạt
-                    // ... Bên trong foreach (var assign in assignments) ...
-
-                    // [LOGIC MỚI] VALIDATE CHECK-IN
+                    // A1. Check-in Validation
                     if (!assign.IsOnBoard)
                     {
-                        // 1. BÁO CÁO LƯƠNG = 0
-                        dReport.AddItem("⚠️ Không Check-in (Không trả lương)", 0, false);
-                        assign.PaymentStatus = DriverPaymentStatus.UN_PAID;
-
-                        // 2. XỬ LÝ TIỀN CỌC (FIX: Tịch thu cọc chuyển cho Owner)
                         if (assign.DepositStatus == DepositStatus.DEPOSITED && assign.DepositAmount > 0)
                         {
-                            decimal penaltyAmount = assign.DepositAmount;
+                            decimal penalty = assign.DepositAmount;
+                            await TransferMoneyAsync(adminWallet, ownerWallet, penalty, tripId,
+                                TransactionType.COMPENSATION, $"Phạt cọc tài xế {dReport.FullName} (Không Check-in)");
 
-                            // A. Cộng tiền vào ví Owner (Bồi thường)
-                            ownerWallet.Balance += penaltyAmount;
-
-                            // B. Tạo Transaction cho Owner
-                            await CreateIncomeTransactionAsync(ownerWallet, tripId, penaltyAmount,
-                                TransactionType.COMPENSATION,
-                                $"Nhận phạt cọc từ {assign.Driver?.FullName ?? "Tài xế"} (Bỏ chuyến)");
-
-                            // C. Cập nhật trạng thái cọc -> TỊCH THU
-                            assign.DepositStatus = DepositStatus.SEIZED; // Cần đảm bảo Enum có trạng thái này
-                            //assign.Note = "Tài xế không check-in. Cọc đã chuyển cho Owner.";
-
-                            // D. Cập nhật biến tổng để hiển thị trong Report của Owner (Phần Thu phạt nội bộ)
-                            collectedForOwner += penaltyAmount;
-
-                            // E. Log vào Report của Driver để họ thấy
-                            dReport.AddItem("⛔ Bị tịch thu cọc (Bỏ chuyến)", penaltyAmount, true);
-
-                            // Trừ tiền hiển thị trong report (thực tế tiền đã nằm ở hệ thống/ví driver từ trước, giờ chỉ là đổi chủ)
-                            dReport.FinalWalletChange = -penaltyAmount;
+                            assign.DepositStatus = DepositStatus.SEIZED;
+                            dReport.AddItem("Bị tịch thu cọc (Không Check-in)", -penalty, true);
                         }
-                        else
-                        {
-                            dReport.FinalWalletChange = 0;
-                        }
-
                         result.DriverReports.Add(dReport);
-                        continue; // -> BỎ QUA CÁC BƯỚC TÍNH LƯƠNG BÊN DƯỚI, SANG TÀI XẾ KHÁC
+                        continue;
                     }
 
-                    // --- NẾU ĐÃ CHECK-IN THÌ TÍNH TOÁN BÌNH THƯỜNG ---
+                    // A2. Tính lương (Thu nhập)
+                    decimal driverIncome = assign.BaseAmount + (assign.BonusAmount ?? 0);
+                    dReport.AddItem("Lương chuyến", driverIncome, false);
 
-                    // A1. Thu nhập (Lương + Thưởng)
-                    decimal totalIncome = assign.BaseAmount + (assign.BonusAmount ?? 0);
-                    totalSalaryAndBonusExpense += totalIncome;
-                    dReport.AddItem("Lương & Thưởng", totalIncome, false);
-
-                    // A2. Tính Phạt (Chỉ phạt nếu tài xế CÓ MẶT trên xe)
-                    decimal payToProvider = 0;
-                    decimal payToOwner = 0;
+                    // A3. Tính phạt (Driver nộp về Admin)
+                    decimal driverPayToAdmin = 0;
 
                     foreach (var sur in allSurcharges)
                     {
-                        // Chỉ tính phạt nếu tài xế chịu trách nhiệm
                         if (IsDriverResponsible(assign, sur))
                         {
-                            // Đếm số lượng tài xế chịu trách nhiệm VÀ CÓ check-in (Công bằng)
                             int responsibleCount = assignments.Count(a => IsDriverResponsible(a, sur) && a.IsOnBoard);
-
-                            // Tránh chia cho 0
                             decimal share = sur.Amount / (responsibleCount > 0 ? responsibleCount : 1);
 
+                            driverPayToAdmin += share;
+
                             if (IsSurchargeForProvider(sur.Type))
-                            {
-                                payToProvider += share;
-                                dReport.AddItem($"Phạt Hàng hóa: {sur.Description}", share, true);
-                            }
+                                compensationPoolForProvider += share;
                             else
-                            {
-                                payToOwner += share;
-                                dReport.AddItem($"Phạt Xe/Khác: {sur.Description}", share, true);
-                            }
+                                compensationPoolForOwner += share;
+
+                            dReport.AddItem($"Phạt: {sur.Description}", -share, true);
                         }
                     }
 
-                    // A3. TRỪ TIỀN PHẠT (Dùng Helper Ghi Nợ nếu thiếu)
-                    if (payToProvider > 0)
+                    // [EXECUTE] Thu tiền phạt: Driver -> Admin
+                    if (driverPayToAdmin > 0)
                     {
-                        await DeductMoneyWithDebtLogAsync(driverWallet, tripId, payToProvider, $"Bồi thường hàng hóa (Trip {trip.TripCode})");
-
-                        providerWallet.Balance += payToProvider;
-                        collectedForProvider += payToProvider;
-                        await CreateIncomeTransactionAsync(providerWallet, tripId, payToProvider, TransactionType.COMPENSATION, $"Nhận bồi thường từ {dReport.FullName}");
+                        await TransferMoneyAsync(driverWallet, adminWallet, driverPayToAdmin, tripId,
+                            TransactionType.PENALTY_COLLECTED, $"Thu tiền phạt từ {dReport.FullName}");
                     }
 
-                    if (payToOwner > 0)
-                    {
-                        await DeductMoneyWithDebtLogAsync(driverWallet, tripId, payToOwner, $"Bồi thường hư xe (Trip {trip.TripCode})");
-
-                        ownerWallet.Balance += payToOwner;
-                        collectedForOwner += payToOwner;
-                        await CreateIncomeTransactionAsync(ownerWallet, tripId, payToOwner, TransactionType.COMPENSATION, $"Nhận bồi thường từ {dReport.FullName}");
-                    }
-
-                    // A4. Hoàn cọc (nếu có)
-                    decimal refundAmount = 0;
+                    // A4. Hoàn cọc: Admin -> Driver
                     if (assign.DepositStatus == DepositStatus.DEPOSITED && assign.DepositAmount > 0)
                     {
-                        refundAmount = assign.DepositAmount;
+                        await TransferMoneyAsync(adminWallet, driverWallet, assign.DepositAmount, tripId,
+                            TransactionType.REFUND, $"Hoàn cọc cho {dReport.FullName}");
                         assign.DepositStatus = DepositStatus.REFUNDED;
-                        dReport.AddItem("Hoàn cọc", refundAmount, false);
-
-                        driverWallet.Balance += refundAmount;
-                        await CreateIncomeTransactionAsync(driverWallet, tripId, refundAmount, TransactionType.REFUND, "Hoàn cọc");
+                        dReport.AddItem("Hoàn trả cọc", assign.DepositAmount, false);
                     }
 
-                    // A5. Cộng Lương (Sau khi đã trừ phạt xong xuôi)
-                    if (totalIncome > 0)
+                    // A5. Trả lương: Admin -> Driver
+                    if (driverIncome > 0)
                     {
-                        driverWallet.Balance += totalIncome;
-                        await CreateIncomeTransactionAsync(driverWallet, tripId, totalIncome, TransactionType.DRIVER_PAYOUT, "Thanh toán lương");
+                        await TransferMoneyAsync(adminWallet, driverWallet, driverIncome, tripId,
+                            TransactionType.PAYOUT_TO_DRIVER, $"Chi lương cho {dReport.FullName}");
+
+                        totalSalaryPaidBySystem += driverIncome;
                     }
 
                     assign.PaymentStatus = DriverPaymentStatus.PAID;
-                    dReport.FinalWalletChange = totalIncome + refundAmount - (payToProvider + payToOwner);
                     result.DriverReports.Add(dReport);
                 }
 
                 // ==========================================================================
-                // PHẦN B: TÍNH CHO OWNER & ADMIN (PLATFORM FEE)
+                // PHẦN B: ADMIN TRẢ BỒI THƯỜNG (Từ quỹ thu được của Driver)
                 // ==========================================================================
 
-                // B1. Cộng Doanh thu & Tính Phí Sàn
+                if (compensationPoolForProvider > 0)
+                {
+                    await TransferMoneyAsync(adminWallet, providerWallet, compensationPoolForProvider, tripId,
+                        TransactionType.COMPENSATION_PAYOUT, "Bồi thường hàng hóa (Thu từ TX)");
+                    providerReport.AddItem("Bồi thường hàng hóa (Từ TX)", compensationPoolForProvider, false);
+                }
+
+                if (compensationPoolForOwner > 0)
+                {
+                    await TransferMoneyAsync(adminWallet, ownerWallet, compensationPoolForOwner, tripId,
+                        TransactionType.COMPENSATION_PAYOUT, "Bồi thường hư hại xe (Thu từ TX)");
+                    ownerReport.AddItem("Bồi thường xe (Từ TX)", compensationPoolForOwner, false);
+                }
+
+                // ==========================================================================
+                // PHẦN C: THANH TOÁN DOANH THU CHO OWNER (ADMIN -> OWNER)
+                // ==========================================================================
+
+                //decimal originalFare = trip.TotalFare;
+                //decimal platformFee = originalFare * 0.10m; // 10%
+                //decimal payoutToOwner = originalFare - platformFee - totalSalaryPaidBySystem;
+
+                //ownerReport.AddItem("Doanh thu chuyến", originalFare, false);
+                //ownerReport.AddItem("Phí hệ thống (10%)", -platformFee, true);
+                //ownerReport.AddItem("Khấu trừ lương TX (Admin đã trả)", -totalSalaryPaidBySystem, true);
+
+                //if (payoutToOwner > 0)
+                //{
+                //    await TransferMoneyAsync(adminWallet, ownerWallet, payoutToOwner, tripId,
+                //        TransactionType.PAYOUT_TO_OWNER, "Thanh toán doanh thu chuyến đi");
+                //}
+                //else if (payoutToOwner < 0)
+                //{
+                //    decimal debt = Math.Abs(payoutToOwner);
+                //    await TransferMoneyAsync(ownerWallet, adminWallet, debt, tripId,
+                //        TransactionType.DEBT_COLLECTION, "Thu hồi nợ (Lương TX > Doanh thu)");
+                //    ownerReport.AddItem("Nợ hệ thống", -debt, true);
+                //}
                 decimal originalFare = trip.TotalFare;
-                decimal platformFee = 0;
 
-                if (originalFare > 0)
-                {
-                    platformFee = originalFare * 0.10m; // 10% phí sàn
-                }
+                // [MỚI THÊM] 1. Ghi nhận chi phí chuyến đi vào báo cáo Provider
+                // Dòng này giúp Email của Provider hiện số tiền âm (VD: -500.000đ) thay vì 0đ
+                providerReport.AddItem("Cước phí chuyến đi", -originalFare, true);
 
-                decimal netRevenue = originalFare - platformFee;
+                // Lưu ý: Nếu hệ thống của bạn CHƯA trừ tiền ví Provider lúc đặt xe, 
+                // hãy mở comment dòng dưới để trừ tiền thật:
+                /* await TransferMoneyAsync(providerWallet, adminWallet, originalFare, tripId, 
+                    TransactionType.PAYMENT, "Thanh toán cước phí chuyến đi");
+                */
 
-                // Log Report Owner
+                // 2. Tính toán doanh thu thực nhận cho Owner
+                decimal platformFee = originalFare * 0.10m; // Phí sàn 10%
+
+                // Thực nhận = Giá gốc - Phí sàn - Lương tài xế (Do Admin đã ứng trước trả TX ở Phần A)
+                decimal payoutToOwner = originalFare - platformFee - totalSalaryPaidBySystem;
+
+                // Ghi vào báo cáo Owner
                 ownerReport.AddItem("Doanh thu chuyến", originalFare, false);
+                ownerReport.AddItem("Phí hệ thống (10%)", -platformFee, true);
 
-                if (platformFee > 0)
+                if (totalSalaryPaidBySystem > 0)
                 {
-                    ownerReport.AddItem("Phí sàn (10%)", platformFee, true);
-                    // CỘNG TIỀN VÀO VÍ ADMIN
-                    if (adminWallet != null)
-                    {
-                        adminWallet.Balance += platformFee;
-                        await CreateIncomeTransactionAsync(adminWallet, tripId, platformFee, TransactionType.PLATFORM_PAYMENT, $"Phí sàn 10% - {trip.TripCode}");
-                    }
+                    ownerReport.AddItem("Khấu trừ lương TX (Admin đã trả hộ)", -totalSalaryPaidBySystem, true);
                 }
 
-                // Cộng tiền thực nhận vào ví Owner
-                ownerWallet.Balance += netRevenue;
-                await CreateIncomeTransactionAsync(ownerWallet, tripId, netRevenue, TransactionType.OWNER_PAYOUT, "Doanh thu vận hành (đã trừ phí)");
-
-                // B2. Trừ Lương Tài xế (Chỉ trừ phần lương của những người ĐÃ Check-in)
-                if (totalSalaryAndBonusExpense > 0)
+                // 3. Thực hiện chuyển tiền cho Owner
+                if (payoutToOwner > 0)
                 {
-                    ownerReport.AddItem("Chi phí lương", totalSalaryAndBonusExpense, true);
-                    await DeductMoneyWithDebtLogAsync(ownerWallet, tripId, totalSalaryAndBonusExpense, "Thanh toán lương tài xế");
+                    // Trường hợp lời: Admin chuyển lợi nhuận còn lại cho Owner
+                    await TransferMoneyAsync(adminWallet, ownerWallet, payoutToOwner, tripId,
+                        TransactionType.PAYOUT_TO_OWNER, "Thanh toán doanh thu chuyến đi");
                 }
+                else if (payoutToOwner < 0)
+                {
+                    // Trường hợp lỗ (Do lương TX cao hơn doanh thu sau khi trừ phí): Owner phải trả lại tiền cho Admin
+                    decimal debt = Math.Abs(payoutToOwner);
+                    await TransferMoneyAsync(ownerWallet, adminWallet, debt, tripId,
+                        TransactionType.DEBT_COLLECTION, "Thu hồi nợ (Chi phí TX > Doanh thu)");
 
-                // B3. Bù lỗ cho Provider (Nếu không tìm được tài xế chịu trách nhiệm)
-                decimal gap = totalAmountDueToProvider - collectedForProvider;
+                    ownerReport.AddItem("Nợ hệ thống (Phải nộp thêm)", -debt, true);
+                }
+                // ==========================================================================
+                // PHẦN D: XỬ LÝ BÙ LỖ (GAP)
+                // ==========================================================================
+
+                decimal gap = totalAmountDueToProvider - compensationPoolForProvider;
                 if (gap > 0)
                 {
-                    await DeductMoneyWithDebtLogAsync(ownerWallet, tripId, gap, "Bù lỗ bồi thường hàng hóa");
+                    // Owner nộp tiền bù lỗ cho Admin
+                    await TransferMoneyAsync(ownerWallet, adminWallet, gap, tripId,
+                        TransactionType.PENALTY_COLLECTED, "Thu bù lỗ bồi thường hàng hóa");
 
-                    providerWallet.Balance += gap;
-                    await CreateIncomeTransactionAsync(providerWallet, tripId, gap, TransactionType.COMPENSATION, "Nhận bồi thường (Owner bù)");
+                    // Admin chuyển tiền bù lỗ cho Provider
+                    await TransferMoneyAsync(adminWallet, providerWallet, gap, tripId,
+                        TransactionType.COMPENSATION_PAYOUT, "Chi trả bù lỗ hàng hóa (Từ Owner)");
 
-                    ownerReport.AddItem("Bù lỗ hàng hóa", gap, true);
+                    ownerReport.AddItem("Bù lỗ hàng hóa (TX không đủ tiền)", -gap, true);
+                    providerReport.AddItem("Bồi thường bổ sung (Từ Owner)", gap, false);
                 }
 
-                // B4. Log tiền phạt nội bộ nhận được (Chỉ report)
-                if (collectedForOwner > 0) ownerReport.AddItem("Thu phạt nội bộ", collectedForOwner, false);
+                // --------------------------------------------------------------------------
+                // 4. SAVE & COMMIT
+                // --------------------------------------------------------------------------
 
-                ownerReport.FinalWalletChange = netRevenue - totalSalaryAndBonusExpense - (gap > 0 ? gap : 0) + collectedForOwner;
-
-                // ==========================================================================
-                // PHẦN C: TÍNH CHO PROVIDER
-                // ==========================================================================
-                providerReport.AddItem("Thanh toán cước", trip.TotalFare, true); // Report only
-
-                decimal totalCompReceived = collectedForProvider + (gap > 0 ? gap : 0);
-                if (totalCompReceived > 0) providerReport.AddItem("Nhận bồi thường", totalCompReceived, false);
-
-                providerReport.FinalWalletChange = totalCompReceived - trip.TotalFare;
-
-                // ==========================================================================
-                // FINAL SAVE
-                // ==========================================================================
                 foreach (var s in allSurcharges) { s.Status = SurchargeStatus.PAID; s.PaidAt = TimeUtil.NowVN(); }
 
-                await _unitOfWork.WalletRepo.UpdateAsync(ownerWallet);
-                await _unitOfWork.WalletRepo.UpdateAsync(providerWallet);
-                if (adminWallet != null) await _unitOfWork.WalletRepo.UpdateAsync(adminWallet);
+                await _unitOfWork.SaveChangeAsync();
+
+                if (useTransaction && transaction != null) await transaction.CommitAsync();
 
                 result.OwnerReport = ownerReport;
                 result.ProviderReport = providerReport;
 
-                return (true, result, "Thành công.");
+                return (true, result, "Thanh lý thành công.");
             }
             catch (Exception ex)
             {
-                return (false, null, ex.Message);
+                if (useTransaction && transaction != null) await transaction.RollbackAsync();
+                return (false, null, $"Lỗi xử lý tiền: {ex.Message}");
             }
         }
 
+        // Helper function để chuyển tiền giữa 2 ví và tạo Transaction Log
+        // SỬA: Thay tham số 'string type' thành 'TransactionType type'
+        // Helper function để chuyển tiền giữa 2 ví và tạo Transaction Log
+        // SỬA: Thay tham số 'string type' thành 'TransactionType type'
+        // Phiên bản dành cho Entity Transaction cũ (chỉ có 1 WalletId)
+        private async Task TransferMoneyAsync(Wallet fromWallet, Wallet toWallet, decimal amount, Guid tripId, TransactionType type, string description)
+        {
+            if (amount <= 0) return;
+
+            // 1. Xử lý Ví Nguồn (Trừ tiền)
+            fromWallet.Balance -= amount;
+
+            var transOut = new Transaction
+            {
+                WalletId = fromWallet.WalletId, // Gắn với ví người gửi
+                TripId = tripId,
+                Amount = -amount, // Số âm thể hiện tiền đi
+                BalanceBefore = fromWallet.Balance + amount, // Số dư trước khi trừ
+                BalanceAfter = fromWallet.Balance,           // Số dư hiện tại
+                Type = type,
+                Status = TransactionStatus.SUCCEEDED,
+                Description = $"Gửi đi: {description}",
+                CreatedAt = TimeUtil.NowVN()
+            };
+            await _unitOfWork.TransactionRepo.AddAsync(transOut);
+
+            // 2. Xử lý Ví Đích (Cộng tiền)
+            toWallet.Balance += amount;
+
+            var transIn = new Transaction
+            {
+                WalletId = toWallet.WalletId, // Gắn với ví người nhận
+                TripId = tripId,
+                Amount = amount, // Số dương thể hiện tiền về
+                BalanceBefore = toWallet.Balance - amount,
+                BalanceAfter = toWallet.Balance,
+                Type = type,
+                Status = TransactionStatus.SUCCEEDED,
+                Description = $"Nhận được: {description}",
+                CreatedAt = TimeUtil.NowVN()
+            };
+            await _unitOfWork.TransactionRepo.AddAsync(transIn);
+
+            // 3. Update Wallet Balance
+            await _unitOfWork.WalletRepo.UpdateAsync(fromWallet);
+            await _unitOfWork.WalletRepo.UpdateAsync(toWallet);
+        }
         // -----------------------------------------------------------
         // HELPER METHODS
         // -----------------------------------------------------------
+        // Hàm này dùng để ghi lại lịch sử GIAO DỊCH CHI (Trừ tiền)
+       
+        // Helper function để chuyển tiền giữa 2 ví và tạo Transaction Log
+        
         private bool IsSurchargeForProvider(SurchargeType type)
         {
             // Chỉ những lỗi này tiền mới về Provider
@@ -2311,24 +2799,68 @@ namespace BLL.Services.Implement
         }
 
         // Helper gửi mail background (giữ nguyên logic cũ của bạn)
+        //public async Task SendCompletionEmailsBackground(Guid tripId, LiquidationResultModel result)
+        //{
+        //    using var scope = _serviceScopeFactory.CreateScope();
+        //    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+        //    // Gửi Owner
+        //    await emailService.SendTripLiquidationEmailAsync(result.OwnerReport, result.TripCode);
+
+        //    // Gửi Provider
+        //    await emailService.SendTripLiquidationEmailAsync(result.ProviderReport, result.TripCode);
+
+        //    // Gửi từng Driver
+        //    foreach (var dReport in result.DriverReports)
+        //    {
+        //        await emailService.SendTripLiquidationEmailAsync(dReport, result.TripCode);
+        //    }
+        //}
         public async Task SendCompletionEmailsBackground(Guid tripId, LiquidationResultModel result)
         {
+            // Tạo scope mới vì đang chạy background thread
             using var scope = _serviceScopeFactory.CreateScope();
             var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<TripService>>(); // Giả sử có Logger
 
-            // Gửi Owner
-            await emailService.SendTripLiquidationEmailAsync(result.OwnerReport, result.TripCode);
-
-            // Gửi Provider
-            await emailService.SendTripLiquidationEmailAsync(result.ProviderReport, result.TripCode);
-
-            // Gửi từng Driver
-            foreach (var dReport in result.DriverReports)
+            try
             {
-                await emailService.SendTripLiquidationEmailAsync(dReport, result.TripCode);
+                // 1. Gửi Owner
+                if (result.OwnerReport != null && !string.IsNullOrEmpty(result.OwnerReport.Email))
+                {
+                    await emailService.SendTripLiquidationEmailAsync(result.OwnerReport, result.TripCode);
+                }
+
+                // 2. Gửi Provider
+                if (result.ProviderReport != null && !string.IsNullOrEmpty(result.ProviderReport.Email))
+                {
+                    await emailService.SendTripLiquidationEmailAsync(result.ProviderReport, result.TripCode);
+                }
+
+                // 3. Gửi Drivers
+                if (result.DriverReports != null)
+                {
+                    foreach (var dReport in result.DriverReports)
+                    {
+                        if (!string.IsNullOrEmpty(dReport.Email))
+                        {
+                            try
+                            {
+                                await emailService.SendTripLiquidationEmailAsync(dReport, result.TripCode);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogError($"Không gửi được email cho Driver {dReport.UserId}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError($"Lỗi tổng quát khi gửi email thanh lý Trip {tripId}: {ex.Message}");
             }
         }
-
         private bool IsValidTransition(TripStatus current, TripStatus next)
         {
             // (Copy nội dung hàm switch case bạn đã viết vào đây)

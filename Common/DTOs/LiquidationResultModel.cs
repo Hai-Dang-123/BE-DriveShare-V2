@@ -11,7 +11,7 @@ namespace Common.DTOs
     {
         public Guid TripId { get; set; }
         public string TripCode { get; set; }
-
+        public DateTime CompletedDate { get; set; }
         // Report chi tiết cho từng đối tượng
         public ParticipantFinancialReport OwnerReport { get; set; }
         public ParticipantFinancialReport ProviderReport { get; set; }
@@ -22,29 +22,25 @@ namespace Common.DTOs
     public class ParticipantFinancialReport
     {
         public Guid UserId { get; set; }
+        public string Role { get; set; }
         public string FullName { get; set; }
-        public string Email { get; set; }
-        public string Role { get; set; } // "Owner", "Provider", "Main Driver", "Sub Driver"
+        public string Email { get; set; } // Quan trọng: Để gửi Email
+        public List<FinancialItem> Items { get; set; } = new List<FinancialItem>();
 
-        // Danh sách các mục chi tiết (VD: +Lương, +Bonus, -Phạt, +Hoàn cọc)
-        public List<FinancialLineItem> Items { get; set; } = new List<FinancialLineItem>();
+        // Tổng thực nhận = Tổng các khoản (Lương - Phạt + Bồi thường...)
+        public decimal FinalAmount => Items.Sum(x => x.Amount);
 
-        // Số tiền biến động thực tế trong ví (Cộng/Trừ)
-        public decimal FinalWalletChange { get; set; }
-
-        // Helper để add dòng nhanh
-        public void AddItem(string desc, decimal amount, bool isDeduction = false)
+        public void AddItem(string description, decimal amount, bool isDeduction)
         {
-            if (amount == 0) return; // Không add dòng 0đ
-            Items.Add(new FinancialLineItem
-            {
-                Description = desc,
-                Amount = amount,
-                IsNegative = isDeduction
-            });
+            Items.Add(new FinancialItem { Description = description, Amount = amount, IsDeduction = isDeduction });
         }
     }
-
+    public class FinancialItem
+    {
+        public string Description { get; set; }
+        public decimal Amount { get; set; } // Số âm nếu là phạt, dương nếu là thu nhập
+        public bool IsDeduction { get; set; } // Cờ để UI hiển thị màu đỏ/xanh
+    }
     public class FinancialLineItem
     {
         public string Description { get; set; } // VD: "Lương cứng", "Phạt hư xe"

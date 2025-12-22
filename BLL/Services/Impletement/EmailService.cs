@@ -452,25 +452,52 @@ namespace BLL.Services.Impletement
 
             string subject = $"✅ [Quyết toán] Chuyến đi #{tripCode} - {report.Role}";
 
-            // Màu sắc tổng tiền
-            string color = report.FinalWalletChange >= 0 ? "#16A34A" : "#DC2626"; // Xanh lá / Đỏ
-            string sign = report.FinalWalletChange > 0 ? "+" : "";
-            string bgTotal = report.FinalWalletChange >= 0 ? "#F0FDF4" : "#FEF2F2";
+            // Lấy tổng tiền
+            decimal finalAmount = report.FinalAmount;
+
+            // --- LOGIC HIỂN THỊ RIÊNG CHO TỪNG VAI TRÒ ---
+            string labelTotal = "TỔNG BIẾN ĐỘNG VÍ";
+            string noteTotal = "*(Số tiền đã được ghi nhận vào hệ thống)";
+
+            // Nếu là Provider (Khách hàng), hiển thị kiểu "Tổng chi phí" sẽ hợp lý hơn
+            // Provider thường bị trừ tiền (số âm), nhưng hiển thị thì nên để số dương màu đỏ (Chi phí)
+            // hoặc giữ nguyên số âm nhưng đổi nhãn thành "Tổng thanh toán"
+            if (report.Role == "Provider")
+            {
+                labelTotal = "TỔNG THANH TOÁN";
+                noteTotal = "*(Đã trừ vào ví hoặc công nợ)";
+            }
+            else if (report.Role == "Driver" || report.Role == "Owner")
+            {
+                labelTotal = "THỰC NHẬN VỀ VÍ";
+                noteTotal = "*(Số tiền được cộng/trừ trực tiếp vào ví)";
+            }
+
+            // Màu sắc & Dấu:
+            // - Với Provider: Nếu finalAmount < 0 (Bị trừ tiền) -> Vẫn hiện màu đỏ nhưng mang ý nghĩa đã thanh toán.
+            // - Với Driver/Owner: > 0 là Xanh (Lời), < 0 là Đỏ (Phạt/Lỗ).
+            string color = finalAmount >= 0 ? "#16A34A" : "#DC2626"; // Xanh lá / Đỏ
+            string sign = finalAmount > 0 ? "+" : ""; // Số âm tự có dấu "-"
+            string bgTotal = finalAmount >= 0 ? "#F0FDF4" : "#FEF2F2"; // Nền xanh nhạt / Đỏ nhạt
 
             // 1. Render các dòng chi tiết (Table Rows)
             StringBuilder rowsHtml = new StringBuilder();
             foreach (var item in report.Items)
             {
-                string itemColor = item.IsNegative ? "#DC2626" : "#16A34A"; // Đỏ nếu trừ, Xanh nếu cộng
-                string itemSign = item.IsNegative ? "-" : "+";
+                // Logic màu sắc dòng:
+                // - Thu nhập/Hoàn tiền (Dương): Xanh
+                // - Chi phí/Phạt (Âm): Đỏ
+                bool isNegative = item.Amount < 0;
+                string itemColor = isNegative ? "#DC2626" : "#16A34A";
+                string itemSign = item.Amount > 0 ? "+" : "";
 
                 rowsHtml.Append($@"
-            <tr style='border-bottom: 1px dashed #E5E7EB;'>
-                <td style='padding: 12px 8px; color: #4B5563; font-size: 14px;'>{item.Description}</td>
-                <td style='padding: 12px 8px; text-align: right; color: {itemColor}; font-weight: 600; font-size: 14px; white-space: nowrap;'>
-                    {itemSign}{item.Amount:N0} ₫
-                </td>
-            </tr>");
+        <tr style='border-bottom: 1px dashed #E5E7EB;'>
+            <td style='padding: 12px 8px; color: #4B5563; font-size: 14px;'>{item.Description}</td>
+            <td style='padding: 12px 8px; text-align: right; color: {itemColor}; font-weight: 600; font-size: 14px; white-space: nowrap;'>
+                {itemSign}{item.Amount:N0} ₫
+            </td>
+        </tr>");
             }
 
             // 2. HTML Body
@@ -497,7 +524,7 @@ namespace BLL.Services.Impletement
         
         <div class='content'>
             <p>Xin chào <strong>{report.FullName}</strong>,</p>
-            <p>Chuyến đi đã hoàn tất. Dưới đây là bảng chi tiết các khoản thu/chi của bạn:</p>
+            <p>Chuyến đi đã hoàn tất. Dưới đây là chi tiết giao dịch:</p>
 
             <div class='table-wrapper'>
                 <table style='width: 100%; border-collapse: collapse;'>
@@ -513,11 +540,11 @@ namespace BLL.Services.Impletement
                 </table>
                 
                 <div class='total-box'>
-                    <div style='font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>TỔNG BIẾN ĐỘNG VÍ</div>
+                    <div style='font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>{labelTotal}</div>
                     <div style='font-size: 28px; font-weight: 800; color: {color}; margin-top: 5px;'>
-                        {sign}{report.FinalWalletChange:N0} ₫
+                        {sign}{finalAmount:N0} ₫
                     </div>
-                    <div style='font-size: 12px; color: #9CA3AF; margin-top: 5px;'>*(Số tiền đã được ghi nhận vào hệ thống)</div>
+                    <div style='font-size: 12px; color: #9CA3AF; margin-top: 5px;'>{noteTotal}</div>
                 </div>
             </div>
 
