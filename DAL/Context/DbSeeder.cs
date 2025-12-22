@@ -792,7 +792,6 @@ namespace DAL.Context
             // =================================================================================
 
             // --- Xe tải nhẹ (Dưới 2.5 tấn) ---
-            // Cấm cao điểm Sáng (6h-9h) và Chiều (16h-20h)
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -800,7 +799,8 @@ namespace DAL.Context
                 TruckType = "LightTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(9, 0, 0),
-                Description = "Cấm xe tải nhẹ vào nội đô giờ cao điểm Sáng"
+                Description = "Cấm xe tải nhẹ vào nội đô giờ cao điểm Sáng",
+                MatchKeywords = "quận 1,quận 3,quận 5,quận 10,phú nhuận,bình thạnh,tân bình,gò vấp,hồ chí minh"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -809,11 +809,11 @@ namespace DAL.Context
                 TruckType = "LightTruck",
                 BanStartTime = new TimeSpan(16, 0, 0),
                 BanEndTime = new TimeSpan(20, 0, 0),
-                Description = "Cấm xe tải nhẹ vào nội đô giờ cao điểm Chiều"
+                Description = "Cấm xe tải nhẹ vào nội đô giờ cao điểm Chiều",
+                MatchKeywords = "quận 1,quận 3,quận 5,quận 10,phú nhuận,bình thạnh,tân bình,gò vấp,hồ chí minh"
             });
 
             // --- Xe tải nặng & Container ---
-            // Cấm lưu thông từ 6h đến 22h (Chỉ chạy đêm)
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -821,7 +821,8 @@ namespace DAL.Context
                 TruckType = "HeavyTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(22, 0, 0),
-                Description = "Cấm xe tải nặng lưu thông ban ngày vào nội đô"
+                Description = "Cấm xe tải nặng lưu thông ban ngày vào nội đô",
+                MatchKeywords = "quận 1,quận 3,quận 5,quận 10,phú nhuận,bình thạnh,tân bình,hồ chí minh"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -830,7 +831,8 @@ namespace DAL.Context
                 TruckType = "Container",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(22, 0, 0),
-                Description = "Cấm xe Container lưu thông ban ngày vào nội đô"
+                Description = "Cấm xe Container lưu thông ban ngày vào nội đô",
+                MatchKeywords = "quận 1,quận 3,quận 5,quận 10,phú nhuận,bình thạnh,tân bình,hồ chí minh"
             });
 
             // =================================================================================
@@ -838,7 +840,6 @@ namespace DAL.Context
             // =================================================================================
 
             // --- Xe tải nhẹ (< 1.25 tấn) ---
-            // Cấm cao điểm: Sáng 6h-9h, Chiều 16h30-19h30
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -846,7 +847,8 @@ namespace DAL.Context
                 TruckType = "LightTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(9, 0, 0),
-                Description = "Cấm xe tải nhẹ giờ cao điểm Sáng"
+                Description = "Cấm xe tải nhẹ giờ cao điểm Sáng",
+                MatchKeywords = "thanh xuân,cầu giấy,hoàng mai,nam từ liêm,khuất duy tiến,phạm hùng,hà nội"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -855,11 +857,11 @@ namespace DAL.Context
                 TruckType = "LightTruck",
                 BanStartTime = new TimeSpan(16, 30, 0),
                 BanEndTime = new TimeSpan(19, 30, 0),
-                Description = "Cấm xe tải nhẹ giờ cao điểm Chiều"
+                Description = "Cấm xe tải nhẹ giờ cao điểm Chiều",
+                MatchKeywords = "thanh xuân,cầu giấy,hoàng mai,nam từ liêm,khuất duy tiến,phạm hùng,hà nội"
             });
 
             // --- Xe tải nặng (> 1.25 tấn) ---
-            // Cấm 6h-21h trong khu vực hạn chế
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -867,14 +869,14 @@ namespace DAL.Context
                 TruckType = "HeavyTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(21, 0, 0),
-                Description = "Cấm xe tải nặng vào nội thành ban ngày"
+                Description = "Cấm xe tải nặng vào nội thành ban ngày",
+                MatchKeywords = "hoàn kiếm,đống đa,ba đình,hai bà trưng,tây hồ,cầu giấy,hà nội"
             });
 
             // =================================================================================
             // 3. ĐÀ NẴNG (Các tuyến đường du lịch & trung tâm)
             // =================================================================================
 
-            // Cấm tải chung giờ cao điểm: 6h30-8h30, 16h30-18h30
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -882,7 +884,8 @@ namespace DAL.Context
                 TruckType = "Truck",
                 BanStartTime = new TimeSpan(6, 30, 0),
                 BanEndTime = new TimeSpan(8, 30, 0),
-                Description = "Cấm các loại xe tải giờ cao điểm Sáng"
+                Description = "Cấm các loại xe tải giờ cao điểm Sáng",
+                MatchKeywords = "hải châu,thanh khê,sơn trà,cẩm lệ,đà nẵng"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -891,10 +894,10 @@ namespace DAL.Context
                 TruckType = "Truck",
                 BanStartTime = new TimeSpan(16, 30, 0),
                 BanEndTime = new TimeSpan(18, 30, 0),
-                Description = "Cấm các loại xe tải giờ cao điểm Chiều"
+                Description = "Cấm các loại xe tải giờ cao điểm Chiều",
+                MatchKeywords = "hải châu,thanh khê,sơn trà,cẩm lệ,đà nẵng"
             });
 
-            // Khu vực Ngũ Hành Sơn - Cấm Container 24/24 một số tuyến
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -902,13 +905,13 @@ namespace DAL.Context
                 TruckType = "Container",
                 BanStartTime = new TimeSpan(0, 0, 0),
                 BanEndTime = new TimeSpan(23, 59, 0),
-                Description = "Cấm tuyệt đối xe Container vào các tuyến đường du lịch biển"
+                Description = "Cấm tuyệt đối xe Container vào các tuyến đường du lịch biển",
+                MatchKeywords = "võ nguyên giáp,hoàng sa,trường sa,ngũ hành sơn,sơn trà,biển mỹ khê"
             });
 
             // =================================================================================
             // 4. HẢI PHÒNG (Thành phố Cảng)
             // =================================================================================
-            // Cấm xe Container vào trung tâm giờ hành chính
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -916,13 +919,13 @@ namespace DAL.Context
                 TruckType = "Container",
                 BanStartTime = new TimeSpan(5, 0, 0),
                 BanEndTime = new TimeSpan(20, 0, 0),
-                Description = "Cấm xe Container vào các tuyến phố trung tâm ban ngày"
+                Description = "Cấm xe Container vào các tuyến phố trung tâm ban ngày",
+                MatchKeywords = "hồng bàng,ngô quyền,lê chân,hải phòng"
             });
 
             // =================================================================================
             // 5. BÌNH DƯƠNG (Thủ phủ Công nghiệp)
             // =================================================================================
-            // QL13, ĐT743... Cấm Container giờ cao điểm để tránh kẹt xe KCN
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -930,7 +933,8 @@ namespace DAL.Context
                 TruckType = "Container",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(8, 0, 0),
-                Description = "Cấm Container/Xe tải nặng giờ cao điểm Sáng"
+                Description = "Cấm Container/Xe tải nặng giờ cao điểm Sáng",
+                MatchKeywords = "thuận an,dĩ an,thủ dầu một,mỹ phước,bến cát,bình dương"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -939,13 +943,13 @@ namespace DAL.Context
                 TruckType = "Container",
                 BanStartTime = new TimeSpan(16, 0, 0),
                 BanEndTime = new TimeSpan(18, 0, 0),
-                Description = "Cấm Container/Xe tải nặng giờ cao điểm Chiều"
+                Description = "Cấm Container/Xe tải nặng giờ cao điểm Chiều",
+                MatchKeywords = "thuận an,dĩ an,thủ dầu một,mỹ phước,bến cát,bình dương"
             });
 
             // =================================================================================
             // 6. ĐỒNG NAI (Biên Hòa)
             // =================================================================================
-            // Khu vực ngã tư Vũng Tàu, Amata
             restrictions.Add(new TruckRestriction
             {
                 TruckRestrictionId = Guid.NewGuid(),
@@ -953,7 +957,8 @@ namespace DAL.Context
                 TruckType = "HeavyTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(8, 30, 0),
-                Description = "Cấm tải nặng lưu thông giờ cao điểm Sáng"
+                Description = "Cấm tải nặng lưu thông giờ cao điểm Sáng",
+                MatchKeywords = "biên hòa,long bình,amata,tam hiệp,đồng nai"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -962,7 +967,8 @@ namespace DAL.Context
                 TruckType = "HeavyTruck",
                 BanStartTime = new TimeSpan(16, 0, 0),
                 BanEndTime = new TimeSpan(18, 30, 0),
-                Description = "Cấm tải nặng lưu thông giờ cao điểm Chiều"
+                Description = "Cấm tải nặng lưu thông giờ cao điểm Chiều",
+                MatchKeywords = "biên hòa,long bình,amata,tam hiệp,đồng nai"
             });
 
             // =================================================================================
@@ -975,7 +981,8 @@ namespace DAL.Context
                 TruckType = "Truck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(8, 0, 0),
-                Description = "Cấm tải trung tâm Ninh Kiều giờ Sáng"
+                Description = "Cấm tải trung tâm Ninh Kiều giờ Sáng",
+                MatchKeywords = "ninh kiều,cái răng,bình thủy,cần thơ"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -984,11 +991,12 @@ namespace DAL.Context
                 TruckType = "Truck",
                 BanStartTime = new TimeSpan(17, 0, 0),
                 BanEndTime = new TimeSpan(19, 0, 0),
-                Description = "Cấm tải trung tâm Ninh Kiều giờ Chiều"
+                Description = "Cấm tải trung tâm Ninh Kiều giờ Chiều",
+                MatchKeywords = "ninh kiều,cái răng,bình thủy,cần thơ"
             });
 
             // =================================================================================
-            // 8. BÀ RỊA - VŨNG TÀU (QL51 & Nội đô Vũng Tàu)
+            // 8. BÀ RỊA - VŨNG TÀU
             // =================================================================================
             restrictions.Add(new TruckRestriction
             {
@@ -997,7 +1005,8 @@ namespace DAL.Context
                 TruckType = "HeavyTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(20, 0, 0),
-                Description = "Cấm xe tải nặng vào trung tâm TP.Vũng Tàu ban ngày"
+                Description = "Cấm xe tải nặng vào trung tâm TP.Vũng Tàu ban ngày",
+                MatchKeywords = "vũng tàu,bà rịa,long sơn"
             });
 
             // =================================================================================
@@ -1010,7 +1019,8 @@ namespace DAL.Context
                 TruckType = "Truck",
                 BanStartTime = new TimeSpan(0, 0, 0),
                 BanEndTime = new TimeSpan(23, 59, 0),
-                Description = "Cấm xe tải lưu thông đường Trần Phú (đường biển) 24/24"
+                Description = "Cấm xe tải lưu thông đường Trần Phú (đường biển) 24/24",
+                MatchKeywords = "trần phú,nha trang,vĩnh nguyên"
             });
             restrictions.Add(new TruckRestriction
             {
@@ -1019,7 +1029,8 @@ namespace DAL.Context
                 TruckType = "HeavyTruck",
                 BanStartTime = new TimeSpan(6, 0, 0),
                 BanEndTime = new TimeSpan(22, 0, 0),
-                Description = "Cấm xe tải trên 5 tấn vào trung tâm ban ngày"
+                Description = "Cấm xe tải trên 5 tấn vào trung tâm ban ngày",
+                MatchKeywords = "nha trang,lộc thọ,phước tiến,khánh hòa"
             });
 
             modelBuilder.Entity<TruckRestriction>().HasData(restrictions);

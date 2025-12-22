@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace DAL.Entities
 {
@@ -11,17 +7,20 @@ namespace DAL.Entities
     {
         public Guid TruckRestrictionId { get; set; }
 
-
-        public string ZoneName { get; set; } // Ví dụ: "Hồ Chí Minh", "Hà Nội"
+        public string ZoneName { get; set; } // Ví dụ: "Hà Nội - Nội Thành"
 
         public string TruckType { get; set; } // Ví dụ: "truck", "container"
 
-        // Lưu giờ bắt đầu cấm (VD: 16:00:00 là TimeSpan(16,0,0))
+        // Lưu giờ bắt đầu cấm (VD: 16:00:00)
         public TimeSpan BanStartTime { get; set; }
 
         // Lưu giờ kết thúc cấm (VD: 20:00:00)
         public TimeSpan BanEndTime { get; set; }
 
-        public string Description { get; set; } // VD: "Cấm tải nội đô chiều"
+        public string Description { get; set; }
+
+        // [MỚI - QUAN TRỌNG] Cột này chứa các từ khóa phân cách bằng dấu phẩy
+        // Ví dụ: "hoàn kiếm,đống đa,ba đình,hai bà trưng,cầu giấy"
+        public string MatchKeywords { get; set; }
     }
 }

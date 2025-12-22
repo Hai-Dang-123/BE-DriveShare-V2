@@ -164,19 +164,19 @@ namespace BLL.Services.Impletement
             var end = shippingRoute.EndLocation;
 
             // Map VehicleType
-            string vehicleTypeApi = "car";
+            string vehicleTypeApi = "truck";
             int capacityKg = 0;
             string vehicleTypeNameLower = vehicle.VehicleType.VehicleTypeName.ToLower();
 
-            if (vehicleTypeNameLower.Contains("tải") || vehicleTypeNameLower.Contains("truck"))
-            {
-                vehicleTypeApi = "truck";
-                capacityKg = (int)vehicle.PayloadInKg;
-            }
-            else if (vehicleTypeNameLower.Contains("máy") || vehicleTypeNameLower.Contains("motorcycle"))
-            {
-                vehicleTypeApi = "motorcycle";
-            }
+            //if (vehicleTypeNameLower.Contains("tải") || vehicleTypeNameLower.Contains("truck"))
+            //{
+            //    vehicleTypeApi = "truck";
+            //    capacityKg = (int)vehicle.PayloadInKg;
+            //}
+            //else if (vehicleTypeNameLower.Contains("máy") || vehicleTypeNameLower.Contains("motorcycle"))
+            //{
+            //    vehicleTypeApi = "motorcycle";
+            //}
 
             // 3. Gọi VietMapService
             var path = await _vietMapService.GetRouteAsync(start, end, vehicleTypeApi, capacityKg);
