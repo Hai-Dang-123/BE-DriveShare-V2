@@ -164,9 +164,9 @@ namespace BLL.Services.Impletement
                     DriverWorkSessionId = Guid.NewGuid(),
                     DriverId = currentDriverId,
                     TripId = dto.TripId,
-                    StartTime = DateTime.UtcNow,
+                    StartTime = TimeUtil.NowVN(),
                     Status = WorkSessionStatus.IN_PROGRESS,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = TimeUtil.NowVN()
                 };
 
                 await _unitOfWork.DriverWorkSessionRepo.AddAsync(newSession);
@@ -222,7 +222,7 @@ namespace BLL.Services.Impletement
                 }
 
                 // Kết thúc phiên
-                session.EndTime = DateTime.UtcNow;
+                session.EndTime = TimeUtil.NowVN();
                 session.Status = WorkSessionStatus.COMPLETED;
 
                 await _unitOfWork.DriverWorkSessionRepo.UpdateAsync(session);
@@ -258,9 +258,104 @@ namespace BLL.Services.Impletement
         // =========================================================================
         // 3. CORE LOGIC: KIỂM TRA LUẬT 4/10/48 & AUTO-BAN
         // =========================================================================
+        //private async Task<(bool IsValid, string Message)> CheckAndBanIfSevereAsync(Guid driverId)
+        //{
+        //    var now = DateTime.UtcNow;
+        //    var todayStart = now.Date;
+
+        //    // Tính đầu tuần (Thứ 2)
+        //    int diff = (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7;
+        //    var weekStart = now.Date.AddDays(-1 * diff);
+
+        //    // Lấy lịch sử lái xe (đã hoàn thành) trong tuần
+        //    var recentSessions = await _unitOfWork.DriverWorkSessionRepo.GetAll()
+        //        .Where(s => s.DriverId == driverId
+        //                 && s.Status == WorkSessionStatus.COMPLETED
+        //                 && s.EndTime >= weekStart)
+        //        .OrderByDescending(s => s.EndTime)
+        //        .ToListAsync();
+
+        //    // --- A. TÍNH TOÁN CÁC CHỈ SỐ ---
+
+        //    // 1. Tổng giờ tuần (48h)
+        //    double weekHours = recentSessions.Sum(s => (s.EndTime.Value - s.StartTime).TotalHours);
+
+        //    // 2. Tổng giờ ngày (10h)
+        //    double dayHours = recentSessions
+        //        .Where(s => s.EndTime >= todayStart)
+        //        .Sum(s => (s.EndTime.Value - s.StartTime).TotalHours);
+
+        //    // 3. Giờ liên tục (4h) - Cộng dồn lùi về quá khứ nếu nghỉ < 15p
+        //    double continuousHours = 0;
+        //    var lastBreakTime = now;
+        //    foreach (var s in recentSessions)
+        //    {
+        //        var breakMinutes = (lastBreakTime - s.EndTime.Value).TotalMinutes;
+        //        // Nếu thời gian nghỉ giữa 2 chuyến < 15 phút => Vẫn tính là lái liên tục
+        //        if (breakMinutes < 15)
+        //        {
+        //            continuousHours += (s.EndTime.Value - s.StartTime).TotalHours;
+        //            lastBreakTime = s.StartTime;
+        //        }
+        //        else
+        //        {
+        //            break; // Đã nghỉ đủ, dừng cộng
+        //        }
+        //    }
+
+        //    // --- B. ĐỊNH NGHĨA NGƯỠNG "BAN" (SEVERE LIMITS - VI PHẠM NẶNG) ---
+        //    // Nếu vượt qua mức này, Ban luôn không cần cảnh báo
+        //    const double BAN_LIMIT_CONTINUOUS = 5.5;  // Cho phép lố 1.5h
+        //    const double BAN_LIMIT_DAY = 13.0;        // Cho phép lố 3h
+        //    const double BAN_LIMIT_WEEK = 60.0;       // Cho phép lố 12h
+
+        //    string banReason = null;
+
+        //    if (continuousHours >= BAN_LIMIT_CONTINUOUS)
+        //        banReason = $"Lái liên tục {continuousHours:F1}h (Ngưỡng Ban: {BAN_LIMIT_CONTINUOUS}h)";
+        //    else if (dayHours >= BAN_LIMIT_DAY)
+        //        banReason = $"Lái {dayHours:F1}h/ngày (Ngưỡng Ban: {BAN_LIMIT_DAY}h)";
+        //    else if (weekHours >= BAN_LIMIT_WEEK)
+        //        banReason = $"Lái {weekHours:F1}h/tuần (Ngưỡng Ban: {BAN_LIMIT_WEEK}h)";
+
+        //    // NẾU VI PHẠM NẶNG -> THỰC HIỆN BAN NGAY LẬP TỨC
+        //    if (banReason != null)
+        //    {
+        //        await BanDriverNowAsync(driverId, banReason);
+        //        return (false, $"Tài khoản đã bị KHÓA vĩnh viễn. Lý do: {banReason}");
+        //    }
+
+        //    // --- C. KIỂM TRA THƯỜNG (WARNING/BLOCK SESSION) ---
+        //    // Nếu chưa đến mức Ban nhưng vi phạm luật thường -> Chặn không cho chạy tiếp
+        //    if (continuousHours >= 4.0)
+        //    {
+        //        await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái liên tục {continuousHours:F1}h (Luật 4h).", "Warning");
+        //        return (false, $"Bạn đã lái liên tục {continuousHours:F1}h (Luật: 4h). Vui lòng nghỉ ngơi 15p.");
+        //    }
+        //    if (dayHours >= 10.0)
+        //    {
+        //        await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái {dayHours:F1}h hôm nay (Luật 10h).", "Warning");
+        //        return (false, $"Bạn đã lái {dayHours:F1}h hôm nay (Luật: 10h). Vui lòng nghỉ ngơi đến ngày mai.");
+        //    }
+        //    if (weekHours >= 48.0)
+        //    {
+        //        await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái {weekHours:F1}h tuần này (Luật 48h).", "Warning");
+        //        return (false, $"Bạn đã lái {weekHours:F1}h tuần này (Luật: 48h). Vui lòng nghỉ ngơi.");
+        //    }
+
+        //    return (true, "OK");
+        //}
+
+        // =========================================================================
+        // 4. HELPER: BAN USER VÀO DB
+        // =========================================================================
+
+        // =========================================================================
+        // 3. CORE LOGIC: KIỂM TRA LUẬT 4/10/48 & AUTO-BAN
+        // =========================================================================
         private async Task<(bool IsValid, string Message)> CheckAndBanIfSevereAsync(Guid driverId)
         {
-            var now = DateTime.UtcNow;
+            var now = TimeUtil.NowVN();
             var todayStart = now.Date;
 
             // Tính đầu tuần (Thứ 2)
@@ -270,28 +365,24 @@ namespace BLL.Services.Impletement
             // Lấy lịch sử lái xe (đã hoàn thành) trong tuần
             var recentSessions = await _unitOfWork.DriverWorkSessionRepo.GetAll()
                 .Where(s => s.DriverId == driverId
-                         && s.Status == WorkSessionStatus.COMPLETED
-                         && s.EndTime >= weekStart)
+                            && s.Status == WorkSessionStatus.COMPLETED
+                            && s.EndTime >= weekStart)
                 .OrderByDescending(s => s.EndTime)
                 .ToListAsync();
 
             // --- A. TÍNH TOÁN CÁC CHỈ SỐ ---
-
-            // 1. Tổng giờ tuần (48h)
             double weekHours = recentSessions.Sum(s => (s.EndTime.Value - s.StartTime).TotalHours);
 
-            // 2. Tổng giờ ngày (10h)
             double dayHours = recentSessions
                 .Where(s => s.EndTime >= todayStart)
                 .Sum(s => (s.EndTime.Value - s.StartTime).TotalHours);
 
-            // 3. Giờ liên tục (4h) - Cộng dồn lùi về quá khứ nếu nghỉ < 15p
+            // 3. Giờ liên tục - Cộng dồn lùi về quá khứ nếu nghỉ < 15p
             double continuousHours = 0;
             var lastBreakTime = now;
             foreach (var s in recentSessions)
             {
                 var breakMinutes = (lastBreakTime - s.EndTime.Value).TotalMinutes;
-                // Nếu thời gian nghỉ giữa 2 chuyến < 15 phút => Vẫn tính là lái liên tục
                 if (breakMinutes < 15)
                 {
                     continuousHours += (s.EndTime.Value - s.StartTime).TotalHours;
@@ -299,15 +390,14 @@ namespace BLL.Services.Impletement
                 }
                 else
                 {
-                    break; // Đã nghỉ đủ, dừng cộng
+                    break;
                 }
             }
 
-            // --- B. ĐỊNH NGHĨA NGƯỠNG "BAN" (SEVERE LIMITS - VI PHẠM NẶNG) ---
-            // Nếu vượt qua mức này, Ban luôn không cần cảnh báo
-            const double BAN_LIMIT_CONTINUOUS = 5.5;  // Cho phép lố 1.5h
-            const double BAN_LIMIT_DAY = 13.0;        // Cho phép lố 3h
-            const double BAN_LIMIT_WEEK = 60.0;       // Cho phép lố 12h
+            // --- B. ĐỊNH NGHĨA NGƯỠNG "BAN" (Giữ nguyên logic gốc cho Ban nặng) ---
+            const double BAN_LIMIT_CONTINUOUS = 5.5;
+            const double BAN_LIMIT_DAY = 13.0;
+            const double BAN_LIMIT_WEEK = 60.0;
 
             string banReason = null;
 
@@ -318,7 +408,6 @@ namespace BLL.Services.Impletement
             else if (weekHours >= BAN_LIMIT_WEEK)
                 banReason = $"Lái {weekHours:F1}h/tuần (Ngưỡng Ban: {BAN_LIMIT_WEEK}h)";
 
-            // NẾU VI PHẠM NẶNG -> THỰC HIỆN BAN NGAY LẬP TỨC
             if (banReason != null)
             {
                 await BanDriverNowAsync(driverId, banReason);
@@ -326,12 +415,19 @@ namespace BLL.Services.Impletement
             }
 
             // --- C. KIỂM TRA THƯỜNG (WARNING/BLOCK SESSION) ---
-            // Nếu chưa đến mức Ban nhưng vi phạm luật thường -> Chặn không cho chạy tiếp
-            if (continuousHours >= 4.0)
+            // [DEMO CHANGE]: Đổi 4h thành 3 phút
+            double limit3Minutes = 3.0 / 60.0;
+
+            if (continuousHours >= limit3Minutes)
             {
-                await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái liên tục {continuousHours:F1}h (Luật 4h).", "Warning");
-                return (false, $"Bạn đã lái liên tục {continuousHours:F1}h (Luật: 4h). Vui lòng nghỉ ngơi 15p.");
+                // Quy đổi ra phút để log hiển thị "3 phút" thay vì "0.05 giờ"
+                double minutesDriven = continuousHours * 60;
+
+                await LogDriverActivityAsync(driverId, $"[DEMO] Cảnh báo: Lái liên tục {minutesDriven:F1} phút (Limit 3p).", "Warning");
+
+                return (false, $"[DEMO] Bạn đã lái liên tục {minutesDriven:F0} phút (Luật demo: 3 phút). Vui lòng nghỉ ngơi 15p.");
             }
+
             if (dayHours >= 10.0)
             {
                 await LogDriverActivityAsync(driverId, $"Cảnh báo: Lái {dayHours:F1}h hôm nay (Luật 10h).", "Warning");
@@ -345,10 +441,6 @@ namespace BLL.Services.Impletement
 
             return (true, "OK");
         }
-
-        // =========================================================================
-        // 4. HELPER: BAN USER VÀO DB
-        // =========================================================================
         private async Task BanDriverNowAsync(Guid driverId, string reason)
         {
             var driver = await _unitOfWork.DriverRepo.GetByIdAsync(driverId);
@@ -357,7 +449,7 @@ namespace BLL.Services.Impletement
             {
                 // 1. Đổi trạng thái User
                 driver.Status = UserStatus.BANNED;
-                driver.LastUpdatedAt = DateTime.UtcNow;
+                driver.LastUpdatedAt = TimeUtil.NowVN();
 
                 await _unitOfWork.DriverRepo.UpdateAsync(driver);
 
@@ -382,7 +474,7 @@ namespace BLL.Services.Impletement
                     DriverId = driverId,
                     Description = message,
                     LogLevel = level,
-                    CreateAt = DateTime.UtcNow
+                    CreateAt = TimeUtil.NowVN()
                 };
                 await _unitOfWork.DriverActivityLogRepo.AddAsync(log);
                 // Lưu ý: Không gọi SaveChangeAsync ở đây để flexible cho transaction bên ngoài
@@ -432,7 +524,7 @@ namespace BLL.Services.Impletement
                         StartTime = x.StartTime,
                         EndTime = x.EndTime,
                         Status = x.Status.ToString(),
-                        DurationHours = x.EndTime.HasValue ? x.DurationInHours : (DateTime.UtcNow - x.StartTime).TotalHours
+                        DurationHours = x.EndTime.HasValue ? x.DurationInHours : (TimeUtil.NowVN() - x.StartTime).TotalHours
                     })
                     .ToListAsync();
 
@@ -447,7 +539,7 @@ namespace BLL.Services.Impletement
         // =========================================================================
         private async Task<DriverAvailabilityDTO> CalculateDriverHoursAsync(Guid driverId)
         {
-            var now = DateTime.UtcNow;
+            var now = TimeUtil.NowVN();
             var startOfDay = now.Date;
             var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
 
@@ -492,7 +584,7 @@ namespace BLL.Services.Impletement
                 if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
                 // 1. Xác định giới hạn tuần hiện tại (Để chỉ cho phép nhập trong tuần này)
-                var now = DateTime.UtcNow;
+                var now = TimeUtil.NowVN();
                 int diff = (7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7;
                 var startOfWeek = now.Date.AddDays(-1 * diff); // 00:00 Thứ 2
                 var endOfWeek = startOfWeek.AddDays(7).AddTicks(-1); // 23:59 Chủ nhật
@@ -553,7 +645,7 @@ namespace BLL.Services.Impletement
                         DriverWorkSessionId = Guid.NewGuid(),
                         DriverId = driverId,
                         TripId = null, // TripId là null
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = TimeUtil.NowVN(),
                     };
 
                     // Gọi hàm helper của Entity để set thời gian và tự tính DurationInHours
@@ -594,7 +686,7 @@ namespace BLL.Services.Impletement
         private async Task<DriverAvailabilityDTO> CalculateDriverHoursForAssignAsync(Guid driverId)
         {
             // 1. Dùng thống nhất múi giờ (UTC)
-            var now = DateTime.UtcNow;
+            var now = TimeUtil.NowVN();
 
             // Xác định khung giờ Ngày
             var startOfDay = now.Date;
@@ -859,7 +951,7 @@ namespace BLL.Services.Impletement
         // Hàm này tách ra để cả API Public và Internal Check đều gọi được
         private async Task<DriverAvailabilityInPostTripDTO> CalculateDriverAvailabilityInternalAsync(Guid driverId)
         {
-            var now = DateTime.UtcNow;
+            var now = TimeUtil.NowVN();
             var startOfDay = now.Date;
             var endOfDay = startOfDay.AddDays(1);
 

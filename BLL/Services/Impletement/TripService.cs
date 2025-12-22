@@ -245,8 +245,8 @@ namespace BLL.Services.Implement
         private ResponseDTO ValidateVehicleCapacity(Vehicle vehicle, ICollection<Package> packages)
         {
             // 1. Tính tổng trọng lượng hàng (kg)
-            // Giả sử WeightKg cũng là decimal không null
-            decimal totalPackageWeight = packages.Sum(p => p.WeightKg);
+            // [FIX] Nhân với số lượng (Quantity) để ra tổng trọng lượng thực tế
+            decimal totalPackageWeight = packages.Sum(p => p.WeightKg * p.Quantity);
 
             // 2. Lấy tải trọng cho phép của xe (kg)
             decimal vehicleMaxLoad = vehicle.PayloadInKg;
@@ -254,19 +254,19 @@ namespace BLL.Services.Implement
             // CHECK TRỌNG LƯỢNG
             if (vehicleMaxLoad < totalPackageWeight)
             {
-                return new ResponseDTO($"Xe quá tải! Tổng hàng: {totalPackageWeight}kg > Tải trọng xe: {vehicleMaxLoad}kg.", 400, false);
+                return new ResponseDTO($"Xe quá tải! Tổng hàng: {totalPackageWeight:N2}kg > Tải trọng xe: {vehicleMaxLoad:N2}kg.", 400, false);
             }
 
             // 3. Tính tổng thể tích hàng (m3)
-            // SỬA LỖI TẠI ĐÂY: Bỏ "?? 0m" đi
-            decimal totalPackageVolume = packages.Sum(p => p.VolumeM3);
+            // [FIX] Nhân với số lượng (Quantity) để ra tổng thể tích thực tế
+            decimal totalPackageVolume = packages.Sum(p => p.VolumeM3 * p.Quantity);
 
             decimal vehicleMaxVolume = vehicle.VolumeInM3;
 
             // CHECK THỂ TÍCH (Chỉ check nếu xe có thùng > 0)
             if (vehicleMaxVolume > 0 && vehicleMaxVolume < totalPackageVolume)
             {
-                return new ResponseDTO($"Hàng quá cồng kềnh! Tổng thể tích: {totalPackageVolume}m3 > Thùng xe: {vehicleMaxVolume}m3.", 400, false);
+                return new ResponseDTO($"Hàng quá cồng kềnh! Tổng thể tích: {totalPackageVolume:N3}m3 > Thùng xe: {vehicleMaxVolume:N3}m3.", 400, false);
             }
 
             return new ResponseDTO("Sức chứa hợp lệ.", 200, true);
