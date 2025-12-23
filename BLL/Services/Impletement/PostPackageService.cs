@@ -724,34 +724,41 @@ namespace BLL.Services.Impletement
                 if (IsLocationMissingCoordinates(dto.StartLocation) || IsLocationMissingCoordinates(dto.EndLocation))
                     return new ResponseDTO("Không xác định được tọa độ địa điểm (Vui lòng kiểm tra lại địa chỉ).", 400, false);
 
-                // --- 2. GET ROUTE (VIETMAP) ---
+                // --- 2. GET ROUTE (ONE WAY - VIETMAP) ---
                 var path = await _vietMapService.GetRouteAsync(dto.StartLocation, dto.EndLocation, "truck");
                 if (path == null) return new ResponseDTO("Không tìm thấy lộ trình phù hợp cho xe tải.", 404, false);
 
-                // --- 3. TÍNH TOÁN THỜI GIAN DI CHUYỂN (TRAVEL TIME) ---
-                double apiHours = path.Time / (1000.0 * 60 * 60);
-                double distanceKm = Math.Round(path.Distance / 1000.0, 2);
+                // --- 3. TÍNH TOÁN THỜI GIAN DI CHUYỂN (LOGIC 2 CHIỀU / ROUND TRIP) ---
+                // 3.1. Tính số liệu 1 chiều trước
+                double oneWayHours = path.Time / (1000.0 * 60 * 60);
+                double oneWayDistanceKm = Math.Round(path.Distance / 1000.0, 2);
 
-                // [FIX LOGIC] Kẹp tốc độ trần (Speed Clamping)
-                double rawHours = apiHours;
-                if (distanceKm > 0 && apiHours > 0)
+                // 3.2. Kẹp tốc độ trần (Speed Clamping) cho 1 chiều
+                // Logic: Nếu API trả về vận tốc ảo (> 55km/h) -> Reset về 50km/h
+                if (oneWayDistanceKm > 0 && oneWayHours > 0)
                 {
-                    double avgSpeed = distanceKm / apiHours;
+                    double avgSpeed = oneWayDistanceKm / oneWayHours;
                     const double MAX_TRUCK_SPEED = 55.0; // km/h
                     const double REALISTIC_SPEED = 50.0; // km/h (Xe tải Bắc Nam)
 
                     if (avgSpeed > MAX_TRUCK_SPEED)
                     {
-                        // Tính lại giờ chạy dựa trên tốc độ thực tế
-                        rawHours = distanceKm / REALISTIC_SPEED;
+                        oneWayHours = oneWayDistanceKm / REALISTIC_SPEED;
                     }
                 }
 
-                // Buffer: Cộng thêm 15% + 30 phút cho tắc đường/nghỉ ngơi
-                double bufferHours = (rawHours * 0.15) + 0.5;
-                double travelTimeTotal = rawHours + bufferHours;
+                // 3.3. NHÂN ĐÔI CHO KHỨ HỒI (2 CHIỀU)
+                double totalDistanceKm = oneWayDistanceKm * 2;
+                double totalTravelHours = oneWayHours * 2;
 
-                // --- 4. CHECK GIỜ CẤM & TÍNH THỜI GIAN CHỜ (LOGIC START & END) ---
+                // Buffer: Cộng thêm 15% tổng thời gian lái + 30 phút rủi ro
+                double bufferHours = (totalTravelHours * 0.15) + 0.5;
+
+                // Tổng thời gian xe lăn bánh (Chưa tính cấm tải)
+                double totalMovingTime = totalTravelHours + bufferHours;
+
+                // --- 4. CHECK GIỜ CẤM & TÍNH THỜI GIAN CHỜ (LOGIC START & END CỦA LƯỢT ĐI) ---
+                // Lưu ý: Ta ưu tiên check cấm tải cho lượt đi để đảm bảo hàng giao đúng hẹn.
                 double totalWaitTime = 0;
                 string restrictionNote = "";
 
@@ -767,17 +774,18 @@ namespace BLL.Services.Impletement
                     restrictionNote += $"Đầu đi: Chờ {Math.Round(startRestriction.WaitTime, 1)}h ({startRestriction.Reason}). ";
                 }
 
-                // BƯỚC 4.2: Tính giờ đến dự kiến (Arrival Time)
-                // Giờ xuất phát thực tế = Giờ muốn đi + Thời gian phải chờ ở đầu đi
+                // BƯỚC 4.2: Tính giờ đến dự kiến tại điểm giao hàng (Arrival Time One-Way)
+                // Để check cấm tải đầu đến, ta phải dùng thời gian của lượt đi (OneWay)
                 var realDepartureTime = dto.ExpectedPickupDate.AddHours(startRestriction.IsRestricted ? startRestriction.WaitTime : 0);
 
-                // Giờ đến = Giờ xuất phát thực tế + Thời gian chạy
-                var estimatedArrivalTime = realDepartureTime.AddHours(travelTimeTotal);
+                // Thời gian chạy 1 chiều + Buffer 1 chiều (tạm tính 50% buffer tổng)
+                double oneWayDuration = oneWayHours + (bufferHours / 2);
+                var estimatedArrivalAtDest = realDepartureTime.AddHours(oneWayDuration);
 
                 // BƯỚC 4.3: Kiểm tra cấm tải tại ĐẦU ĐẾN (End Location)
                 var endRestriction = await _trafficRestrictionService.CheckRestrictionAsync(
                     dto.EndLocation.Address,
-                    estimatedArrivalTime
+                    estimatedArrivalAtDest
                 );
 
                 if (endRestriction.IsRestricted)
@@ -788,40 +796,43 @@ namespace BLL.Services.Impletement
                 }
 
                 // --- 5. TỔNG HỢP & VALIDATE ---
-                double totalDuration = travelTimeTotal + totalWaitTime; // Tổng = Chạy + Chờ (Start) + Chờ (End)
+                // Tổng Duration = (Chạy 2 chiều + Buffer 2 chiều) + Chờ cấm tải (Start/End lượt đi)
+                double totalDuration = totalMovingTime + totalWaitTime;
 
-                // Tính ngày giao hàng tối thiểu
-                var minDeliveryDateRaw = dto.ExpectedPickupDate.AddHours(totalDuration);
-                var minDeliveryDate = CeilToNextHour(minDeliveryDateRaw);
+                // Tính ngày hoàn thành chuyến (Xe về đến nhà)
+                var tripCompletionDateRaw = dto.ExpectedPickupDate.AddHours(totalDuration);
+                var tripCompletionDate = CeilToNextHour(tripCompletionDateRaw);
 
-                // Gợi ý ngày giao hàng (thư thả thêm 1 ngày nếu quãng đường dài > 500km, nếu ngắn thì thôi)
-                // Logic phụ: Nếu đường dài > 1000km (như Bắc Nam), cộng hẳn 24h để an toàn
-                var suggestedDate = (distanceKm > 500) ? minDeliveryDate.AddDays(1) : minDeliveryDate.AddHours(4);
+                // Gợi ý: Nếu chạy > 500km thì thư thả thêm 1 ngày
+                var suggestedDate = (totalDistanceKm > 500) ? tripCompletionDate.AddDays(1) : tripCompletionDate.AddHours(4);
 
                 // Map kết quả ra DTO
                 var result = new RouteCalculationResultDTO
                 {
-                    EstimatedDistanceKm = distanceKm,
-                    TravelTimeHours = Math.Round(travelTimeTotal, 1),
+                    EstimatedDistanceKm = totalDistanceKm,      // 2 Chiều
+                    TravelTimeHours = Math.Round(totalTravelHours, 1), // 2 Chiều (chưa buffer)
                     WaitTimeHours = Math.Round(totalWaitTime, 1),
-                    EstimatedDurationHours = Math.Round(totalDuration, 1),
+                    EstimatedDurationHours = Math.Round(totalDuration, 1), // Tổng 2 chiều + chờ
                     RestrictionNote = restrictionNote,
 
-                    SuggestedMinDeliveryDate = suggestedDate,
+                    SuggestedMinDeliveryDate = suggestedDate, // Ngày xe rảnh (hoàn thành 2 chiều)
                     IsValid = true,
                     Message = totalWaitTime > 0
-                              ? $"Lộ trình khả thi. Lưu ý: {restrictionNote}"
-                              : "Lộ trình khả thi."
+                              ? $"Lộ trình 2 chiều khả thi. Lưu ý: {restrictionNote}"
+                              : "Lộ trình 2 chiều khả thi."
                 };
 
-                // Validate với thời gian khách mong muốn
-                if (dto.ExpectedDeliveryDate.HasValue && dto.ExpectedDeliveryDate.Value <= minDeliveryDate)
+                // Validate: So sánh thời gian khách mong muốn (ExpectedDeliveryDate) với thời gian cần thiết
+                // [Lưu ý]: Nếu khách muốn check ngày GIAO HÀNG (Arrival), ta nên so sánh với (OneWay + Wait), 
+                // nhưng nếu khách thuê xe theo chuyến (Duration), ta so sánh với TotalDuration.
+                // Ở đây code đang so sánh với TotalDuration (ngụ ý khách thuê xe trọn gói đi về).
+                if (dto.ExpectedDeliveryDate.HasValue && dto.ExpectedDeliveryDate.Value <= tripCompletionDate)
                 {
                     result.IsValid = false;
-                    result.Message = $"Thời gian quá gấp! Cần tối thiểu {Math.Round(totalDuration, 1)}h (Gồm {Math.Round(travelTimeTotal, 1)}h chạy + {Math.Round(totalWaitTime, 1)}h chờ). Gợi ý: {suggestedDate:dd/MM/yyyy HH:mm}";
+                    result.Message = $"Thời gian quá gấp cho 2 chiều! Cần tối thiểu {Math.Round(totalDuration, 1)}h (Gồm {Math.Round(totalTravelHours, 1)}h chạy + {Math.Round(totalWaitTime, 1)}h chờ + Buffer). Gợi ý: {suggestedDate:dd/MM/yyyy HH:mm}";
                 }
 
-                return new ResponseDTO("Tính toán thành công", 200, true, result);
+                return new ResponseDTO("Tính toán thành công (2 chiều)", 200, true, result);
             }
             catch (Exception ex)
             {

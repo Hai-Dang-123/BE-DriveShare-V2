@@ -511,7 +511,15 @@ namespace BLL.Services.Impletement
 
                 query = query.OrderByDescending(x => x.StartTime);
 
-                var totalHours = await query.Where(x => x.EndTime != null).SumAsync(x => x.DurationInHours);
+                // --- FIX 1: TÍNH TỔNG GIỜ CHÍNH XÁC ---
+                // Dùng DateDiffSecond để tính tổng giây rồi chia cho 3600 sẽ chính xác hơn là Sum cột có sẵn
+                // Lưu ý: Cần using Microsoft.EntityFrameworkCore;
+                var totalSeconds = await query
+                    .Where(x => x.EndTime != null)
+                    .SumAsync(x => EF.Functions.DateDiffSecond(x.StartTime, x.EndTime.Value));
+
+                double totalHours = Math.Round(totalSeconds / 3600.0, 2); // Làm tròn 2 số thập phân
+
                 var totalRecords = await query.CountAsync();
 
                 var dataList = await query
@@ -524,7 +532,12 @@ namespace BLL.Services.Impletement
                         StartTime = x.StartTime,
                         EndTime = x.EndTime,
                         Status = x.Status.ToString(),
-                        DurationHours = x.EndTime.HasValue ? x.DurationInHours : (TimeUtil.NowVN() - x.StartTime).TotalHours
+
+                        // --- FIX 2: TÍNH DURATION DYNAMIC ---
+                        // Tính trực tiếp khoảng cách thời gian thay vì lấy cột DurationInHours
+                        DurationHours = x.EndTime.HasValue
+                            ? (x.EndTime.Value - x.StartTime).TotalHours
+                            : (TimeUtil.NowVN() - x.StartTime).TotalHours
                     })
                     .ToListAsync();
 

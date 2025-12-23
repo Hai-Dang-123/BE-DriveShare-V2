@@ -7,7 +7,7 @@ namespace Common.Helpers
     {
         public static DriverSuggestionDTO CalculateScenarios(
             double distanceKm,
-            double rawDrivingHours,
+            double rawDrivingHours, // Tổng giờ lái 2 chiều (Khứ hồi)
             double waitTimeHours,
             double bufferHours,
             DateTime pickup,
@@ -19,12 +19,16 @@ namespace Common.Helpers
                 EstimatedDurationHours = Math.Round(rawDrivingHours, 1)
             };
 
-            // Deadline window (giờ)
-            double deadlineWindow = (deadline - pickup).TotalHours;
-            if (deadlineWindow <= 0) deadlineWindow = 0.1;
+            // Deadline window (Thời gian khách cho phép để GIAO HÀNG - 1 chiều)
+            double deliveryDeadlineWindow = (deadline - pickup).TotalHours;
+            if (deliveryDeadlineWindow <= 0) deliveryDeadlineWindow = 0.1;
 
-            // Tổng thời gian "chết" (Chờ kho + Buffer rủi ro)
+            // Tổng thời gian "chết" (Chờ + Buffer)
             double nonDrivingTime = waitTimeHours + bufferHours;
+
+            // Ước tính thời gian cho 1 chiều (để check deadline)
+            // Giả sử: Thời gian lái chia đôi, Buffer chia đôi, WaitTime thường nằm ở đầu/cuối nên tạm chia đôi
+            double oneWayHoursEst = (rawDrivingHours / 2) + (nonDrivingTime / 2);
 
             // =====================================================================
             // KỊCH BẢN 1: SOLO (1 TÀI XẾ)
@@ -33,47 +37,57 @@ namespace Common.Helpers
             double shortBreaks = (rawDrivingHours / 4.0) * 0.25;
 
             // 2. Nghỉ dài (Sleep): Luật lái max 10h/ngày. 
-            // Ví dụ: 34h lái -> 3.4 ngày -> Cần ngủ 3 đêm (mỗi đêm 10 tiếng gồm ăn tối/ngủ/ăn sáng)
             double daysNeeded = rawDrivingHours / 10.0;
             int nightsToSleep = (int)Math.Floor(daysNeeded);
-            // Nếu phần dư > 0 (ví dụ lái 10.5h), thực tế tài xế sẽ cố hoặc ngủ thêm, 
-            // nhưng công thức này lấy sàn để tính tối thiểu số đêm phải ngủ lại dọc đường.
-
             double sleepTime = nightsToSleep * 10.0;
 
-            // Tổng thời gian trôi qua thực tế
-            double soloElapsed = rawDrivingHours + shortBreaks + sleepTime + nonDrivingTime;
+            // Tổng thời gian trôi qua thực tế (Cho cả chuyến đi về)
+            double soloElapsedTotal = rawDrivingHours + shortBreaks + sleepTime + nonDrivingTime;
+
+            // Check khả thi về mặt SỨC KHỎE/LUẬT (Không check deadline khách ở đây)
+            // Solo: Không được lái quá 10h/ca liên tục (nhưng ở đây đã tính ngủ nghỉ rồi nên ok).
+            // Tuy nhiên, nếu chuyến đi kéo dài quá 5-6 ngày liên tục thì Solo là không nên.
+            bool isSoloPhysicallyPossible = (rawDrivingHours <= 48); // Chỉ giới hạn nếu tổng giờ lái quá khủng khiếp
 
             suggestion.SoloScenario = new DriverScenarioDTO
             {
-                TotalElapsedHours = Math.Round(soloElapsed, 1),
+                TotalElapsedHours = Math.Round(soloElapsedTotal, 1),
                 DrivingHoursPerDriver = Math.Round(rawDrivingHours, 1),
-                IsPossible = (soloElapsed <= deadlineWindow) && (rawDrivingHours <= 48),
-                Message = $"1 Tài xế: Tổng {Math.Round(soloElapsed, 1)}h (~{(soloElapsed / 24):N1} ngày)."
+                IsPossible = isSoloPhysicallyPossible,
+                Message = $"1 Tài xế: Tổng {Math.Round(soloElapsedTotal, 1)}h (~{(soloElapsedTotal / 24):N1} ngày)."
             };
 
-            if (!suggestion.SoloScenario.IsPossible)
+            // Warning Logic: Check xem LƯỢT ĐI có kịp deadline không
+            // Lượt đi Solo = (Tổng Solo / 2)
+            double soloOneWayElapsed = soloElapsedTotal / 2;
+            if (soloOneWayElapsed > deliveryDeadlineWindow)
             {
-                if (rawDrivingHours > 48) suggestion.SoloScenario.Note = "Quá 48h lái/tuần.";
-                else suggestion.SoloScenario.Note = "Trễ deadline (Cần thêm tài).";
+                suggestion.SoloScenario.Note = $"Lưu ý: Có thể trễ giờ giao hàng (Dư kiến đến sau {(soloOneWayElapsed - deliveryDeadlineWindow):N1}h).";
             }
 
+            if (!isSoloPhysicallyPossible) suggestion.SoloScenario.Note = "Quá giới hạn sức khỏe (Cần >48h lái).";
+
+
             // =====================================================================
-            // KỊCH BẢN 2: TEAM (2 TÀI XẾ CHẠY SUỐT)
+            // KỊCH BẢN 2: TEAM (2 TÀI XẾ)
             // =====================================================================
-            // Hiệu suất 95% (đổi tài, vệ sinh)
+            // Hiệu suất 95%
             double teamTotalElapsed = (rawDrivingHours / 0.95) + nonDrivingTime;
 
             suggestion.TeamScenario = new DriverScenarioDTO
             {
                 TotalElapsedHours = Math.Round(teamTotalElapsed, 1),
-                DrivingHoursPerDriver = Math.Round(rawDrivingHours / 2, 1),
-                IsPossible = teamTotalElapsed <= deadlineWindow,
+                DrivingHoursPerDriver = Math.Round(rawDrivingHours / 2, 1), // Chia đôi giờ lái
+                IsPossible = true, // 2 tài thường luôn chạy được
                 Message = $"2 Tài xế: Tổng {Math.Round(teamTotalElapsed, 1)}h."
             };
 
-            if (!suggestion.TeamScenario.IsPossible)
-                suggestion.TeamScenario.Note = "Vẫn trễ deadline.";
+            // Check Deadline lượt đi
+            double teamOneWayElapsed = teamTotalElapsed / 2;
+            if (teamOneWayElapsed > deliveryDeadlineWindow)
+            {
+                suggestion.TeamScenario.Note = "Lưu ý: Có thể giao hàng trễ.";
+            }
 
             // =====================================================================
             // KỊCH BẢN 3: EXPRESS (3 TÀI XẾ)
@@ -85,13 +99,16 @@ namespace Common.Helpers
             {
                 TotalElapsedHours = Math.Round(expressElapsed, 1),
                 DrivingHoursPerDriver = Math.Round(rawDrivingHours / 3, 1),
-                IsPossible = expressElapsed <= deadlineWindow,
+                IsPossible = true,
                 Message = "3 Tài xế (Express)."
             };
 
             // =====================================================================
             // RECOMMENDATION (ĐỀ XUẤT)
             // =====================================================================
+            // Logic: Chọn phương án ít người nhất mà vẫn "IsPossible" (về mặt sức khỏe/luật)
+            // Ưu tiên Solo -> Team -> Express
+
             if (suggestion.SoloScenario.IsPossible)
             {
                 suggestion.SystemRecommendation = "SOLO";
@@ -102,15 +119,10 @@ namespace Common.Helpers
                 suggestion.SystemRecommendation = "TEAM";
                 suggestion.RequiredHoursFromQuota = suggestion.TeamScenario.DrivingHoursPerDriver;
             }
-            else if (suggestion.ExpressScenario.IsPossible)
+            else
             {
                 suggestion.SystemRecommendation = "EXPRESS";
                 suggestion.RequiredHoursFromQuota = suggestion.ExpressScenario.DrivingHoursPerDriver;
-            }
-            else
-            {
-                suggestion.SystemRecommendation = "IMPOSSIBLE";
-                suggestion.RequiredHoursFromQuota = suggestion.TeamScenario.DrivingHoursPerDriver;
             }
 
             return suggestion;

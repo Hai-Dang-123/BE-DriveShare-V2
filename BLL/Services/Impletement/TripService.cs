@@ -447,6 +447,7 @@ namespace BLL.Services.Implement
         }
 
         // --- Get By Driver ---
+        // --- Get By Driver ---
         public async Task<ResponseDTO> GetAllTripsByDriverAsync(int pageNumber, int pageSize, string? search, string? sortField, string? sortDirection)
         {
             try
@@ -454,12 +455,12 @@ namespace BLL.Services.Implement
                 var driverId = _userUtility.GetUserIdFromToken();
                 if (driverId == Guid.Empty) return new ResponseDTO("Unauthorized", 401, false);
 
-                // 1. Base Query (Từ Assignment -> Trip)
-                // Lưu ý: Để Search/Sort được trên Trip, ta nên query từ TripRepo và Join/Any với Assignment
+                // 1. Base Query (Giữ nguyên logic lọc của bạn)
                 var query = _unitOfWork.TripRepo.GetAll()
                     .AsNoTracking()
-                    .Where(t => t.Status != TripStatus.DELETED && t.DriverAssignments.Any(a => a.DriverId == driverId));
-
+                    .Where(t => t.Status != TripStatus.DELETED
+                             && t.DriverAssignments.Any(a => a.DriverId == driverId
+                                                          && a.AssignmentStatus != AssignmentStatus.CANCELLED));
 
                 query = IncludeTripDetails(query);
 
@@ -471,15 +472,18 @@ namespace BLL.Services.Implement
                 var totalCount = await query.CountAsync();
                 var trips = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
 
-                // 4. Map (Lấy thêm thông tin Assignment cụ thể của Driver này)
-                // Vì trips đã load về RAM, ta có thể tìm Assignment trong list con
+                // 4. Map (FIX LỖI TẠI ĐÂY)
                 var dtos = trips.Select<Trip, DriverTripDetailDTO>(t =>
                 {
-                    var myAssign = t.DriverAssignments.FirstOrDefault(a => a.DriverId == driverId);
-                    // Fallback nếu include bị thiếu (dù đã include ở trên)
+                    // [QUAN TRỌNG]: Khi tìm assignment của tôi trong list, PHẢI loại bỏ cái đã Cancel đi
+                    // Nếu không FirstOrDefault sẽ bốc nhầm cái cũ đã hủy.
+                    var myAssign = t.DriverAssignments
+                        .FirstOrDefault(a => a.DriverId == driverId
+                                          && a.AssignmentStatus != AssignmentStatus.CANCELLED);
+
+                    // Fallback nếu không tìm thấy (hoặc chỉ có assign bị hủy nên bị lọc mất)
                     if (myAssign == null)
                     {
-                        // MapToTripDetailDTO trả về TripDetailDTO, cần chuyển sang DriverTripDetailDTO
                         var baseDto = MapToTripDetailDTO(t);
                         return new DriverTripDetailDTO
                         {
@@ -500,10 +504,10 @@ namespace BLL.Services.Implement
                             PackageCodes = baseDto.PackageCodes,
                             DriverNames = baseDto.DriverNames,
                             AssignmentType = null,
-                            AssignmentStatus = null
+                            AssignmentStatus = null // Sẽ hiển thị null thay vì CANCELLED
                         };
                     }
-                    return MapToDriverTripDetailDTO(t, myAssign);       // Map chuyên sâu cho driver
+                    return MapToDriverTripDetailDTO(t, myAssign);
                 }).ToList();
 
                 return new ResponseDTO("Success", 200, true, new PaginatedDTO<DriverTripDetailDTO>(dtos, totalCount, pageNumber, pageSize));
@@ -1384,14 +1388,12 @@ namespace BLL.Services.Implement
 
         }
 
-
-
-
         // =========================================================================================================
         // PRIVATE HELPERS (LOGIC & MAPPERS)
         // =========================================================================================================
-
-
+        // =========================================================================================================
+        // PRIVATE HELPERS (LOGIC & MAPPERS)
+        // =========================================================================================================
         public async Task<ResponseDTO> GetTripDriverAnalysisAsync(Guid tripId)
         {
             try
@@ -1405,49 +1407,50 @@ namespace BLL.Services.Implement
 
                 if (trip == null) return new ResponseDTO("Trip not found", 404, false);
 
-                // 2. Lấy dữ liệu từ Trip và ShippingRoute
-                // Ưu tiên lấy từ ShippingRoute (dữ liệu dự tính chuẩn), nếu không có thì fallback sang Actual (thực tế)
-
-                double distance = (trip.ShippingRoute?.EstimatedDistanceKm > 0)
+                // 2. Lấy dữ liệu 1 CHIỀU (ONE WAY) từ Trip và ShippingRoute
+                // Ưu tiên lấy từ ShippingRoute (dữ liệu dự tính chuẩn)
+                double oneWayDistance = (trip.ShippingRoute?.EstimatedDistanceKm > 0)
                     ? trip.ShippingRoute.EstimatedDistanceKm
                     : (double)trip.ActualDistanceKm;
 
-                double rawDrivingHours = (trip.ShippingRoute?.EstimatedDurationHours > 0)
+                double oneWayHours = (trip.ShippingRoute?.EstimatedDurationHours > 0)
                     ? trip.ShippingRoute.EstimatedDurationHours
                     : trip.ActualDuration.TotalHours;
 
-                // [QUAN TRỌNG] FIX LOGIC: Kẹp tốc độ trần (Speed Clamping)
-                // Đồng bộ logic với GetPostPackageDetailsAsync để tránh việc tính ra 27 tiếng cho HN-SG
-                if (distance > 0 && rawDrivingHours > 0)
-                {
-                    double avgSpeed = distance / rawDrivingHours;
-                    const double REALISTIC_TRUCK_SPEED = 50.0; // Tốc độ trung bình xe tải Bắc Nam (50km/h)
+                // [STEP 2.1] CHUẨN HÓA DỮ LIỆU 1 CHIỀU (Kẹp tốc độ trần)
+                // Logic: Nếu tính ra vận tốc > 55km/h (xe con) -> Reset về tốc độ xe tải (50km/h)
+                const double REALISTIC_TRUCK_SPEED = 50.0;
 
-                    // Nếu vận tốc > 55km/h -> Dữ liệu đang là của xe con hoặc lý thuyết
+                if (oneWayDistance > 0 && oneWayHours > 0)
+                {
+                    double avgSpeed = oneWayDistance / oneWayHours;
                     if (avgSpeed > 55.0)
                     {
-                        // Tính lại giờ lái thực tế
-                        rawDrivingHours = distance / REALISTIC_TRUCK_SPEED;
+                        oneWayHours = oneWayDistance / REALISTIC_TRUCK_SPEED;
                     }
                 }
-                else if (distance > 0 && rawDrivingHours <= 0)
+                else if (oneWayDistance > 0 && oneWayHours <= 0)
                 {
-                    // Fallback: Nếu không có thời gian, tự tính theo tốc độ 50km/h
-                    rawDrivingHours = distance / 50.0;
+                    oneWayHours = oneWayDistance / REALISTIC_TRUCK_SPEED;
                 }
 
+                // [STEP 2.2] TÍNH TOÁN KHỨ HỒI (2 CHIỀU) - [NEW FIX]
+                // Nhân đôi quãng đường và thời gian lái xe
+                double totalDistance = oneWayDistance * 2;
+                double totalDrivingHours = oneWayHours * 2;
+
                 // [FIX LỖI] Lấy WaitTime & Tính Buffer
-                // Dùng toán tử ?. và ?? để handle null an toàn
                 double waitTimeHours = trip.ShippingRoute?.WaitTimeHours ?? 0;
 
-                // Tính Buffer: 15% thời gian lái + 30 phút rủi ro (Đồng bộ logic)
-                double bufferHours = (rawDrivingHours * 0.15) + 0.5;
+                // Tính Buffer dựa trên tổng thời gian lái khứ hồi: 15% + 30 phút rủi ro
+                double bufferHours = (totalDrivingHours * 0.15) + 0.5;
 
                 // 3. Gọi Helper tính toán
-                // rawDrivingHours lúc này đã là con số thực tế (ví dụ ~34h cho HN-SG)
+                // Lưu ý: Deadline ở đây đang so với ngày Giao hàng (DeliveryDate). 
+                // Nếu chạy khứ hồi, tài xế sẽ về trễ hơn DeliveryDate. Helper sẽ cảnh báo nếu vượt quá window.
                 var suggestion = TripCalculationHelper.CalculateScenarios(
-                    distance,
-                    rawDrivingHours,
+                    totalDistance,
+                    totalDrivingHours,
                     waitTimeHours,
                     bufferHours,
                     trip.ShippingRoute?.ExpectedPickupDate ?? TimeUtil.NowVN(),
@@ -1499,7 +1502,7 @@ namespace BLL.Services.Implement
                     DrivingHoursRequired = requiredHoursPerDriver,
                     Recommendation = remaining == 0
                         ? "Đã đủ tài xế."
-                        : $"Cần tuyển thêm {remaining} tài xế ({mode}). Điều kiện: Còn dư ít nhất {requiredHoursPerDriver:F1} giờ lái/tuần."
+                        : $"Cần tuyển thêm {remaining} tài xế ({mode} - Khứ hồi). Điều kiện: Dư {requiredHoursPerDriver:F1}h lái/tuần."
                 };
 
                 return new ResponseDTO("Success", 200, true, analysis);

@@ -20,74 +20,65 @@ namespace BLL.Services.Impletement
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(address))
-                    return (false, 0, null);
+                if (string.IsNullOrWhiteSpace(address)) return (false, 0, null);
 
-                // 1. CHUYỂN ĐỔI MÚI GIỜ (CHUẨN HÓA)
-                // Quy ước: Nếu nhận UTC thì +7. Nếu nhận Unspecified thì coi như là giờ VN luôn (Local).
+                // 1. Chuẩn hóa thời gian & địa chỉ
                 DateTime entryTimeVN = estimatedEntryTime;
-
-                //if (estimatedEntryTime.Kind == DateTimeKind.Utc)
-                //{
-                //    entryTimeVN = estimatedEntryTime.AddHours(7);
-                //}
-
                 var entryTimeOfDay = entryTimeVN.TimeOfDay;
-
-                // Chuẩn hóa địa chỉ đầu vào: chữ thường, trim
                 string normalizedAddress = address.ToLower().Trim();
 
-                // 2. LẤY DATA (Có thể Cache layer này nếu muốn nhanh hơn nữa)
-                // Lấy tất cả luật ra để lọc trong memory (Vì bảng này thường ít dòng, < 100 dòng thì load hết OK)
+                // 2. Load Data (Nên cache layer này)
                 var restrictions = await _unitOfWork.TruckRestrictionRepo.GetAll().AsNoTracking().ToListAsync();
 
-                // 3. TÌM RULE PHÙ HỢP (LOGIC MATCHING KEYWORD)
+                // 3. Match Logic (Đã Fix lỗi qua đêm)
                 var matchedRestriction = restrictions.FirstOrDefault(r =>
                 {
-                    // A. Check Giờ trước (Nhanh nhất)
-                    if (entryTimeOfDay < r.BanStartTime || entryTimeOfDay >= r.BanEndTime)
-                        return false;
-
-                    // B. Check Địa điểm dựa trên Keyword (Dynamic)
-                    if (!string.IsNullOrEmpty(r.MatchKeywords))
+                    // A. Check Giờ
+                    bool isTimeRestricted = false;
+                    if (r.BanStartTime < r.BanEndTime)
                     {
-                        // Tách chuỗi keyword từ DB: "hoàn kiếm, đống đa" -> ["hoàn kiếm", "đống đa"]
-                        var keywords = r.MatchKeywords.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-
-                        // Nếu địa chỉ chứa BẤT KỲ từ khóa nào -> Dính
-                        foreach (var key in keywords)
-                        {
-                            if (normalizedAddress.Contains(key.Trim().ToLower()))
-                            {
-                                return true; // Match!
-                            }
-                        }
+                        // Cấm trong ngày (7h -> 9h)
+                        isTimeRestricted = (entryTimeOfDay >= r.BanStartTime && entryTimeOfDay < r.BanEndTime);
                     }
                     else
                     {
-                        // Fallback: Nếu không có keyword, so sánh ZoneName như cũ
-                        if (!string.IsNullOrEmpty(r.ZoneName) && normalizedAddress.Contains(r.ZoneName.ToLower().Trim()))
-                        {
-                            return true;
-                        }
+                        // Cấm qua đêm (22h -> 6h sáng hôm sau)
+                        isTimeRestricted = (entryTimeOfDay >= r.BanStartTime || entryTimeOfDay < r.BanEndTime);
                     }
 
-                    return false;
+                    if (!isTimeRestricted) return false;
+
+                    // B. Check Keyword Address
+                    if (!string.IsNullOrEmpty(r.MatchKeywords))
+                    {
+                        var keywords = r.MatchKeywords.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        return keywords.Any(k => normalizedAddress.Contains(k.Trim().ToLower()));
+                    }
+
+                    // C. Fallback ZoneName
+                    return !string.IsNullOrEmpty(r.ZoneName) && normalizedAddress.Contains(r.ZoneName.ToLower().Trim());
                 });
 
-                // 4. TRẢ KẾT QUẢ
+                // 4. Trả kết quả
                 if (matchedRestriction != null)
                 {
-                    // Tính thời gian chờ
-                    // Lấy ngày hiện tại + Giờ kết thúc cấm
-                    var allowedTimeVN = entryTimeVN.Date.Add(matchedRestriction.BanEndTime);
+                    DateTime allowedTimeVN;
 
-                    // Nếu giờ kết thúc nhỏ hơn giờ hiện tại (trường hợp qua đêm), cộng thêm 1 ngày (nhưng ở đây logic TimeOfDay đã chặn rồi, safety check thôi)
-                    if (allowedTimeVN < entryTimeVN) allowedTimeVN = allowedTimeVN.AddDays(1);
+                    // Tính thời gian được phép đi
+                    if (matchedRestriction.BanStartTime < matchedRestriction.BanEndTime)
+                    {
+                        allowedTimeVN = entryTimeVN.Date.Add(matchedRestriction.BanEndTime);
+                    }
+                    else
+                    {
+                        // Xử lý cấm qua đêm
+                        if (entryTimeOfDay >= matchedRestriction.BanStartTime)
+                            allowedTimeVN = entryTimeVN.Date.AddDays(1).Add(matchedRestriction.BanEndTime);
+                        else
+                            allowedTimeVN = entryTimeVN.Date.Add(matchedRestriction.BanEndTime);
+                    }
 
-                    var waitTimeSpan = allowedTimeVN - entryTimeVN;
-                    var waitHours = waitTimeSpan.TotalHours;
-
+                    double waitHours = (allowedTimeVN - entryTimeVN).TotalHours;
                     if (waitHours < 0) waitHours = 0;
 
                     return (true, waitHours, matchedRestriction.Description);
@@ -97,7 +88,6 @@ namespace BLL.Services.Impletement
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error CheckRestriction: {ex.Message}");
                 return (false, 0, null);
             }
         }
